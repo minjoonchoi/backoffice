@@ -1,0 +1,10 @@
+.next
+.playwright-cli
+coverage
+node_modules
+next-env.d.ts
+playwright-report
+storybook-static
+test-results
+pnpm-lock.yaml
+.storybook/public/mockServiceWorker.js

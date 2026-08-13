@@ -1,0 +1,545 @@
+import { describe, expect, it } from "vitest"
+import { z } from "zod"
+
+import { resolveBackofficeAccess } from "@/auth/local-access"
+import { localDefaultUserId, localFixture } from "@/mocks/fixture"
+import {
+  defaultGeneralUserRole,
+  defaultIamOperatorRole,
+  defaultPolicyOperatorRole,
+  defaultUiResourceManagerRole,
+  initialBackofficeState,
+} from "@/mocks/system-fixture"
+import {
+  localBackofficeDataSource,
+  createBackofficeQueryClient,
+} from "@/application/bootstrap/initial-state"
+
+const uuidSchema = z.uuid()
+
+describe("backoffice initial state", () => {
+  it("loads local mock data only when the development source is explicit", async () => {
+    await expect(
+      (await createBackofficeQueryClient("development", undefined)).getSnapshot(
+        {},
+      ),
+    ).resolves.toEqual({ data: initialBackofficeState })
+    await expect(
+      (
+        await createBackofficeQueryClient(
+          "development",
+          localBackofficeDataSource,
+        )
+      ).getSnapshot({}),
+    ).resolves.toEqual({ data: localFixture })
+    await expect(
+      createBackofficeQueryClient("development", "unknown"),
+    ).rejects.toThrow("Unsupported backoffice data source")
+    await expect(
+      createBackofficeQueryClient("production", localBackofficeDataSource),
+    ).rejects.toThrow("restricted to development")
+  })
+
+  it("exposes local session seed only through the bootstrap client", async () => {
+    const defaultClient = await createBackofficeQueryClient(
+      "development",
+      undefined,
+    )
+    const localClient = await createBackofficeQueryClient(
+      "development",
+      localBackofficeDataSource,
+    )
+
+    await expect(defaultClient.getLocalSessionSeed()).resolves.toBeNull()
+    await expect(localClient.getLocalSessionSeed()).resolves.toEqual({
+      defaultUserId: localDefaultUserId,
+    })
+  })
+
+  it("provides valid and unique entity identifiers", () => {
+    const collections = [
+      localFixture.organizations,
+      localFixture.users,
+      localFixture.roles,
+      localFixture.groups,
+      localFixture.approvalLines,
+      localFixture.accessPolicies,
+      localFixture.accessPolicyAssignments,
+      localFixture.approvalDocuments,
+      localFixture.notifications,
+      localFixture.services,
+      localFixture.serviceEndpoints,
+      localFixture.serviceEndpointFields,
+      localFixture.apiKeys,
+      localFixture.uiNamespaces,
+      localFixture.uiResources,
+    ]
+
+    for (const collection of collections) {
+      const ids = collection.map((item) => item.id)
+      expect(ids.every((id) => uuidSchema.safeParse(id).success)).toBe(true)
+      expect(new Set(ids).size).toBe(ids.length)
+    }
+    const requestFieldIds = localFixture.approvalLines.flatMap((template) =>
+      template.fields.map((field) => field.id),
+    )
+    expect(
+      requestFieldIds.every((id) => uuidSchema.safeParse(id).success),
+    ).toBe(true)
+    expect(new Set(requestFieldIds).size).toBe(requestFieldIds.length)
+  })
+
+  it("derives fixture email addresses from nicknames", () => {
+    for (const user of localFixture.users) {
+      expect(user.email).toBe(`${user.nickname.toLowerCase()}@example.com`)
+    }
+  })
+
+  it("keeps every non-resigned fixture user in at least one organization", () => {
+    expect(
+      localFixture.users.every(
+        (user) =>
+          user.employmentStatus === "resigned" ||
+          user.organizationIds.length > 0,
+      ),
+    ).toBe(true)
+  })
+
+  it("provides the local development and security organizations", () => {
+    expect(
+      localFixture.organizations.map((organization) => organization.name),
+    ).toEqual([
+      "개발 1팀",
+      "개발 2팀",
+      "개인정보보호팀",
+      "보안성검토팀",
+      "IT보안팀",
+      "개발실",
+    ])
+  })
+
+  it("assigns external services to the IT security organization", () => {
+    const itSecurity = localFixture.organizations.find(
+      (organization) => organization.name === "IT보안팀",
+    )
+    const externalServices = localFixture.services.filter(
+      (service) => service.type === "external",
+    )
+
+    expect(itSecurity).toBeDefined()
+    expect(externalServices.length).toBeGreaterThan(0)
+    expect(
+      externalServices.every(
+        (service) => service.ownerOrganizationId === itSecurity?.id,
+      ),
+    ).toBe(true)
+    expect(
+      externalServices.every((service) =>
+        localFixture.serviceEndpoints.every(
+          (endpoint) => endpoint.serviceId !== service.id,
+        ),
+      ),
+    ).toBe(true)
+  })
+
+  it("provides system roles, the general user role, and default groups", () => {
+    expect(localFixture.roles.map((role) => role.name)).toEqual([
+      "Backoffice 시스템 관리자",
+      "Backoffice 정책 운영자",
+      "Backoffice IAM 운영자",
+      "Backoffice 일반 사용자",
+      "Backoffice UI 리소스 관리자",
+    ])
+    expect(localFixture.groups.map((group) => group.name)).toEqual([
+      "조직장 그룹",
+    ])
+    expect(
+      localFixture.roles.find((role) => role.id === defaultGeneralUserRole.id)
+        ?.userIds,
+    ).toEqual(localFixture.users.map((user) => user.id))
+    expect(
+      localFixture.roles.find(
+        (role) =>
+          role.id === localFixture.systemReferences.roleIds.administrator,
+      ),
+    ).toMatchObject({
+      userIds: [
+        localFixture.users.find((user) => user.nickname === "David")?.id,
+      ],
+      organizationIds: [],
+    })
+    expect(
+      localFixture.roles.find((role) => role.id === defaultIamOperatorRole.id)
+        ?.organizationIds,
+    ).toEqual([
+      localFixture.organizations.find(
+        (organization) => organization.name === "개발 1팀",
+      )?.id,
+    ])
+    expect(
+      localFixture.roles.find(
+        (role) => role.id === defaultPolicyOperatorRole.id,
+      )?.userIds,
+    ).toEqual([localFixture.users.find((user) => user.nickname === "Owen")?.id])
+    expect(
+      localFixture.roles.find(
+        (role) => role.id === defaultUiResourceManagerRole.id,
+      )?.userIds,
+    ).toEqual([localFixture.users.find((user) => user.nickname === "Owen")?.id])
+    const generalUser = localFixture.users.find(
+      (user) => user.nickname === "Daniel",
+    )
+    const organizationLeader = localFixture.users.find(
+      (user) => user.nickname === "Emma",
+    )
+    if (!generalUser || !organizationLeader) {
+      throw new Error("Role fixture users are missing")
+    }
+    expect(
+      resolveBackofficeAccess(localFixture, generalUser.id).menuIds,
+    ).toEqual([
+      "home",
+      "approvalDocuments",
+      "services",
+      "serviceEndpoints",
+      "apiKeys",
+    ])
+    expect(
+      resolveBackofficeAccess(localFixture, organizationLeader.id),
+    ).toEqual({
+      roleIds: [defaultGeneralUserRole.id],
+      menuIds: [
+        "home",
+        "approvalDocuments",
+        "services",
+        "serviceEndpoints",
+        "apiKeys",
+      ],
+    })
+  })
+
+  it("bundles system UI access by role instead of creating menu policies", () => {
+    expect(
+      initialBackofficeState.accessPolicies.map((policy) => policy.name),
+    ).toEqual([
+      "Backoffice 시스템 관리자 UI 접근",
+      "Backoffice 일반 사용자 UI 접근",
+      "Backoffice IAM 운영자 UI 접근",
+      "Backoffice 정책 운영자 UI 접근",
+      "Backoffice UI 리소스 관리자 UI 접근",
+      "Backoffice 조직장 서비스·엔드포인트 관리 UI 접근",
+    ])
+    expect(
+      initialBackofficeState.accessPolicies.some((policy) =>
+        policy.name.includes("메뉴 접근"),
+      ),
+    ).toBe(false)
+    expect(initialBackofficeState.accessPolicyAssignments).toHaveLength(6)
+
+    const administratorPolicy = initialBackofficeState.accessPolicies.find(
+      (policy) => policy.name === "Backoffice 시스템 관리자 UI 접근",
+    )
+    expect(
+      administratorPolicy?.resources.filter(
+        (resource) => resource.type === "ui-resource",
+      ),
+    ).toHaveLength(initialBackofficeState.uiResources.length)
+
+    const generalUserPolicy = initialBackofficeState.accessPolicies.find(
+      (policy) => policy.name === "Backoffice 일반 사용자 UI 접근",
+    )
+    const generalUserResourceIds = new Set(
+      generalUserPolicy?.resources.flatMap((resource) =>
+        resource.type === "ui-resource" ? [resource.id] : [],
+      ),
+    )
+    expect(
+      initialBackofficeState.uiResources
+        .filter((resource) => resource.key.startsWith("users"))
+        .every((resource) => !generalUserResourceIds.has(resource.id)),
+    ).toBe(true)
+    expect(
+      initialBackofficeState.uiResources
+        .filter((resource) => resource.key === "services:list")
+        .every((resource) => generalUserResourceIds.has(resource.id)),
+    ).toBe(true)
+
+    const iamOperatorPolicy = initialBackofficeState.accessPolicies.find(
+      (policy) => policy.name === "Backoffice IAM 운영자 UI 접근",
+    )
+    const iamOperatorResourceIds = new Set(
+      iamOperatorPolicy?.resources.flatMap((resource) =>
+        resource.type === "ui-resource" ? [resource.id] : [],
+      ),
+    )
+    expect(
+      initialBackofficeState.uiResources
+        .filter((resource) =>
+          ["users", "organizations", "roles", "groups"].some(
+            (menuId) =>
+              resource.key === menuId || resource.key.startsWith(`${menuId}:`),
+          ),
+        )
+        .every((resource) => iamOperatorResourceIds.has(resource.id)),
+    ).toBe(true)
+  })
+
+  it("assigns one dedicated leader to every organization and an employed member to every team", () => {
+    const leaderIds = localFixture.organizations.map(
+      (organization) => organization.leaderUserId,
+    )
+
+    expect(new Set(leaderIds).size).toBe(localFixture.organizations.length)
+
+    for (const organization of localFixture.organizations) {
+      const leader = localFixture.users.find(
+        (user) => user.id === organization.leaderUserId,
+      )
+
+      expect(leader?.employmentStatus).toBe("employed")
+      expect(leader?.organizationIds).toEqual([organization.id])
+      const hasChildOrganization = localFixture.organizations.some(
+        (candidate) => candidate.parentId === organization.id,
+      )
+      if (!hasChildOrganization) {
+        expect(
+          localFixture.users.some(
+            (user) =>
+              user.id !== organization.leaderUserId &&
+              user.employmentStatus === "employed" &&
+              user.organizationIds.includes(organization.id),
+          ),
+        ).toBe(true)
+      }
+    }
+
+    expect(localFixture.groups[0]?.userIds).toEqual(leaderIds)
+  })
+
+  it("keeps every fixture relationship resolvable", () => {
+    const userIds = new Set(localFixture.users.map((item) => item.id))
+    const organizationIds = new Set(
+      localFixture.organizations.map((item) => item.id),
+    )
+    const roleIds = new Set(localFixture.roles.map((item) => item.id))
+    const groupIds = new Set(localFixture.groups.map((item) => item.id))
+    const approvalLineIds = new Set(
+      localFixture.approvalLines.map((item) => item.id),
+    )
+    const approvalDocumentIds = new Set(
+      localFixture.approvalDocuments.map((item) => item.id),
+    )
+    const serviceIds = new Set(localFixture.services.map((item) => item.id))
+    const endpointIds = new Set(
+      localFixture.serviceEndpoints.map((item) => item.id),
+    )
+    const uiResourceIds = new Set(
+      localFixture.uiResources.map((item) => item.id),
+    )
+    const uiNamespaceIds = new Set(
+      localFixture.uiNamespaces.map((item) => item.id),
+    )
+    const accessPolicyIds = new Set(
+      localFixture.accessPolicies.map((item) => item.id),
+    )
+
+    expect(
+      localFixture.organizations.every(
+        (item) =>
+          userIds.has(item.leaderUserId) &&
+          (!item.parentId || organizationIds.has(item.parentId)),
+      ),
+    ).toBe(true)
+    expect(
+      localFixture.users.every((item) =>
+        item.organizationIds.every((id) => organizationIds.has(id)),
+      ),
+    ).toBe(true)
+    expect(
+      localFixture.roles.every(
+        (item) =>
+          item.userIds.every((id) => userIds.has(id)) &&
+          item.organizationIds.every((id) => organizationIds.has(id)),
+      ),
+    ).toBe(true)
+    expect(
+      localFixture.groups.every((item) =>
+        item.userIds.every((id) => userIds.has(id)),
+      ),
+    ).toBe(true)
+    expect(
+      localFixture.uiNamespaces.every(
+        (namespace) =>
+          roleIds.has(namespace.administratorRoleId) &&
+          accessPolicyIds.has(namespace.administratorAccessPolicyId) &&
+          localFixture.accessPolicyAssignments.some(
+            (assignment) =>
+              assignment.accessPolicyId ===
+                namespace.administratorAccessPolicyId &&
+              assignment.targetType === "role" &&
+              assignment.targetId === namespace.administratorRoleId,
+          ),
+      ),
+    ).toBe(true)
+    expect(
+      localFixture.approvalLines.every((item) =>
+        item.steps.every((step) => {
+          if (step.assigneeMode === "fixed-user") {
+            return localFixture.users.some(
+              (user) =>
+                user.id === step.userId && user.employmentStatus === "employed",
+            )
+          }
+          if (step.assigneeMode === "fixed-organization") {
+            return organizationIds.has(step.organizationId)
+          }
+          return true
+        }),
+      ),
+    ).toBe(true)
+    expect(
+      localFixture.accessPolicies.every(
+        (policy) =>
+          localFixture.approvalLines.filter(
+            (line) =>
+              line.status === "active" &&
+              line.category === "permission" &&
+              line.type === policy.type,
+          ).length === 1 &&
+          policy.resources.length > 0 &&
+          new Set(
+            policy.resources.map(
+              (resource) => `${resource.type}:${resource.id}`,
+            ),
+          ).size === policy.resources.length &&
+          policy.resources.every((resource) => {
+            if (resource.type === "ui-resource") {
+              return uiResourceIds.has(resource.id)
+            }
+            if (resource.type === "ui-namespace") {
+              return uiNamespaceIds.has(resource.id)
+            }
+            const endpoint = localFixture.serviceEndpoints.find(
+              (item) => item.id === resource.id,
+            )
+            return Boolean(
+              endpointIds.has(resource.id) &&
+              endpoint &&
+              serviceIds.has(endpoint.serviceId),
+            )
+          }),
+      ),
+    ).toBe(true)
+    expect(
+      localFixture.accessPolicyAssignments.every((assignment) => {
+        if (!accessPolicyIds.has(assignment.accessPolicyId)) return false
+        if (assignment.targetType === "user") {
+          return userIds.has(assignment.targetId)
+        }
+        if (assignment.targetType === "organization") {
+          return organizationIds.has(assignment.targetId)
+        }
+        if (assignment.targetType === "role") {
+          return roleIds.has(assignment.targetId)
+        }
+        return groupIds.has(assignment.targetId)
+      }),
+    ).toBe(true)
+    expect(
+      localFixture.approvalDocuments.every((item) => {
+        const line = localFixture.approvalLines.find(
+          (candidate) => candidate.id === item.approvalLineId,
+        )
+        const requester = localFixture.users.find(
+          (candidate) => candidate.id === item.requesterId,
+        )
+        const service =
+          item.documentKind === "api-key-issuance"
+            ? localFixture.services.find(
+                (candidate) => candidate.id === item.serviceId,
+              )
+            : undefined
+        return (
+          organizationIds.has(item.organizationId) &&
+          userIds.has(item.requesterId) &&
+          approvalLineIds.has(item.approvalLineId) &&
+          line?.type === item.type &&
+          requester?.employmentStatus === "employed" &&
+          requester.organizationIds.includes(item.organizationId) &&
+          (!service || service.ownerOrganizationId === item.organizationId) &&
+          (item.documentKind !== "general" ||
+            item.type !== "access-grant" ||
+            accessPolicyIds.has(item.accessPolicyId)) &&
+          item.approvalSteps.every((step) => {
+            return step.assigneeType === "user"
+              ? localFixture.users.some(
+                  (user) =>
+                    user.id === step.assigneeId &&
+                    user.employmentStatus === "employed",
+                )
+              : organizationIds.has(step.assigneeId)
+          })
+        )
+      }),
+    ).toBe(true)
+    expect(
+      localFixture.notifications.every(
+        (notification) =>
+          userIds.has(notification.userId) &&
+          (notification.targetType === "approval-document"
+            ? approvalDocumentIds.has(notification.targetId)
+            : accessPolicyIds.has(notification.targetId)),
+      ),
+    ).toBe(true)
+    expect(
+      localFixture.services.every((item) => {
+        const templates = [
+          [item.credentialTemplateIds.issuance, "api-key"],
+          [item.credentialTemplateIds.replacement, "api-key-replace"],
+          [item.credentialTemplateIds.disposal, "api-key-dispose"],
+        ] as const
+        return (
+          organizationIds.has(item.ownerOrganizationId) &&
+          templates.every(([id, type]) =>
+            localFixture.approvalLines.some(
+              (template) =>
+                template.id === id &&
+                template.category === "credential" &&
+                template.type === type,
+            ),
+          )
+        )
+      }),
+    ).toBe(true)
+    expect(
+      localFixture.serviceEndpoints.every((item) => {
+        const service = localFixture.services.find(
+          (candidate) => candidate.id === item.serviceId,
+        )
+        return serviceIds.has(item.serviceId) && service?.type === "internal"
+      }),
+    ).toBe(true)
+    expect(
+      localFixture.serviceEndpointFields.every((field) =>
+        endpointIds.has(field.endpointId),
+      ),
+    ).toBe(true)
+    expect(
+      new Set(
+        localFixture.serviceEndpointFields.map(
+          (field) =>
+            `${field.endpointId}\u0000${field.location}\u0000${field.fieldPath}`,
+        ),
+      ).size,
+    ).toBe(localFixture.serviceEndpointFields.length)
+    expect(
+      localFixture.apiKeys.every(
+        (item) =>
+          serviceIds.has(item.serviceId) &&
+          approvalDocumentIds.has(item.approvalDocumentId) &&
+          (item.registeredByUserId === null ||
+            userIds.has(item.registeredByUserId)),
+      ),
+    ).toBe(true)
+  })
+})

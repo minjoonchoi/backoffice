@@ -1,0 +1,668 @@
+version: 1
+defaultUserId: 10000000-0000-4000-8000-000000000001
+organizations:
+  - id: 20000000-0000-4000-8000-000000000001
+    name: 개발 1팀
+    leaderUserId: 10000000-0000-4000-8000-000000000001
+    parentId: 20000000-0000-4000-8000-000000000008
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 20000000-0000-4000-8000-000000000002
+    name: 개발 2팀
+    leaderUserId: 10000000-0000-4000-8000-000000000003
+    parentId: 20000000-0000-4000-8000-000000000008
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 20000000-0000-4000-8000-000000000005
+    name: 개인정보보호팀
+    leaderUserId: 10000000-0000-4000-8000-000000000002
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 20000000-0000-4000-8000-000000000006
+    name: 보안성검토팀
+    leaderUserId: 10000000-0000-4000-8000-000000000008
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 20000000-0000-4000-8000-000000000007
+    name: IT보안팀
+    leaderUserId: 10000000-0000-4000-8000-000000000016
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 20000000-0000-4000-8000-000000000008
+    name: 개발실
+    leaderUserId: 10000000-0000-4000-8000-000000000018
+    createdAt: 2026-08-08T09:00:00.000Z
+users:
+  - id: 10000000-0000-4000-8000-000000000001
+    nickname: David
+    email: david@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000001
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000002
+    nickname: James
+    email: james@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000005
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000003
+    nickname: Emma
+    email: emma@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000002
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000006
+    nickname: Noah
+    email: noah@example.com
+    employmentStatus: on-leave
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000001
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000007
+    nickname: Olivia
+    email: olivia@example.com
+    employmentStatus: resigned
+    organizationIds: []
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000008
+    nickname: Ethan
+    email: ethan@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000006
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000009
+    nickname: Owen
+    email: owen@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000001
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000010
+    nickname: Amelia
+    email: amelia@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000002
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000013
+    nickname: Henry
+    email: henry@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000005
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000014
+    nickname: Charlotte
+    email: charlotte@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000006
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000015
+    nickname: Daniel
+    email: daniel@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000005
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000016
+    nickname: Benjamin
+    email: benjamin@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000007
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000017
+    nickname: Evelyn
+    email: evelyn@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000007
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000018
+    nickname: Jhonny
+    email: jhonny@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000008
+    createdAt: 2026-08-08T09:00:00.000Z
+roles:
+  - id: 00000000-0000-4000-8000-000000000001
+    name: Backoffice 시스템 관리자
+    description: Backoffice 네임스페이스의 모든 UI 리소스와 관리 기능에 접근하는 기본 역할입니다.
+    userIds:
+      - 10000000-0000-4000-8000-000000000001
+    organizationIds: []
+    createdAt: 2026-08-08T00:00:00.000Z
+  - id: 00000000-0000-4000-8000-000000000004
+    name: Backoffice 정책 운영자
+    description: Backoffice에서 정책을 생성·수정·삭제하는 시스템 기본 역할입니다.
+    userIds:
+      - 10000000-0000-4000-8000-000000000009
+    organizationIds: []
+    createdAt: 2026-08-08T00:00:00.000Z
+  - id: 00000000-0000-4000-8000-000000000011
+    name: Backoffice IAM 운영자
+    description: Backoffice의 사용자, 조직, 역할과 그룹을 조회하고 관리하는 시스템 기본 역할입니다.
+    userIds: []
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000001
+    createdAt: 2026-08-12T00:00:00.000Z
+  - id: 00000000-0000-4000-8000-000000000008
+    name: Backoffice 일반 사용자
+    description: Backoffice의 카탈로그, 접근 정책과 자격증명을 조회하는 기본 역할입니다.
+    userIds:
+      - 10000000-0000-4000-8000-000000000001
+      - 10000000-0000-4000-8000-000000000002
+      - 10000000-0000-4000-8000-000000000003
+      - 10000000-0000-4000-8000-000000000006
+      - 10000000-0000-4000-8000-000000000007
+      - 10000000-0000-4000-8000-000000000008
+      - 10000000-0000-4000-8000-000000000009
+      - 10000000-0000-4000-8000-000000000010
+      - 10000000-0000-4000-8000-000000000013
+      - 10000000-0000-4000-8000-000000000014
+      - 10000000-0000-4000-8000-000000000015
+      - 10000000-0000-4000-8000-000000000016
+      - 10000000-0000-4000-8000-000000000017
+      - 10000000-0000-4000-8000-000000000018
+    organizationIds: []
+    createdAt: 2026-08-08T00:00:00.000Z
+  - id: 00000000-0000-4000-8000-000000000010
+    name: Backoffice UI 리소스 관리자
+    description: 정책으로 허용된 네임스페이스의 UI 리소스를 동기화하고 정리하는 시스템 기본 역할입니다.
+    userIds:
+      - 10000000-0000-4000-8000-000000000009
+    organizationIds: []
+    createdAt: 2026-08-11T00:00:00.000Z
+groups:
+  - id: 00000000-0000-4000-8000-000000000002
+    name: 조직장 그룹
+    description: 조직 정보에 따라 조직장을 자동으로 동기화하는 시스템 그룹입니다.
+    userIds:
+      - 10000000-0000-4000-8000-000000000001
+      - 10000000-0000-4000-8000-000000000003
+      - 10000000-0000-4000-8000-000000000002
+      - 10000000-0000-4000-8000-000000000008
+      - 10000000-0000-4000-8000-000000000016
+      - 10000000-0000-4000-8000-000000000018
+    createdAt: 2026-08-08T00:00:00.000Z
+approvalLines:
+  - id: 40000000-0000-4000-8000-000000000001
+    name: API Key 발급 요청 템플릿
+    category: credential
+    type: api-key
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+    steps:
+      - id: 41000000-0000-4000-8000-000000000001
+        order: 1
+        stage: 1
+        kind: request
+        assigneeMode: requester
+      - id: 41000000-0000-4000-8000-000000000002
+        order: 2
+        stage: 2
+        kind: approval
+        assigneeMode: request-organization-leader
+      - id: 41000000-0000-4000-8000-000000000003
+        order: 3
+        stage: 3
+        kind: agreement
+        assigneeMode: fixed-organization
+        organizationId: 20000000-0000-4000-8000-000000000005
+      - id: 41000000-0000-4000-8000-000000000004
+        order: 4
+        stage: 3
+        kind: agreement
+        assigneeMode: fixed-organization
+        organizationId: 20000000-0000-4000-8000-000000000006
+      - id: 41000000-0000-4000-8000-000000000005
+        order: 5
+        stage: 4
+        kind: agreement
+        assigneeMode: service-owner-organization
+      - id: 41000000-0000-4000-8000-000000000006
+        order: 6
+        stage: 5
+        kind: reference
+        assigneeMode: request-organization
+    fields:
+      - id: 43000000-0000-4000-8000-000000000001
+        order: 1
+        key: service
+        label: 발급 대상 서비스
+        binding: service-id
+        control: service-select
+        required: true
+      - id: 43000000-0000-4000-8000-000000000002
+        order: 2
+        key: key-name
+        label: 자격증명 이름
+        binding: key-name
+        control: text
+        required: true
+      - id: 43000000-0000-4000-8000-000000000003
+        order: 3
+        key: aws-secret-name
+        label: AWS ASM Secret name
+        binding: aws-secret-name
+        control: text
+        required: true
+      - id: 43000000-0000-4000-8000-000000000004
+        order: 4
+        key: aws-secret-key
+        label: Secret value key
+        binding: aws-secret-key
+        control: text
+        required: true
+      - id: 43000000-0000-4000-8000-000000000005
+        order: 5
+        key: request-organization
+        label: 요청 조직
+        binding: request-organization-id
+        control: organization-select
+        required: true
+      - id: 43000000-0000-4000-8000-000000000006
+        order: 6
+        key: reason
+        label: 발급 사유
+        binding: content
+        control: textarea
+        required: true
+  - id: 40000000-0000-4000-8000-000000000003
+    name: API Key 교체 요청 템플릿
+    category: credential
+    type: api-key-replace
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+    steps:
+      - id: 44000000-0000-4000-8000-000000000001
+        order: 1
+        stage: 1
+        kind: request
+        assigneeMode: requester
+      - id: 44000000-0000-4000-8000-000000000002
+        order: 2
+        stage: 2
+        kind: approval
+        assigneeMode: request-organization-leader
+      - id: 44000000-0000-4000-8000-000000000003
+        order: 3
+        stage: 3
+        kind: agreement
+        assigneeMode: service-owner-organization
+    fields:
+      - id: 44000000-0000-4000-8000-000000000011
+        order: 1
+        key: request-organization
+        label: 요청 조직
+        binding: request-organization-id
+        control: organization-select
+        required: true
+      - id: 44000000-0000-4000-8000-000000000012
+        order: 2
+        key: aws-secret-name
+        label: AWS ASM Secret name
+        binding: aws-secret-name
+        control: text
+        required: true
+      - id: 44000000-0000-4000-8000-000000000013
+        order: 3
+        key: aws-secret-key
+        label: Secret value key
+        binding: aws-secret-key
+        control: text
+        required: true
+      - id: 44000000-0000-4000-8000-000000000014
+        order: 4
+        key: reason
+        label: 교체 사유
+        binding: content
+        control: textarea
+        required: true
+  - id: 40000000-0000-4000-8000-000000000004
+    name: API Key 폐기 요청 템플릿
+    category: credential
+    type: api-key-dispose
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+    steps:
+      - id: 45000000-0000-4000-8000-000000000001
+        order: 1
+        stage: 1
+        kind: request
+        assigneeMode: requester
+      - id: 45000000-0000-4000-8000-000000000002
+        order: 2
+        stage: 2
+        kind: approval
+        assigneeMode: request-organization-leader
+      - id: 45000000-0000-4000-8000-000000000003
+        order: 3
+        stage: 3
+        kind: agreement
+        assigneeMode: service-owner-organization
+    fields:
+      - id: 45000000-0000-4000-8000-000000000011
+        order: 1
+        key: request-organization
+        label: 요청 조직
+        binding: request-organization-id
+        control: organization-select
+        required: true
+      - id: 45000000-0000-4000-8000-000000000012
+        order: 2
+        key: reason
+        label: 폐기 사유
+        binding: content
+        control: textarea
+        required: true
+  - id: 40000000-0000-4000-8000-000000000002
+    name: 권한 부여 요청 템플릿
+    category: permission
+    type: access-grant
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+    steps:
+      - id: 42000000-0000-4000-8000-000000000001
+        order: 1
+        stage: 1
+        kind: request
+        assigneeMode: requester
+      - id: 42000000-0000-4000-8000-000000000002
+        order: 2
+        stage: 2
+        kind: approval
+        assigneeMode: fixed-user
+        userId: 10000000-0000-4000-8000-000000000008
+    fields: []
+accessPolicies:
+  - id: 43000000-0000-4000-8000-000000000001
+    name: 운영 모니터링 허용
+    description: 서비스 상태와 감사 이벤트를 함께 조회하는 운영 모니터링 리소스 접근을 허용합니다.
+    type: access-grant
+    effect: allow
+    resources:
+      - type: endpoint
+        id: 70000000-0000-4000-8000-000000000001
+      - type: endpoint
+        id: 70000000-0000-4000-8000-000000000003
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 43000000-0000-4000-8000-000000000002
+    name: Developer API 이벤트 발행 거부
+    description: 요청 헤더, 쿼리, 요청 본문과 응답 본문 필드가 정의된 Developer API 이벤트 발행 리소스의 접근을 거부합니다.
+    type: access-grant
+    effect: deny
+    resources:
+      - type: endpoint
+        id: 70000000-0000-4000-8000-000000000002
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+accessPolicyAssignments:
+  - id: 44000000-0000-4000-8000-000000000001
+    accessPolicyId: 43000000-0000-4000-8000-000000000001
+    targetType: user
+    targetId: 10000000-0000-4000-8000-000000000014
+    createdAt: 2026-08-08T09:00:00.000Z
+approvalDocuments:
+  - id: 50000000-0000-4000-8000-000000000001
+    documentKind: api-key-issuance
+    title: 로컬 API Key 발급 요청
+    type: api-key
+    organizationId: 20000000-0000-4000-8000-000000000002
+    requesterId: 10000000-0000-4000-8000-000000000010
+    approvalLineId: 40000000-0000-4000-8000-000000000001
+    content: 로컬 테스트에서 API 연동을 검증하기 위한 발급 요청입니다.
+    fieldValues: []
+    serviceId: 60000000-0000-4000-8000-000000000001
+    endpointIds:
+      - 70000000-0000-4000-8000-000000000001
+    keyName: local-integration-key
+    awsSecretName: backoffice/developer-api
+    awsSecretKey: local-integration-key
+    status: approved
+    createdAt: 2026-08-08T09:00:00.000Z
+    approvalSteps:
+      - id: 41000000-0000-4000-8000-000000000001
+        order: 1
+        stage: 1
+        kind: request
+        assigneeMode: requester
+        assigneeType: user
+        assigneeId: 10000000-0000-4000-8000-000000000010
+      - id: 41000000-0000-4000-8000-000000000002
+        order: 2
+        stage: 2
+        kind: approval
+        assigneeMode: request-organization-leader
+        assigneeType: user
+        assigneeId: 10000000-0000-4000-8000-000000000003
+      - id: 41000000-0000-4000-8000-000000000003
+        order: 3
+        stage: 3
+        kind: agreement
+        assigneeMode: fixed-organization
+        assigneeType: organization
+        assigneeId: 20000000-0000-4000-8000-000000000005
+      - id: 41000000-0000-4000-8000-000000000004
+        order: 4
+        stage: 3
+        kind: agreement
+        assigneeMode: fixed-organization
+        assigneeType: organization
+        assigneeId: 20000000-0000-4000-8000-000000000006
+      - id: 41000000-0000-4000-8000-000000000005
+        order: 5
+        stage: 4
+        kind: agreement
+        assigneeMode: service-owner-organization
+        assigneeType: organization
+        assigneeId: 20000000-0000-4000-8000-000000000002
+      - id: 41000000-0000-4000-8000-000000000006
+        order: 6
+        stage: 5
+        kind: reference
+        assigneeMode: request-organization
+        assigneeType: organization
+        assigneeId: 20000000-0000-4000-8000-000000000002
+  - id: 50000000-0000-4000-8000-000000000002
+    documentKind: general
+    title: 보안 서비스 접근 요청
+    type: access-grant
+    organizationId: 20000000-0000-4000-8000-000000000006
+    requesterId: 10000000-0000-4000-8000-000000000014
+    approvalLineId: 40000000-0000-4000-8000-000000000002
+    accessPolicyId: 43000000-0000-4000-8000-000000000001
+    content: 보안 서비스 검토 업무를 수행하기 위한 접근 권한 요청입니다.
+    fieldValues: []
+    status: approved
+    createdAt: 2026-08-08T09:00:00.000Z
+    approvalSteps:
+      - id: 42000000-0000-4000-8000-000000000001
+        order: 1
+        stage: 1
+        kind: request
+        assigneeMode: requester
+        assigneeType: user
+        assigneeId: 10000000-0000-4000-8000-000000000014
+      - id: 42000000-0000-4000-8000-000000000002
+        order: 2
+        stage: 2
+        kind: approval
+        assigneeMode: fixed-user
+        assigneeType: user
+        assigneeId: 10000000-0000-4000-8000-000000000008
+notifications:
+  - id: 53000000-0000-4000-8000-000000000001
+    userId: 10000000-0000-4000-8000-000000000010
+    event: request-submitted
+    targetType: approval-document
+    targetId: 50000000-0000-4000-8000-000000000001
+    createdAt: 2026-08-08T01:00:00.000Z
+    readAt: null
+  - id: 53000000-0000-4000-8000-000000000002
+    userId: 10000000-0000-4000-8000-000000000010
+    event: api-key-issued
+    targetType: approval-document
+    targetId: 50000000-0000-4000-8000-000000000001
+    createdAt: 2026-08-08T02:00:00.000Z
+    readAt: 2026-08-08T03:00:00.000Z
+  - id: 53000000-0000-4000-8000-000000000003
+    userId: 10000000-0000-4000-8000-000000000014
+    event: request-submitted
+    targetType: approval-document
+    targetId: 50000000-0000-4000-8000-000000000002
+    createdAt: 2026-08-08T01:00:00.000Z
+    readAt: null
+  - id: 53000000-0000-4000-8000-000000000004
+    userId: 10000000-0000-4000-8000-000000000014
+    event: access-granted
+    targetType: approval-document
+    targetId: 50000000-0000-4000-8000-000000000002
+    createdAt: 2026-08-08T02:00:00.000Z
+    readAt: null
+services:
+  - id: 60000000-0000-4000-8000-000000000001
+    name: Developer API
+    code: developer-api
+    host: https://api.example.com
+    type: internal
+    ownerOrganizationId: 20000000-0000-4000-8000-000000000002
+    credentialTemplateIds:
+      issuance: 40000000-0000-4000-8000-000000000001
+      replacement: 40000000-0000-4000-8000-000000000003
+      disposal: 40000000-0000-4000-8000-000000000004
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 60000000-0000-4000-8000-000000000002
+    name: 협업 SaaS
+    code: collaboration-saas
+    host: https://collaboration.example.com
+    type: external
+    ownerOrganizationId: 20000000-0000-4000-8000-000000000007
+    credentialTemplateIds:
+      issuance: 40000000-0000-4000-8000-000000000001
+      replacement: 40000000-0000-4000-8000-000000000003
+      disposal: 40000000-0000-4000-8000-000000000004
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 60000000-0000-4000-8000-000000000003
+    name: Audit API
+    code: audit-api
+    host: https://audit-api.example.com
+    type: internal
+    ownerOrganizationId: 20000000-0000-4000-8000-000000000007
+    credentialTemplateIds:
+      issuance: 40000000-0000-4000-8000-000000000001
+      replacement: 40000000-0000-4000-8000-000000000003
+      disposal: 40000000-0000-4000-8000-000000000004
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 60000000-0000-4000-8000-000000000004
+    name: Backoffice API
+    code: backoffice-api
+    host: https://backoffice-api.example.com
+    type: internal
+    ownerOrganizationId: 20000000-0000-4000-8000-000000000001
+    credentialTemplateIds:
+      issuance: 40000000-0000-4000-8000-000000000001
+      replacement: 40000000-0000-4000-8000-000000000003
+      disposal: 40000000-0000-4000-8000-000000000004
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+serviceEndpoints:
+  - id: 70000000-0000-4000-8000-000000000001
+    serviceId: 60000000-0000-4000-8000-000000000001
+    name: 상태 확인 API
+    method: GET
+    path: /health
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000002
+    serviceId: 60000000-0000-4000-8000-000000000001
+    name: 이벤트 API
+    method: POST
+    path: /v1/events
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000003
+    serviceId: 60000000-0000-4000-8000-000000000003
+    name: 감사 이벤트 조회 API
+    method: GET
+    path: /v1/audit-events
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000004
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: UI 리소스 동기화 API
+    method: POST
+    path: /v1/ui-resources/sync
+    createdAt: 2026-08-08T09:00:00.000Z
+serviceEndpointFields:
+  - id: 71000000-0000-4000-8000-000000000001
+    endpointId: 70000000-0000-4000-8000-000000000001
+    location: response-body
+    fieldPath: $.status
+    valueType: string
+    required: true
+    description: 서비스 상태
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 71000000-0000-4000-8000-000000000002
+    endpointId: 70000000-0000-4000-8000-000000000002
+    location: header
+    fieldPath: $['x-request-id']
+    valueType: string
+    required: false
+    description: 요청 추적 식별자
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 71000000-0000-4000-8000-000000000003
+    endpointId: 70000000-0000-4000-8000-000000000002
+    location: query
+    fieldPath: $.dryRun
+    valueType: boolean
+    required: false
+    description: 처리 없이 요청 유효성만 검증할지 여부
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 71000000-0000-4000-8000-000000000004
+    endpointId: 70000000-0000-4000-8000-000000000002
+    location: request-body
+    fieldPath: $.eventType
+    valueType: string
+    required: true
+    description: 이벤트 유형
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 71000000-0000-4000-8000-000000000005
+    endpointId: 70000000-0000-4000-8000-000000000002
+    location: request-body
+    fieldPath: $.payload
+    valueType: object
+    required: true
+    description: 이벤트 데이터
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 71000000-0000-4000-8000-000000000006
+    endpointId: 70000000-0000-4000-8000-000000000002
+    location: response-body
+    fieldPath: $.accepted
+    valueType: boolean
+    required: true
+    description: 요청 접수 여부
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 71000000-0000-4000-8000-000000000007
+    endpointId: 70000000-0000-4000-8000-000000000003
+    location: response-body
+    fieldPath: $.items
+    valueType: array
+    required: true
+    description: 감사 이벤트 목록
+    createdAt: 2026-08-08T09:00:00.000Z
+apiKeys:
+  - id: 80000000-0000-4000-8000-000000000001
+    name: local-integration-key
+    serviceId: 60000000-0000-4000-8000-000000000001
+    endpointIds:
+      - 70000000-0000-4000-8000-000000000001
+    approvalDocumentId: 50000000-0000-4000-8000-000000000001
+    replacesApiKeyId: null
+    registeredByUserId: 10000000-0000-4000-8000-000000000001
+    awsSecretName: backoffice/developer-api
+    awsSecretKey: local-integration-key
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
