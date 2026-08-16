@@ -52,7 +52,7 @@ src/
 ### `domain`과 `ui`
 
 - `domain/common.ts`: 여러 feature가 공유하는 식별자·상태·command 결과 계약이다.
-- `domain/system-references.ts`: snapshot으로 받은 시스템 역할·그룹·네임스페이스 참조 계약이다.
+- `domain/system-references.ts`: snapshot으로 받은 시스템 역할·네임스페이스 참조 계약이다.
 - `ui`: 여러 feature가 함께 사용하는 할당, 관계 제거, 상태 표시 같은 업무 UI다. 범용 디자인 시스템 컴포넌트는 이곳이 아니라 `components`에 둔다.
 
 ## 배치 판단 기준
@@ -71,3 +71,11 @@ src/
 - mock 구현은 feature의 `local-api.ts`, 실제 구현은 규모에 따라 feature의 `http-api.ts`에 둔다.
 - app·auth·feature·UI runtime 코드는 `mocks` 또는 system fixture를 직접 import하지 않는다. fixture 선택과 로딩은 bootstrap API client 경계 안에서만 수행한다.
 - 전체 client 구현과 선택 흐름은 [Backoffice API client 경계](api-client-boundary.md)를 따른다.
+
+## 도메인 식별값과 문자열
+
+- 상태, 유형, 효과, 대상, 처리 단계처럼 조건 분기와 저장 계약에 쓰이는 문자열은 해당 feature의 `model.ts`에 `as const` 객체로 한 번만 정의한다. 여러 feature가 공유하는 값만 `src/domain`에 둔다.
+- Zod enum, TypeScript 타입, select 후보와 조건문은 같은 상수 객체에서 파생한다. 같은 값을 schema 배열, UI 조건과 local API에 각각 문자열로 반복하지 않는다.
+- UI 리소스 key는 [UI 리소스 레지스트리 관리](ui-resource-registry.md)에 따라 `uiResourceKeys`를 사용하고 시스템 레코드 ID는 API snapshot의 `systemReferences`를 사용한다.
+- 사용자 문구, 번역 key, 폼 필드명, URL, CSS class와 테스트의 기대값은 도메인 식별값이 아니다. 의미가 다른 문자열을 하나의 전역 상수 파일에 모으지 않는다.
+- `domain-value-constants.test.ts`는 운영 코드가 관리 대상 도메인 값을 raw 문자열로 비교하지 않는지 회귀 검증한다. 새 도메인 값 객체를 추가하면 이 검사 대상에도 포함한다.

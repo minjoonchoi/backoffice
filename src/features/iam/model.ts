@@ -2,11 +2,12 @@ import { z } from "zod"
 
 import { entityIdSchema } from "@/domain/common"
 
-export const employmentStatusSchema = z.enum([
-  "employed",
-  "on-leave",
-  "resigned",
-])
+export const employmentStatusValues = {
+  employed: "employed",
+  onLeave: "on-leave",
+  resigned: "resigned",
+} as const
+export const employmentStatusSchema = z.enum(employmentStatusValues)
 
 export const organizationInputSchema = z.object({
   name: z.string().trim().min(2).max(80),
@@ -26,7 +27,8 @@ export const userInputSchema = z
   })
   .refine(
     (user) =>
-      user.employmentStatus === "resigned" || user.organizationIds.length > 0,
+      user.employmentStatus === employmentStatusValues.resigned ||
+      user.organizationIds.length > 0,
     { path: ["organizationIds"] },
   )
 
@@ -35,22 +37,29 @@ export const roleInputSchema = z.object({
   description: z.string().trim().min(2).max(500),
 })
 
-export const groupInputSchema = z.object({
-  name: z.string().trim().min(2).max(80),
+export const applicationInputSchema = z.object({
+  name: z.string().trim().min(2).max(100),
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(64)
+    .regex(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/),
   description: z.string().trim().min(2).max(500),
+  ownerOrganizationId: entityIdSchema,
 })
 
 export type EmploymentStatus = z.infer<typeof employmentStatusSchema>
 export const employmentStatuses: EmploymentStatus[] = [
-  "employed",
-  "on-leave",
-  "resigned",
+  employmentStatusValues.employed,
+  employmentStatusValues.onLeave,
+  employmentStatusValues.resigned,
 ]
 
 export type OrganizationInput = z.infer<typeof organizationInputSchema>
 export type UserInput = z.infer<typeof userInputSchema>
 export type RoleInput = z.infer<typeof roleInputSchema>
-export type GroupInput = z.infer<typeof groupInputSchema>
+export type ApplicationInput = z.infer<typeof applicationInputSchema>
 
 export type Organization = OrganizationInput & {
   id: string
@@ -69,8 +78,7 @@ export type Role = RoleInput & {
   createdAt: string
 }
 
-export type Group = GroupInput & {
+export type Application = ApplicationInput & {
   id: string
-  userIds: string[]
   createdAt: string
 }

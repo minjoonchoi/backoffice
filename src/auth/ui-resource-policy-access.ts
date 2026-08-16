@@ -1,16 +1,25 @@
 import { uiResourceManifest } from "@/config/menu-registry"
 import { resolveAuthorizationSubject } from "@/auth/authorization-subject"
 import type { BackofficeState } from "@/application/state/model"
-import type { AccessPolicyAssignmentTarget } from "@/features/access-policies/model"
-import { resolveUiResourceVisibilities } from "@/features/ui-resources/ui-resource-visibility"
+import {
+  accessPolicyAssignmentTargets,
+  accessPolicyEffects,
+  accessPolicyResourceTypes,
+  type AccessPolicyAssignmentTarget,
+} from "@/features/access-policies/model"
+import {
+  resolveUiResourceVisibilities,
+  uiResourceVisibilityValues,
+} from "@/features/ui-resources/ui-resource-visibility"
+import { isAccessPolicyEffective } from "@/features/access-policies/access-policy-status"
+import { entityStatuses } from "@/domain/common"
 
 type UiResourcePolicyAccessState = Pick<
   BackofficeState,
   | "accessPolicies"
   | "accessPolicyAssignments"
-  | "groups"
   | "roles"
-  | "uiNamespaces"
+  | "namespaces"
   | "uiResources"
   | "users"
 >
@@ -19,7 +28,7 @@ export type UiResourcePolicyGrant = Readonly<{
   policyId: string
   resourceId: string
   resourceKey: string
-  effect: "allow" | "deny"
+  effect: (typeof accessPolicyEffects)[keyof typeof accessPolicyEffects]
   targetType: AccessPolicyAssignmentTarget
   targetId: string
 }>
@@ -42,12 +51,17 @@ function matchesTarget(
   userId: string,
   organizationIds: ReadonlySet<string>,
   roleIds: ReadonlySet<string>,
-  groupIds: ReadonlySet<string>,
 ) {
-  if (targetType === "user") return targetId === userId
-  if (targetType === "organization") return organizationIds.has(targetId)
-  if (targetType === "role") return roleIds.has(targetId)
-  return groupIds.has(targetId)
+  if (targetType === accessPolicyAssignmentTargets.user) {
+    return targetId === userId
+  }
+  if (targetType === accessPolicyAssignmentTargets.organization) {
+    return organizationIds.has(targetId)
+  }
+  if (targetType === accessPolicyAssignmentTargets.role) {
+    return roleIds.has(targetId)
+  }
+  return false
 }
 
 export function resolveUiResourcePolicyAccess(
@@ -57,9 +71,10 @@ export function resolveUiResourcePolicyAccess(
 ): UiResourcePolicyAccess {
   const subject = resolveAuthorizationSubject(state, userId)
   if (!subject) return noAccess
-  const namespace = state.uiNamespaces.find(
+  const namespace = state.namespaces.find(
     (candidate) =>
-      candidate.key === namespaceKey && candidate.status === "active",
+      candidate.key === namespaceKey &&
+      candidate.status === entityStatuses.active,
   )
   if (!namespace) {
     return { roleIds: [...subject.roleIds], resourceKeys: [], grants: [] }
@@ -70,7 +85,8 @@ export function resolveUiResourcePolicyAccess(
   )
   const visibilities = resolveUiResourceVisibilities(namespaceResources)
   const resources = namespaceResources.filter(
-    (resource) => visibilities.get(resource.id) === "visible",
+    (resource) =>
+      visibilities.get(resource.id) === uiResourceVisibilityValues.visible,
   )
   const resourcesById = new Map(
     resources.map((resource) => [resource.id, resource]),
@@ -80,7 +96,7 @@ export function resolveUiResourcePolicyAccess(
   )
   const policiesById = new Map(
     state.accessPolicies
-      .filter((policy) => policy.status === "active")
+      .filter((policy) => isAccessPolicyEffective(policy))
       .map((policy) => [policy.id, policy]),
   )
   const grants: UiResourcePolicyGrant[] = []
@@ -93,7 +109,6 @@ export function resolveUiResourcePolicyAccess(
         subject.user.id,
         subject.organizationIds,
         subject.roleIds,
-        subject.groupIds,
       )
     ) {
       continue
@@ -101,7 +116,7 @@ export function resolveUiResourcePolicyAccess(
     const policy = policiesById.get(assignment.accessPolicyId)
     if (!policy) continue
     for (const reference of policy.resources) {
-      if (reference.type !== "ui-resource") continue
+      if (reference.type !== accessPolicyResourceTypes.uiResource) continue
       const resource = resourcesById.get(reference.id)
       if (!resource) continue
       grants.push({
@@ -117,7 +132,7 @@ export function resolveUiResourcePolicyAccess(
 
   const allowedKeys = new Set(
     grants
-      .filter((grant) => grant.effect === "allow")
+      .filter((grant) => grant.effect === accessPolicyEffects.allow)
       .map((grant) => grant.resourceKey),
   )
   for (const key of [...allowedKeys]) {
@@ -128,7 +143,7 @@ export function resolveUiResourcePolicyAccess(
     }
   }
   const deniedKeys = grants
-    .filter((grant) => grant.effect === "deny")
+    .filter((grant) => grant.effect === accessPolicyEffects.deny)
     .map((grant) => grant.resourceKey)
   const resourceKeys = resources
     .map((resource) => resource.key)
@@ -164,7 +179,6 @@ export type UiResourceAssignmentTargets = Readonly<{
   userIds: readonly string[]
   organizationIds: readonly string[]
   roleIds: readonly string[]
-  groupIds: readonly string[]
 }>
 
 export function resolveUiResourceAssignmentTargets(
@@ -186,11 +200,12 @@ export function resolveUiResourceAssignmentTargets(
     state.accessPolicies
       .filter(
         (policy) =>
-          policy.status === "active" &&
-          policy.effect === "allow" &&
+          isAccessPolicyEffective(policy) &&
+          policy.effect === accessPolicyEffects.allow &&
           policy.resources.some(
             (resource) =>
-              resource.type === "ui-resource" && resourceIds.has(resource.id),
+              resource.type === accessPolicyResourceTypes.uiResource &&
+              resourceIds.has(resource.id),
           ),
       )
       .map((policy) => policy.id),
@@ -199,24 +214,22 @@ export function resolveUiResourceAssignmentTargets(
     userIds: new Set<string>(),
     organizationIds: new Set<string>(),
     roleIds: new Set<string>(),
-    groupIds: new Set<string>(),
   }
   for (const assignment of state.accessPolicyAssignments) {
     if (!policyIds.has(assignment.accessPolicyId)) continue
-    if (assignment.targetType === "user") {
+    if (assignment.targetType === accessPolicyAssignmentTargets.user) {
       targets.userIds.add(assignment.targetId)
-    } else if (assignment.targetType === "organization") {
+    } else if (
+      assignment.targetType === accessPolicyAssignmentTargets.organization
+    ) {
       targets.organizationIds.add(assignment.targetId)
-    } else if (assignment.targetType === "role") {
+    } else if (assignment.targetType === accessPolicyAssignmentTargets.role) {
       targets.roleIds.add(assignment.targetId)
-    } else {
-      targets.groupIds.add(assignment.targetId)
     }
   }
   return {
     userIds: [...targets.userIds],
     organizationIds: [...targets.organizationIds],
     roleIds: [...targets.roleIds],
-    groupIds: [...targets.groupIds],
   }
 }

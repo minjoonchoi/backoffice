@@ -1,3 +1,7 @@
+import { approvalTypeValues } from "@/features/request-templates/model"
+import { approvalDocumentKinds } from "@/features/access-policies/model"
+import { employmentStatusValues } from "@/features/iam/model"
+import { entityStatuses } from "@/domain/common"
 import type { BackofficeState } from "@/application/state/model"
 import type { ApprovalDocument } from "@/features/access-policies/model"
 import type { ApiKey } from "@/features/credentials/model"
@@ -12,18 +16,19 @@ export function resolveOwnedCredentialIds(
   userId: string | null,
 ): readonly string[] {
   const user = state.users.find((candidate) => candidate.id === userId)
-  if (user?.employmentStatus !== "employed") return []
+  if (user?.employmentStatus !== employmentStatusValues.employed) return []
 
   return state.apiKeys.flatMap((credential) => {
-    if (credential.status !== "active") return []
+    if (credential.status !== entityStatuses.active) return []
     const issuanceDocument = state.approvalDocuments.find(
       (document) => document.id === credential.approvalDocumentId,
     )
     if (
-      issuanceDocument?.documentKind !== "api-key-issuance" &&
+      issuanceDocument?.documentKind !== approvalDocumentKinds.apiKeyIssuance &&
       !(
-        issuanceDocument?.documentKind === "api-key-lifecycle" &&
-        issuanceDocument.type === "api-key-replace"
+        issuanceDocument?.documentKind ===
+          approvalDocumentKinds.apiKeyLifecycle &&
+        issuanceDocument.type === approvalTypeValues.apiKeyReplace
       )
     ) {
       throw new Error(

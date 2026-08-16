@@ -2,45 +2,64 @@ import { z } from "zod"
 
 import { entityIdSchema, type EntityStatus } from "@/domain/common"
 
-export const approvalTypeSchema = z.enum([
-  "resource-create",
-  "access-grant",
-  "access-revoke",
-  "resource-dispose",
-  "api-key",
-  "api-key-replace",
-  "api-key-dispose",
-])
-export const requestCategorySchema = z.enum(["permission", "credential"])
-export const approvalStepKindSchema = z.enum([
-  "request",
-  "approval",
-  "agreement",
-  "reference",
-])
-export const approvalAssigneeModeSchema = z.enum([
-  "fixed-user",
-  "fixed-organization",
-  "document-select",
-  "requester",
-  "request-organization-leader",
-  "request-organization",
-  "service-owner-organization",
-])
-export const requestTemplateFieldBindingSchema = z.enum([
-  "service-id",
-  "request-organization-id",
-  "key-name",
-  "aws-secret-name",
-  "aws-secret-key",
-  "content",
-  "custom",
-])
-export const requestTemplateFieldControlSchema = z.enum([
-  "text",
-  "textarea",
-  "service-select",
-  "organization-select",
+export const approvalTypeValues = {
+  resourceCreate: "resource-create",
+  accessGrant: "access-grant",
+  accessRevoke: "access-revoke",
+  resourceDispose: "resource-dispose",
+  apiKey: "api-key",
+  apiKeyReplace: "api-key-replace",
+  apiKeyDispose: "api-key-dispose",
+} as const
+export const requestCategoryValues = {
+  permission: "permission",
+  credential: "credential",
+} as const
+export const approvalStepKindValues = {
+  request: "request",
+  approval: "approval",
+  agreement: "agreement",
+  reference: "reference",
+} as const
+export const approvalAssigneeModeValues = {
+  fixedUser: "fixed-user",
+  fixedOrganization: "fixed-organization",
+  documentSelect: "document-select",
+  requester: "requester",
+  requestOrganizationLeader: "request-organization-leader",
+  requestOrganization: "request-organization",
+  serviceOwnerOrganization: "service-owner-organization",
+} as const
+export const requestTemplateFieldBindingValues = {
+  serviceId: "service-id",
+  requestOrganizationId: "request-organization-id",
+  keyName: "key-name",
+  awsSecretName: "aws-secret-name",
+  awsSecretKey: "aws-secret-key",
+  content: "content",
+  custom: "custom",
+} as const
+export const requestTemplateFieldControlValues = {
+  text: "text",
+  textarea: "textarea",
+  serviceSelect: "service-select",
+  organizationSelect: "organization-select",
+} as const
+
+export const approvalTypeSchema = z.enum(approvalTypeValues)
+export const requestCategorySchema = z.enum(requestCategoryValues)
+export const approvalStepKindSchema = z.enum(approvalStepKindValues)
+export const approvalAssigneeModeSchema = z.enum(approvalAssigneeModeValues)
+export const requestTemplateFieldBindingSchema = z.enum(
+  requestTemplateFieldBindingValues,
+)
+export const requestTemplateFieldControlSchema = z.enum(
+  requestTemplateFieldControlValues,
+)
+const credentialApprovalTypes = new Set<z.infer<typeof approvalTypeSchema>>([
+  approvalTypeValues.apiKey,
+  approvalTypeValues.apiKeyReplace,
+  approvalTypeValues.apiKeyDispose,
 ])
 
 const approvalStepInputBaseSchema = z.object({
@@ -49,25 +68,31 @@ const approvalStepInputBaseSchema = z.object({
 })
 export const approvalStepInputSchema = z.discriminatedUnion("assigneeMode", [
   approvalStepInputBaseSchema.extend({
-    assigneeMode: z.literal("fixed-user"),
+    assigneeMode: z.literal(approvalAssigneeModeValues.fixedUser),
     userId: entityIdSchema,
   }),
   approvalStepInputBaseSchema.extend({
-    assigneeMode: z.literal("fixed-organization"),
+    assigneeMode: z.literal(approvalAssigneeModeValues.fixedOrganization),
     organizationId: entityIdSchema,
   }),
   approvalStepInputBaseSchema.extend({
-    assigneeMode: z.literal("document-select"),
-  }),
-  approvalStepInputBaseSchema.extend({ assigneeMode: z.literal("requester") }),
-  approvalStepInputBaseSchema.extend({
-    assigneeMode: z.literal("request-organization-leader"),
+    assigneeMode: z.literal(approvalAssigneeModeValues.documentSelect),
   }),
   approvalStepInputBaseSchema.extend({
-    assigneeMode: z.literal("request-organization"),
+    assigneeMode: z.literal(approvalAssigneeModeValues.requester),
   }),
   approvalStepInputBaseSchema.extend({
-    assigneeMode: z.literal("service-owner-organization"),
+    assigneeMode: z.literal(
+      approvalAssigneeModeValues.requestOrganizationLeader,
+    ),
+  }),
+  approvalStepInputBaseSchema.extend({
+    assigneeMode: z.literal(approvalAssigneeModeValues.requestOrganization),
+  }),
+  approvalStepInputBaseSchema.extend({
+    assigneeMode: z.literal(
+      approvalAssigneeModeValues.serviceOwnerOrganization,
+    ),
   }),
 ])
 
@@ -102,32 +127,35 @@ const requestTemplateFieldBaseSchema = z.object({
 })
 export const requestTemplateFieldInputSchema = z.discriminatedUnion("binding", [
   requestTemplateFieldBaseSchema.extend({
-    binding: z.literal("service-id"),
-    control: z.literal("service-select"),
+    binding: z.literal(requestTemplateFieldBindingValues.serviceId),
+    control: z.literal(requestTemplateFieldControlValues.serviceSelect),
   }),
   requestTemplateFieldBaseSchema.extend({
-    binding: z.literal("request-organization-id"),
-    control: z.literal("organization-select"),
+    binding: z.literal(requestTemplateFieldBindingValues.requestOrganizationId),
+    control: z.literal(requestTemplateFieldControlValues.organizationSelect),
   }),
   requestTemplateFieldBaseSchema.extend({
-    binding: z.literal("key-name"),
-    control: z.literal("text"),
+    binding: z.literal(requestTemplateFieldBindingValues.keyName),
+    control: z.literal(requestTemplateFieldControlValues.text),
   }),
   requestTemplateFieldBaseSchema.extend({
-    binding: z.literal("aws-secret-name"),
-    control: z.literal("text"),
+    binding: z.literal(requestTemplateFieldBindingValues.awsSecretName),
+    control: z.literal(requestTemplateFieldControlValues.text),
   }),
   requestTemplateFieldBaseSchema.extend({
-    binding: z.literal("aws-secret-key"),
-    control: z.literal("text"),
+    binding: z.literal(requestTemplateFieldBindingValues.awsSecretKey),
+    control: z.literal(requestTemplateFieldControlValues.text),
   }),
   requestTemplateFieldBaseSchema.extend({
-    binding: z.literal("content"),
-    control: z.literal("textarea"),
+    binding: z.literal(requestTemplateFieldBindingValues.content),
+    control: z.literal(requestTemplateFieldControlValues.textarea),
   }),
   requestTemplateFieldBaseSchema.extend({
-    binding: z.literal("custom"),
-    control: z.enum(["text", "textarea"]),
+    binding: z.literal(requestTemplateFieldBindingValues.custom),
+    control: z.enum([
+      requestTemplateFieldControlValues.text,
+      requestTemplateFieldControlValues.textarea,
+    ]),
   }),
 ])
 
@@ -141,18 +169,18 @@ export const approvalLineInputSchema = z
   })
   .refine(
     (template) =>
-      template.category === "credential"
-        ? ["api-key", "api-key-replace", "api-key-dispose"].includes(
-            template.type,
-          )
+      template.category === requestCategoryValues.credential
+        ? credentialApprovalTypes.has(template.type)
         : !template.type.startsWith("api-key"),
     { path: ["type"] },
   )
   .refine(
     (template) =>
-      template.category === "credential" ||
+      template.category === requestCategoryValues.credential ||
       template.steps.every(
-        (step) => step.assigneeMode !== "service-owner-organization",
+        (step) =>
+          step.assigneeMode !==
+          approvalAssigneeModeValues.serviceOwnerOrganization,
       ),
     { path: ["steps"] },
   )
@@ -165,7 +193,9 @@ export const approvalLineInputSchema = z
   .refine(
     (template) => {
       const systemBindings = template.fields
-        .filter((field) => field.binding !== "custom")
+        .filter(
+          (field) => field.binding !== requestTemplateFieldBindingValues.custom,
+        )
         .map((field) => field.binding)
       return new Set(systemBindings).size === systemBindings.length
     },
@@ -184,29 +214,16 @@ export type RequestTemplateFieldControl = z.infer<
 >
 
 export const approvalTypes: ApprovalType[] = [
-  "resource-create",
-  "access-grant",
-  "access-revoke",
-  "resource-dispose",
-  "api-key",
-  "api-key-replace",
-  "api-key-dispose",
+  ...Object.values(approvalTypeValues),
 ]
-export const requestCategories: RequestCategory[] = ["permission", "credential"]
+export const requestCategories: RequestCategory[] = Object.values(
+  requestCategoryValues,
+)
 export const approvalStepKinds: ApprovalStepKind[] = [
-  "request",
-  "approval",
-  "agreement",
-  "reference",
+  ...Object.values(approvalStepKindValues),
 ]
 export const approvalAssigneeModes: ApprovalAssigneeMode[] = [
-  "fixed-user",
-  "fixed-organization",
-  "document-select",
-  "requester",
-  "request-organization-leader",
-  "request-organization",
-  "service-owner-organization",
+  ...Object.values(approvalAssigneeModeValues),
 ]
 
 export type ApprovalLineInput = z.infer<typeof approvalLineInputSchema>
@@ -223,10 +240,19 @@ export type RequestTemplateField = RequestTemplateFieldInput & {
 }
 export type ApprovalLine = Omit<ApprovalLineInput, "steps" | "fields"> & {
   id: string
+  version: number
   status: EntityStatus
   createdAt: string
   steps: ApprovalStep[]
   fields: RequestTemplateField[]
+}
+
+export type ApprovalLineRevision = {
+  id: string
+  approvalLineId: string
+  version: number
+  snapshot: ApprovalLine
+  createdAt: string
 }
 
 type ResolvedApprovalStepBase = {

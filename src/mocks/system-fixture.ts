@@ -10,11 +10,14 @@ import type {
   AccessPolicyAssignmentTarget,
   AccessPolicyResource,
 } from "@/features/access-policies/model"
+import { accessPolicyManagementTypes } from "@/features/access-policies/model"
 import type { BackofficeState } from "@/application/state/model"
-import type { Group, Role } from "@/features/iam/model"
-import type { UiNamespace, UiResource } from "@/features/ui-resources/model"
+import type { Role } from "@/features/iam/model"
+import type { Namespace, UiResource } from "@/features/ui-resources/model"
 import { uiResourceManagerUiResourceKeys } from "@/config/system-ui-access"
 import { backofficeSystemReferencesSchema } from "@/domain/system-references"
+import { entityStatuses } from "@/domain/common"
+import { uiResourceTypeValues } from "@/features/ui-resources/ui-resource-manifest"
 
 const localSystemReferences = backofficeSystemReferencesSchema.parse({
   roleIds: {
@@ -23,11 +26,9 @@ const localSystemReferences = backofficeSystemReferencesSchema.parse({
     iamOperator: "00000000-0000-4000-8000-000000000011",
     generalUser: "00000000-0000-4000-8000-000000000008",
     uiResourceManager: "00000000-0000-4000-8000-000000000010",
+    serviceOperator: "00000000-0000-4000-8000-000000000002",
   },
-  groupIds: {
-    organizationLeader: "00000000-0000-4000-8000-000000000002",
-  },
-  uiNamespaceIds: {
+  namespaceIds: {
     backoffice: "00000000-0000-4000-8000-000000000009",
   },
   serviceEndpointIds: {
@@ -57,7 +58,7 @@ export const defaultIamOperatorRole: Role = {
   id: localSystemReferences.roleIds.iamOperator,
   name: "Backoffice IAM 운영자",
   description:
-    "Backoffice의 사용자, 조직, 역할과 그룹을 조회하고 관리하는 시스템 기본 역할입니다.",
+    "Backoffice의 사용자, 조직, 역할과 어플리케이션을 조회하고 관리하는 시스템 기본 역할입니다.",
   userIds: [],
   organizationIds: [],
   createdAt: "2026-08-12T00:00:00.000Z",
@@ -75,35 +76,38 @@ export const defaultUiResourceManagerRole: Role = {
   id: localSystemReferences.roleIds.uiResourceManager,
   name: "Backoffice UI 리소스 관리자",
   description:
-    "정책으로 허용된 네임스페이스의 UI 리소스를 동기화하고 정리하는 시스템 기본 역할입니다.",
+    "관리 역할로 지정된 네임스페이스의 UI 리소스를 동기화하고 정리하는 시스템 기본 역할입니다.",
   userIds: [],
   organizationIds: [],
   createdAt: "2026-08-11T00:00:00.000Z",
 }
-
-export const organizationLeaderGroup: Group = {
-  id: localSystemReferences.groupIds.organizationLeader,
-  name: "조직장 그룹",
+export const defaultServiceOperatorRole: Role = {
+  id: localSystemReferences.roleIds.serviceOperator,
+  name: "Backoffice 서비스 운영자",
   description:
-    "조직 정보에 따라 조직장을 자동으로 동기화하는 시스템 그룹입니다.",
+    "조직 정보에 따라 현재 조직장에게 자동으로 부여되는 서비스 카탈로그 운영 역할입니다.",
   userIds: [],
+  organizationIds: [],
   createdAt: "2026-08-08T00:00:00.000Z",
 }
 const backofficeAdministratorAccessPolicyId =
   "45000000-0000-4000-8000-000000000101"
-export const defaultUiNamespace: UiNamespace = {
-  id: localSystemReferences.uiNamespaceIds.backoffice,
+const uiResourceManagerAccessPolicyId = "45000000-0000-4000-8000-000000000104"
+export const defaultNamespace: Namespace = {
+  id: localSystemReferences.namespaceIds.backoffice,
   key: "backoffice",
   name: "Backoffice",
   description: "Backoffice 애플리케이션의 UI 리소스 네임스페이스입니다.",
-  administratorRoleId: defaultBackofficeAdminRole.id,
-  administratorAccessPolicyId: backofficeAdministratorAccessPolicyId,
-  status: "active",
+  managerRoleId: defaultUiResourceManagerRole.id,
+  managerAccessPolicyId: uiResourceManagerAccessPolicyId,
+  status: entityStatuses.active,
   lastSyncedAt: "2026-08-11T00:00:00.000Z",
   createdAt: "2026-08-11T00:00:00.000Z",
 }
 const policyOperatorUiResourceKeys = [
   uiResourceKeys.approvalDocuments.list.actions.createPolicy,
+  uiResourceKeys.approvalDocuments.list.actions.simulatePolicyAccess,
+  uiResourceKeys.approvalDocuments.detail.actions.clonePolicy,
   uiResourceKeys.approvalDocuments.detail.actions.updatePolicy,
   uiResourceKeys.approvalDocuments.detail.actions.deletePolicy,
 ]
@@ -113,8 +117,8 @@ export const initialUiResources: UiResource[] =
   uiResourceManifest.resources.map((resource, index) => ({
     ...resource,
     id: `90000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
-    namespaceId: defaultUiNamespace.id,
-    status: "active",
+    namespaceId: defaultNamespace.id,
+    status: entityStatuses.active,
     orphanedAt: null,
     createdAt: systemUiAccessCreatedAt,
   }))
@@ -128,19 +132,33 @@ function uiResourceReferences(keys: readonly string[]) {
   return [...new Set(keys)].map(uiResourceReference)
 }
 
-const generalUserMenuIds: MenuKey[] = [
+const generalUserUiResourceKeys = [
   uiResourceKeys.home.key,
+  uiResourceKeys.home.overview.key,
   uiResourceKeys.approvalDocuments.key,
+  uiResourceKeys.approvalDocuments.list.key,
+  uiResourceKeys.approvalDocuments.detail.key,
+  uiResourceKeys.approvalDocuments.requestDetail.key,
+  uiResourceKeys.approvalDocuments.request.key,
   uiResourceKeys.services.key,
+  uiResourceKeys.services.list.key,
+  uiResourceKeys.services.detail.key,
   uiResourceKeys.serviceEndpoints.key,
+  uiResourceKeys.serviceEndpoints.list.key,
+  uiResourceKeys.serviceEndpoints.detail.key,
   uiResourceKeys.apiKeys.key,
+  uiResourceKeys.apiKeys.list.key,
+  uiResourceKeys.apiKeys.detail.key,
+  uiResourceKeys.apiKeys.request.key,
+  uiResourceKeys.apiKeys.replaceRequest.key,
+  uiResourceKeys.apiKeys.disposeRequest.key,
 ]
 
 const iamMenuIds: MenuKey[] = [
   uiResourceKeys.users.key,
   uiResourceKeys.organizations.key,
   uiResourceKeys.roles.key,
-  uiResourceKeys.groups.key,
+  uiResourceKeys.applications.key,
 ]
 
 const iamOperatorUiResourceKeys = [
@@ -148,8 +166,10 @@ const iamOperatorUiResourceKeys = [
   ...initialUiResources
     .filter(
       (resource) =>
-        resource.type === "action" &&
-        iamMenuIds.some((menuId) => resource.key.startsWith(`${menuId}:`)),
+        resource.type === uiResourceTypeValues.action &&
+        iamMenuIds.some((menuId) => resource.key.startsWith(`${menuId}:`)) &&
+        resource.key !==
+          uiResourceKeys.users.detail.actions.changeEmploymentStatus,
     )
     .map((resource) => resource.key),
 ]
@@ -171,12 +191,13 @@ function createUiAccessPolicy(
       name,
       description,
       type: "access-grant",
+      managementType: accessPolicyManagementTypes.systemManaged,
       effect: "allow",
       resources: [
         ...uiResourceReferences(resourceKeys),
         ...additionalResources,
       ],
-      status: "active",
+      status: entityStatuses.active,
       createdAt: systemUiAccessCreatedAt,
     } satisfies AccessPolicy,
     assignments,
@@ -191,7 +212,6 @@ const roleUiAccessPolicies = [
     initialUiResources.map((resource) => resource.key),
     [{ targetType: "role", targetId: defaultBackofficeAdminRole.id }],
     [
-      { type: "ui-namespace", id: defaultUiNamespace.id },
       {
         type: "endpoint",
         id: localSystemReferences.serviceEndpointIds.importUiResources,
@@ -203,15 +223,18 @@ const roleUiAccessPolicies = [
     "Backoffice 일반 사용자 UI 접근",
     "Backoffice 일반 사용자 역할에 정책, 자격증명과 카탈로그의 기본 조회 화면을 허용합니다.",
     [
-      ...getMenuUiResourceKeys(generalUserMenuIds),
+      ...generalUserUiResourceKeys,
       uiResourceKeys.home.overview.actions.markNotificationRead,
+      uiResourceKeys.approvalDocuments.requestDetail.actions.processRequest,
+      uiResourceKeys.approvalDocuments.requestDetail.actions.withdrawRequest,
+      uiResourceKeys.approvalDocuments.requestDetail.actions.resubmitRequest,
     ],
     [{ targetType: "role", targetId: defaultGeneralUserRole.id }],
   ),
   createUiAccessPolicy(
     "45000000-0000-4000-8000-000000000107",
     "Backoffice IAM 운영자 UI 접근",
-    "Backoffice IAM 운영자 역할에 사용자, 조직, 역할과 그룹의 조회·관리 기능을 허용합니다.",
+    "Backoffice IAM 운영자 역할에 사용자, 조직, 역할과 어플리케이션의 조회·관리 기능을 허용합니다.",
     iamOperatorUiResourceKeys,
     [{ targetType: "role", targetId: defaultIamOperatorRole.id }],
   ),
@@ -226,13 +249,12 @@ const roleUiAccessPolicies = [
     [{ targetType: "role", targetId: defaultPolicyOperatorRole.id }],
   ),
   createUiAccessPolicy(
-    "45000000-0000-4000-8000-000000000104",
+    uiResourceManagerAccessPolicyId,
     "Backoffice UI 리소스 관리자 UI 접근",
     "Backoffice UI 리소스 관리자 역할에 리소스 조회·동기화·상태 변경·고아 리소스 정리를 허용합니다.",
     uiResourceManagerUiResourceKeys,
     [{ targetType: "role", targetId: defaultUiResourceManagerRole.id }],
     [
-      { type: "ui-namespace", id: defaultUiNamespace.id },
       {
         type: "endpoint",
         id: localSystemReferences.serviceEndpointIds.importUiResources,
@@ -241,8 +263,8 @@ const roleUiAccessPolicies = [
   ),
   createUiAccessPolicy(
     "45000000-0000-4000-8000-000000000105",
-    "Backoffice 조직장 서비스·엔드포인트 관리 UI 접근",
-    "조직장 그룹에 소유 조직의 서비스와 엔드포인트 관리 및 자격증명 등록 기능을 허용합니다.",
+    "Backoffice 서비스 운영자 UI 접근",
+    "Backoffice 서비스 운영자 역할에 소유 조직의 서비스와 엔드포인트 관리 및 자격증명 등록 기능을 허용합니다.",
     [
       ...getMenuUiResourceKeys([
         uiResourceKeys.services.key,
@@ -252,7 +274,7 @@ const roleUiAccessPolicies = [
       ...initialUiResources
         .filter(
           (resource) =>
-            resource.type === "action" &&
+            resource.type === uiResourceTypeValues.action &&
             (resource.key.startsWith(`${uiResourceKeys.services.key}:`) ||
               resource.key.startsWith(
                 `${uiResourceKeys.serviceEndpoints.key}:`,
@@ -260,8 +282,9 @@ const roleUiAccessPolicies = [
         )
         .map((resource) => resource.key),
       uiResourceKeys.apiKeys.list.actions.registerCredential,
+      uiResourceKeys.apiKeys.detail.actions.emergencyRevokeCredential,
     ],
-    [{ targetType: "group", targetId: organizationLeaderGroup.id }],
+    [{ targetType: "role", targetId: defaultServiceOperatorRole.id }],
   ),
 ]
 
@@ -280,12 +303,14 @@ export const systemUiAccessPolicyAssignments: AccessPolicyAssignment[] =
   systemUiPolicyAssignments.map((assignment, index) => ({
     id: `46000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
     ...assignment,
+    expiresAt: null,
     createdAt: systemUiAccessCreatedAt,
   }))
 
 export const initialBackofficeState: BackofficeState = {
   systemReferences: localSystemReferences,
   organizations: [],
+  applications: [],
   users: [],
   roles: [
     defaultBackofficeAdminRole,
@@ -293,9 +318,10 @@ export const initialBackofficeState: BackofficeState = {
     defaultIamOperatorRole,
     defaultGeneralUserRole,
     defaultUiResourceManagerRole,
+    defaultServiceOperatorRole,
   ],
-  groups: [organizationLeaderGroup],
   approvalLines: [],
+  approvalLineRevisions: [],
   accessPolicies: systemUiAccessPolicies,
   accessPolicyAssignments: systemUiAccessPolicyAssignments,
   approvalDocuments: [],
@@ -303,7 +329,16 @@ export const initialBackofficeState: BackofficeState = {
   services: [],
   serviceEndpoints: [],
   serviceEndpointFields: [],
+  serviceEndpointRevisions: [],
+  credentialLifecycleSettings: {
+    expirationPeriodDays: 365,
+    rotationIntervalDays: 90,
+    updatedAt: systemUiAccessCreatedAt,
+    updatedByUserId: null,
+  },
   apiKeys: [],
-  uiNamespaces: [defaultUiNamespace],
+  namespaces: [defaultNamespace],
   uiResources: initialUiResources,
+  uiResourceSyncHistories: [],
+  auditEvents: [],
 }

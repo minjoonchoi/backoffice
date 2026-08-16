@@ -1,3 +1,4 @@
+import { employmentStatusValues } from "@/features/iam/model"
 import type { BackofficeState } from "@/application/state/model"
 
 type ApprovalAssigneeState = Pick<BackofficeState, "organizations" | "users">
@@ -22,7 +23,7 @@ export function resolveRequestOrganizationLeader(
     const leader = state.users.find(
       (user) =>
         user.id === organization.leaderUserId &&
-        user.employmentStatus === "employed",
+        user.employmentStatus === employmentStatusValues.employed,
     )
     if (leader && leader.id !== requesterId) {
       return { organization, leader }

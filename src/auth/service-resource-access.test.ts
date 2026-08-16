@@ -5,7 +5,7 @@ import {
   resolveServiceResourceAccess,
 } from "@/auth/service-resource-access"
 import { localFixture } from "@/mocks/fixture"
-import { organizationLeaderGroup } from "@/mocks/system-fixture"
+import { defaultServiceOperatorRole } from "@/mocks/system-fixture"
 
 function findUserId(nickname: string) {
   const user = localFixture.users.find((item) => item.nickname === nickname)
@@ -60,7 +60,7 @@ describe("service resource access", () => {
     expect(canManageService(access, findService("협업 SaaS"))).toBe(false)
   })
 
-  it("does not grant a scope to members or stale group members", () => {
+  it("does not grant a scope to members or stale role members", () => {
     expect(
       resolveServiceResourceAccess(localFixture, findUserId("Amelia")),
     ).toEqual({
@@ -70,11 +70,13 @@ describe("service resource access", () => {
     })
 
     const state = structuredClone(localFixture)
-    const leaderGroup = state.groups.find(
-      (group) => group.id === organizationLeaderGroup.id,
+    const serviceOperatorRole = state.roles.find(
+      (role) => role.id === defaultServiceOperatorRole.id,
     )
-    if (!leaderGroup) throw new Error("Organization leader group is missing")
-    leaderGroup.userIds.push(findUserId("Daniel"))
+    if (!serviceOperatorRole) {
+      throw new Error("Service operator role is missing")
+    }
+    serviceOperatorRole.userIds.push(findUserId("Daniel"))
 
     expect(resolveServiceResourceAccess(state, findUserId("Daniel"))).toEqual({
       isAdministrator: false,

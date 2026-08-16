@@ -23,10 +23,12 @@ import {
 } from "@/components/ui/card"
 import { uiResourceKeys } from "@/config/menu-registry"
 import { resolveAccessPolicyAssignmentAffectedUserIds } from "@/features/access-policies/access-policy-assignment"
+import { isAccessPolicyEffective } from "@/features/access-policies/access-policy-status"
 import type {
   AccessPolicy,
   AccessPolicyAssignment,
 } from "@/features/access-policies/model"
+import { accessPolicyManagementTypes } from "@/features/access-policies/model"
 
 type PolicyAssignmentRow = Readonly<{
   assignment: AccessPolicyAssignment
@@ -39,7 +41,7 @@ export function AccessPolicyAssignmentCard({
   targetName,
   canManage = false,
 }: {
-  targetType: "organization" | "role" | "group"
+  targetType: "organization" | "role"
   targetId: string
   targetName: string
   canManage?: boolean
@@ -61,12 +63,15 @@ export function AccessPolicyAssignmentCard({
   })
   const assignedPolicyIds = new Set(rows.map(({ policy }) => policy.id))
   const candidates = backoffice.accessPolicies.filter(
-    (policy) => policy.status === "active" && !assignedPolicyIds.has(policy.id),
+    (policy) =>
+      policy.managementType === accessPolicyManagementTypes.operatorManaged &&
+      isAccessPolicyEffective(policy) &&
+      !assignedPolicyIds.has(policy.id),
   )
   const administratorAssignmentIds = new Set(
-    backoffice.uiNamespaces.flatMap((namespace) =>
-      namespace.administratorRoleId === targetId
-        ? [namespace.administratorAccessPolicyId]
+    backoffice.namespaces.flatMap((namespace) =>
+      namespace.managerRoleId === targetId
+        ? [namespace.managerAccessPolicyId]
         : [],
     ),
   )

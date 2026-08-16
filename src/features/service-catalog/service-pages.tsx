@@ -1,8 +1,21 @@
 "use client"
 
+import { requestCategoryValues } from "@/features/request-templates/model"
+import { approvalTypeValues } from "@/features/request-templates/model"
+import { serviceTypeValues } from "@/features/service-catalog/model"
+import { entityStatuses } from "@/domain/common"
 import { uiResourceKeys } from "@/config/menu-registry"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Cloud, Network, Pencil, Plus, Server, Trash2 } from "lucide-react"
+import {
+  Cloud,
+  KeyRound,
+  Network,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Server,
+  Trash2,
+} from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
@@ -49,18 +62,21 @@ import { Input } from "@/components/ui/input"
 import { snackbar } from "@/components/ui/snackbar"
 import { Textarea } from "@/components/ui/textarea"
 import {
+  endpointFieldLocationValues,
+  endpointLifecycleValues,
   httpMethods,
+  isEndpointRequestParameterLocation,
   serviceTypes,
   type HttpMethod,
   type ManagedService,
   type ServiceEndpoint,
   type ServiceEndpointField,
   type ServiceEndpointFieldInput,
+  type ServiceEndpointRevision,
   type ServiceType,
 } from "@/features/service-catalog/model"
 import type { BackofficeErrorCode } from "@/domain/common"
 import { FormSelect } from "@/components/patterns/form-select"
-import { ApiKeyIssuanceDialog } from "@/features/credentials/api-key-issuance-dialog"
 import {
   serviceEndpointInputSchema,
   serviceInputSchema,
@@ -72,6 +88,10 @@ import {
   CommandErrorMessage,
   useBackofficeLabels,
 } from "@/application/ui/backoffice-ui"
+import {
+  resolveEndpointChangeImpact,
+  type EndpointChangeImpact,
+} from "@/features/service-catalog/endpoint-impact"
 
 function useServiceResourceAccess() {
   const backoffice = useBackoffice()
@@ -98,7 +118,9 @@ function parseJsonArrayFormField(
 
 function setEndpointFieldLocation(
   field: unknown,
-  location: "request-body" | "response-body",
+  location:
+    | typeof endpointFieldLocationValues.requestBody
+    | typeof endpointFieldLocationValues.responseBody,
 ): unknown {
   if (typeof field !== "object" || field === null || Array.isArray(field)) {
     return field
@@ -114,10 +136,10 @@ function parseEndpointFields(data: FormData): unknown {
   return [
     ...parameters,
     ...requestBody.map((field) =>
-      setEndpointFieldLocation(field, "request-body"),
+      setEndpointFieldLocation(field, endpointFieldLocationValues.requestBody),
     ),
     ...responseBody.map((field) =>
-      setEndpointFieldLocation(field, "response-body"),
+      setEndpointFieldLocation(field, endpointFieldLocationValues.responseBody),
     ),
   ]
 }
@@ -216,6 +238,7 @@ function EndpointFieldsTable({
 
 function ServiceEditDialog({ service }: { service: ManagedService }) {
   const backoffice = useBackoffice()
+  const sessionAccess = useSessionAccess()
   const access = useServiceResourceAccess()
   const t = useTranslations("backoffice.services")
   const common = useTranslations("backoffice.common")
@@ -249,7 +272,7 @@ function ServiceEditDialog({ service }: { service: ManagedService }) {
     const data = new FormData(form)
     const parsed = serviceInputSchema.safeParse({
       name: data.get("name"),
-      code: data.get("code"),
+      slug: data.get("slug"),
       host: data.get("host"),
       type,
       ownerOrganizationId: organizationId,
@@ -259,7 +282,11 @@ function ServiceEditDialog({ service }: { service: ManagedService }) {
       setError("invalid-input")
       return
     }
-    const result = await backoffice.updateService(service.id, parsed.data)
+    const result = await backoffice.updateService(
+      service.id,
+      parsed.data,
+      sessionAccess.currentUser?.id ?? "",
+    )
     if (!result.ok) {
       setError(result.error)
       return
@@ -299,21 +326,22 @@ function ServiceEditDialog({ service }: { service: ManagedService }) {
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor={`${formId}-code`}>{common("code")}</FieldLabel>
+            <FieldLabel htmlFor={`${formId}-slug`}>{t("slug")}</FieldLabel>
             <Input
-              id={`${formId}-code`}
-              aria-describedby={`${formId}-code-description`}
-              name="code"
+              id={`${formId}-slug`}
+              aria-describedby={`${formId}-slug-description`}
+              name="slug"
               required
               minLength={2}
               maxLength={32}
               pattern="[a-z]+(?:-[a-z]+)*"
               autoCapitalize="none"
               spellCheck={false}
-              defaultValue={service.code}
+              defaultValue={service.slug}
+              readOnly
             />
-            <FieldDescription id={`${formId}-code-description`}>
-              {t("codeDescription")}
+            <FieldDescription id={`${formId}-slug-description`}>
+              {t("slugDescription")}
             </FieldDescription>
           </Field>
           <Field>
@@ -332,7 +360,9 @@ function ServiceEditDialog({ service }: { service: ManagedService }) {
             value={type}
             onValueChange={setType}
             options={serviceTypes
-              .filter((item) => item === "internal" || !hasEndpoints)
+              .filter(
+                (item) => item === serviceTypeValues.internal || !hasEndpoints,
+              )
               .map((item) => ({
                 value: item,
                 label: labels.serviceType(item),
@@ -371,9 +401,9 @@ function ServiceEditDialog({ service }: { service: ManagedService }) {
               options={backoffice.approvalLines
                 .filter(
                   (template) =>
-                    (template.status === "active" ||
+                    (template.status === entityStatuses.active ||
                       template.id === service.credentialTemplateIds[key]) &&
-                    template.category === "credential" &&
+                    template.category === requestCategoryValues.credential &&
                     template.type === requestType,
                 )
                 .map((template) => ({
@@ -417,7 +447,7 @@ function ServicesTable({
         accessorKey: "name",
         header: common("name"),
       },
-      { accessorKey: "code", header: common("code") },
+      { accessorKey: "slug", header: t("slug") },
       {
         accessorKey: "host",
         header: t("host"),
@@ -480,9 +510,9 @@ function ServicesTable({
           getValue: (row) => row.name,
         },
         {
-          id: "service-code",
-          label: common("code"),
-          getValue: (row) => row.code,
+          id: "service-slug",
+          label: t("slug"),
+          getValue: (row) => row.slug,
         },
         { id: "service-host", label: t("host"), getValue: (row) => row.host },
         {
@@ -505,6 +535,7 @@ function ServicesTable({
 
 function ServiceCreationDialog() {
   const backoffice = useBackoffice()
+  const sessionAccess = useSessionAccess()
   const access = useServiceResourceAccess()
   const t = useTranslations("backoffice.services")
   const common = useTranslations("backoffice.common")
@@ -514,7 +545,8 @@ function ServiceCreationDialog() {
   const [organizationId, setOrganizationId] = useState<string | null>(null)
   const credentialTemplates = backoffice.approvalLines.filter(
     (template) =>
-      template.category === "credential" && template.status === "active",
+      template.category === requestCategoryValues.credential &&
+      template.status === entityStatuses.active,
   )
   function firstCredentialTemplateId(
     requestType: "api-key" | "api-key-replace" | "api-key-dispose",
@@ -524,26 +556,24 @@ function ServiceCreationDialog() {
         ?.id ?? null
     )
   }
-  const [credentialTemplateIds, setCredentialTemplateIds] = useState({
+  const credentialTemplateIds = {
     issuance: firstCredentialTemplateId("api-key"),
     replacement: firstCredentialTemplateId("api-key-replace"),
     disposal: firstCredentialTemplateId("api-key-dispose"),
-  })
+  }
   const [error, setError] = useState<BackofficeErrorCode>()
   const organizations = backoffice.organizations.filter((organization) =>
     access.manageableOrganizationIds.includes(organization.id),
   )
+  const ownerOrganizationId = access.isAdministrator
+    ? organizationId
+    : (organizations[0]?.id ?? null)
   const formId = "service-create-form"
 
   function changeOpen(nextOpen: boolean) {
     setOpen(nextOpen)
     setType(null)
     setOrganizationId(null)
-    setCredentialTemplateIds({
-      issuance: firstCredentialTemplateId("api-key"),
-      replacement: firstCredentialTemplateId("api-key-replace"),
-      disposal: firstCredentialTemplateId("api-key-dispose"),
-    })
     setError(undefined)
   }
 
@@ -551,17 +581,20 @@ function ServiceCreationDialog() {
     const data = new FormData(form)
     const parsed = serviceInputSchema.safeParse({
       name: data.get("name"),
-      code: data.get("code"),
+      slug: data.get("slug"),
       host: data.get("host"),
       type,
-      ownerOrganizationId: organizationId,
+      ownerOrganizationId,
       credentialTemplateIds,
     })
     if (!parsed.success) {
       setError("invalid-input")
       return
     }
-    const result = await backoffice.createService(parsed.data)
+    const result = await backoffice.createService(
+      parsed.data,
+      sessionAccess.currentUser?.id ?? "",
+    )
     if (!result.ok) {
       setError(result.error)
       return
@@ -603,11 +636,11 @@ function ServiceCreationDialog() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="service-code">{common("code")}</FieldLabel>
+              <FieldLabel htmlFor="service-slug">{t("slug")}</FieldLabel>
               <Input
-                id="service-code"
-                aria-describedby="service-code-description"
-                name="code"
+                id="service-slug"
+                aria-describedby="service-slug-description"
+                name="slug"
                 required
                 minLength={2}
                 pattern="[a-z]+(?:-[a-z]+)*"
@@ -615,8 +648,8 @@ function ServiceCreationDialog() {
                 autoCapitalize="none"
                 spellCheck={false}
               />
-              <FieldDescription id="service-code-description">
-                {t("codeDescription")}
+              <FieldDescription id="service-slug-description">
+                {t("slugDescription")}
               </FieldDescription>
             </Field>
             <Field>
@@ -638,44 +671,17 @@ function ServiceCreationDialog() {
                 label: labels.serviceType(item),
               }))}
             />
-            <FormSelect
-              label={t("owner")}
-              value={organizationId}
-              onValueChange={setOrganizationId}
-              options={organizations.map((item) => ({
-                value: item.id,
-                label: item.name,
-              }))}
-            />
-            {(
-              [
-                ["issuance", "api-key", "credentialIssuanceTemplate"],
-                [
-                  "replacement",
-                  "api-key-replace",
-                  "credentialReplacementTemplate",
-                ],
-                ["disposal", "api-key-dispose", "credentialDisposalTemplate"],
-              ] as const
-            ).map(([key, requestType, label]) => (
+            {access.isAdministrator ? (
               <FormSelect
-                key={key}
-                label={t(label)}
-                value={credentialTemplateIds[key]}
-                onValueChange={(value) => {
-                  setCredentialTemplateIds((current) => ({
-                    ...current,
-                    [key]: value,
-                  }))
-                }}
-                options={credentialTemplates
-                  .filter((template) => template.type === requestType)
-                  .map((template) => ({
-                    value: template.id,
-                    label: template.name,
-                  }))}
+                label={t("owner")}
+                value={organizationId}
+                onValueChange={setOrganizationId}
+                options={organizations.map((item) => ({
+                  value: item.id,
+                  label: item.name,
+                }))}
               />
-            ))}
+            ) : null}
             <CommandErrorMessage error={error} />
           </form>
         )}
@@ -689,7 +695,7 @@ function ServiceCreationDialog() {
               form={formId}
               disabled={
                 !type ||
-                !organizationId ||
+                !ownerOrganizationId ||
                 !credentialTemplateIds.issuance ||
                 !credentialTemplateIds.replacement ||
                 !credentialTemplateIds.disposal
@@ -736,16 +742,18 @@ export function ServicesPage() {
           icon={Server}
           title={t("internalCount")}
           value={
-            backoffice.services.filter((item) => item.type === "internal")
-              .length
+            backoffice.services.filter(
+              (item) => item.type === serviceTypeValues.internal,
+            ).length
           }
         />
         <MetricCard
           icon={Cloud}
           title={t("externalCount")}
           value={
-            backoffice.services.filter((item) => item.type === "external")
-              .length
+            backoffice.services.filter(
+              (item) => item.type === serviceTypeValues.external,
+            ).length
           }
         />
       </div>
@@ -757,6 +765,7 @@ export function ServicesPage() {
 
 function EndpointEditDialog({ endpoint }: { endpoint: ServiceEndpoint }) {
   const backoffice = useBackoffice()
+  const sessionAccess = useSessionAccess()
   const access = useServiceResourceAccess()
   const t = useTranslations("backoffice.endpoints")
   const common = useTranslations("backoffice.common")
@@ -764,10 +773,11 @@ function EndpointEditDialog({ endpoint }: { endpoint: ServiceEndpoint }) {
   const [serviceId, setServiceId] = useState<string | null>(endpoint.serviceId)
   const [method, setMethod] = useState<HttpMethod | null>(endpoint.method)
   const [error, setError] = useState<BackofficeErrorCode>()
+  const [impact, setImpact] = useState<EndpointChangeImpact | null>(null)
   const services = backoffice.services.filter(
     (service) =>
-      service.status === "active" &&
-      service.type === "internal" &&
+      service.status === entityStatuses.active &&
+      service.type === serviceTypeValues.internal &&
       canManageService(access, service),
   )
   const formId = `endpoint-${endpoint.id}-form`
@@ -775,13 +785,13 @@ function EndpointEditDialog({ endpoint }: { endpoint: ServiceEndpoint }) {
     (field) => field.endpointId === endpoint.id,
   )
   const requestParameters = endpointFields.filter((field) =>
-    ["path", "query", "header"].includes(field.location),
+    isEndpointRequestParameterLocation(field.location),
   )
   const requestBodyFields = endpointFields.filter(
-    (field) => field.location === "request-body",
+    (field) => field.location === endpointFieldLocationValues.requestBody,
   )
   const responseBodyFields = endpointFields.filter(
-    (field) => field.location === "response-body",
+    (field) => field.location === endpointFieldLocationValues.responseBody,
   )
 
   function changeOpen(nextOpen: boolean) {
@@ -789,6 +799,7 @@ function EndpointEditDialog({ endpoint }: { endpoint: ServiceEndpoint }) {
     setServiceId(endpoint.serviceId)
     setMethod(endpoint.method)
     setError(undefined)
+    setImpact(null)
   }
 
   async function submit(form: HTMLFormElement) {
@@ -798,15 +809,36 @@ function EndpointEditDialog({ endpoint }: { endpoint: ServiceEndpoint }) {
       name: data.get("name"),
       method,
       path: data.get("path"),
+      version: data.get("version"),
+      lifecycle: endpoint.lifecycle,
       fields: parseEndpointFields(data),
     })
     if (!parsed.success) {
       setError("invalid-input")
       return
     }
+    const nextImpact = resolveEndpointChangeImpact(
+      backoffice,
+      endpoint.id,
+      parsed.data.fields,
+    )
+    const metadataChanged =
+      endpoint.name !== parsed.data.name ||
+      endpoint.method !== parsed.data.method ||
+      endpoint.path !== parsed.data.path ||
+      endpoint.version !== parsed.data.version
+    const hasFieldChanges =
+      nextImpact.addedFields.length > 0 ||
+      nextImpact.removedFields.length > 0 ||
+      nextImpact.changedFields.length > 0
+    if (!impact && (metadataChanged || hasFieldChanges)) {
+      setImpact(nextImpact)
+      return
+    }
     const result = await backoffice.updateServiceEndpoint(
       endpoint.id,
       parsed.data,
+      sessionAccess.currentUser?.id ?? "",
     )
     if (!result.ok) {
       setError(result.error)
@@ -830,6 +862,9 @@ function EndpointEditDialog({ endpoint }: { endpoint: ServiceEndpoint }) {
         <form
           id={formId}
           className="grid gap-4"
+          onChange={() => {
+            setImpact(null)
+          }}
           onSubmit={(event) => {
             event.preventDefault()
             void submit(event.currentTarget)
@@ -873,6 +908,20 @@ function EndpointEditDialog({ endpoint }: { endpoint: ServiceEndpoint }) {
               maxLength={500}
               pattern="/.*"
               defaultValue={endpoint.path}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${formId}-version`}>
+              {t("version")}
+            </FieldLabel>
+            <Input
+              id={`${formId}-version`}
+              name="version"
+              required
+              minLength={1}
+              maxLength={40}
+              pattern="[A-Za-z0-9][A-Za-z0-9._-]*"
+              defaultValue={endpoint.version}
             />
           </Field>
           <Field>
@@ -932,6 +981,39 @@ function EndpointEditDialog({ endpoint }: { endpoint: ServiceEndpoint }) {
           <FieldDescription id={`${formId}-schema-description`}>
             {t("schemaInputDescription")}
           </FieldDescription>
+          {impact ? (
+            <section className="grid gap-2 rounded-card border border-warning-foreground/30 bg-warning p-3">
+              <h3 className="font-semibold">{t("changeImpactTitle")}</h3>
+              <p className="text-sm text-warning-foreground">
+                {t("changeImpactDescription")}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="success">
+                  {t("addedFieldCount", { count: impact.addedFields.length })}
+                </Badge>
+                <Badge variant="destructive">
+                  {t("removedFieldCount", {
+                    count: impact.removedFields.length,
+                  })}
+                </Badge>
+                <Badge variant="warning">
+                  {t("changedFieldCount", {
+                    count: impact.changedFields.length,
+                  })}
+                </Badge>
+                <Badge variant="outline">
+                  {t("affectedPolicyCount", {
+                    count: impact.accessPolicyIds.length,
+                  })}
+                </Badge>
+                <Badge variant="outline">
+                  {t("affectedCredentialCount", {
+                    count: impact.apiKeyIds.length,
+                  })}
+                </Badge>
+              </div>
+            </section>
+          ) : null}
           <CommandErrorMessage error={error} />
         </form>
         <DialogFooter>
@@ -939,7 +1021,7 @@ function EndpointEditDialog({ endpoint }: { endpoint: ServiceEndpoint }) {
             {common("cancel")}
           </DialogClose>
           <Button type="submit" form={formId} disabled={!serviceId || !method}>
-            {common("save")}
+            {impact ? common("save") : t("reviewImpact")}
           </Button>
         </DialogFooter>
       </FormDialogContent>
@@ -966,6 +1048,7 @@ function EndpointsTable({
         header: common("name"),
       },
       { accessorKey: "method", header: t("method"), size: 80 },
+      { accessorKey: "version", header: t("version"), size: 96 },
       {
         accessorKey: "path",
         header: t("path"),
@@ -988,6 +1071,22 @@ function EndpointsTable({
           )
         },
         size: 320,
+      },
+      {
+        accessorKey: "lifecycle",
+        header: common("status"),
+        size: 112,
+        cell: ({ row }) => (
+          <Badge
+            variant={
+              row.original.lifecycle === entityStatuses.active
+                ? "success"
+                : "warning"
+            }
+          >
+            {t(row.original.lifecycle)}
+          </Badge>
+        ),
       },
     ]
     if (showService) {
@@ -1028,6 +1127,11 @@ function EndpointsTable({
         getValue: (row) => row.method,
       },
       { id: "endpoint-path", label: t("path"), getValue: (row) => row.path },
+      {
+        id: "endpoint-status",
+        label: common("status"),
+        getValue: (row) => t(row.lifecycle),
+      },
     ]
     if (showService) {
       nextFilters.splice(1, 0, {
@@ -1060,6 +1164,7 @@ function EndpointsTable({
 
 function EndpointCreationDialog() {
   const backoffice = useBackoffice()
+  const sessionAccess = useSessionAccess()
   const access = useServiceResourceAccess()
   const t = useTranslations("backoffice.endpoints")
   const common = useTranslations("backoffice.common")
@@ -1069,8 +1174,8 @@ function EndpointCreationDialog() {
   const [error, setError] = useState<BackofficeErrorCode>()
   const services = backoffice.services.filter(
     (item) =>
-      item.status === "active" &&
-      item.type === "internal" &&
+      item.status === entityStatuses.active &&
+      item.type === serviceTypeValues.internal &&
       canManageService(access, item),
   )
   const formId = "endpoint-create-form"
@@ -1089,13 +1194,18 @@ function EndpointCreationDialog() {
       name: data.get("name"),
       method,
       path: data.get("path"),
+      version: data.get("version"),
+      lifecycle: endpointLifecycleValues.active,
       fields: parseEndpointFields(data),
     })
     if (!parsed.success) {
       setError("invalid-input")
       return
     }
-    const result = await backoffice.createServiceEndpoint(parsed.data)
+    const result = await backoffice.createServiceEndpoint(
+      parsed.data,
+      sessionAccess.currentUser?.id ?? "",
+    )
     if (!result.ok) {
       setError(result.error)
       return
@@ -1143,6 +1253,18 @@ function EndpointCreationDialog() {
                 required
                 minLength={2}
                 maxLength={100}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="endpoint-version">{t("version")}</FieldLabel>
+              <Input
+                id="endpoint-version"
+                name="version"
+                required
+                minLength={1}
+                maxLength={40}
+                pattern="[A-Za-z0-9][A-Za-z0-9._-]*"
+                defaultValue="v1"
               />
             </Field>
             <FormSelect
@@ -1243,20 +1365,41 @@ export function ServiceEndpointsPage() {
     ) &&
     backoffice.services.some(
       (service) =>
-        service.status === "active" &&
-        service.type === "internal" &&
+        service.status === entityStatuses.active &&
+        service.type === serviceTypeValues.internal &&
         canManageService(access, service),
     )
   const canViewDetail = sessionAccess.canAccessUiResource(
     uiResourceKeys.serviceEndpoints.detail.key,
   )
+  const canSynchronize =
+    sessionAccess.canAccessUiResource(
+      uiResourceKeys.serviceEndpoints.list.actions.syncEndpoints,
+    ) &&
+    sessionAccess.canAccessUiResource(uiResourceKeys.serviceEndpoints.sync.key)
   return (
     <div className="grid gap-6">
       <PageHeader
         eyebrow={t("eyebrow")}
         title={t("title")}
         description={t("description")}
-        actions={canRegister ? <EndpointCreationDialog /> : null}
+        actions={
+          canRegister || canSynchronize ? (
+            <>
+              {canSynchronize ? (
+                <Button
+                  variant="outline"
+                  nativeButton={false}
+                  render={<Link href="/service-endpoints/sync" />}
+                >
+                  <RefreshCw />
+                  {t("syncOpenApi")}
+                </Button>
+              ) : null}
+              {canRegister ? <EndpointCreationDialog /> : null}
+            </>
+          ) : null
+        }
       />
       <div className="grid gap-3 sm:grid-cols-2">
         <MetricCard
@@ -1322,6 +1465,7 @@ export function ServiceEndpointDetailPage({
     throw new Error(`Endpoint service not found: ${endpoint.id}`)
   }
   const resolvedEndpointId = endpoint.id
+  const endpointLifecycle = endpoint.lifecycle
   const canManage = canManageService(access, service)
   const canUpdate =
     canManage &&
@@ -1333,27 +1477,90 @@ export function ServiceEndpointDetailPage({
     sessionAccess.canAccessUiResource(
       uiResourceKeys.serviceEndpoints.detail.actions.deleteEndpoint,
     )
+  const canChangeLifecycle =
+    canManage &&
+    sessionAccess.canAccessUiResource(
+      uiResourceKeys.serviceEndpoints.detail.actions.changeEndpointLifecycle,
+    )
   const endpointFields = backoffice.serviceEndpointFields.filter(
     (field) => field.endpointId === endpoint.id,
   )
+  const endpointRevisions = backoffice.serviceEndpointRevisions
+    .filter((revision) => revision.endpointId === endpoint.id)
+    .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))
+  const revisionColumns: ColumnDef<ServiceEndpointRevision>[] = [
+    {
+      accessorKey: "version",
+      header: t("version"),
+      size: 120,
+    },
+    {
+      id: "methodPath",
+      header: `${t("method")} / ${t("path")}`,
+      cell: ({ row }) => (
+        <span className="flex min-w-0 items-center gap-2">
+          <Badge variant="outline">{row.original.endpoint.method}</Badge>
+          <code className="truncate" title={row.original.endpoint.path}>
+            {row.original.endpoint.path}
+          </code>
+        </span>
+      ),
+    },
+    {
+      id: "fields",
+      header: t("fieldTotal"),
+      size: 120,
+      cell: ({ row }) => t("fieldCount", { count: row.original.fields.length }),
+    },
+    {
+      accessorKey: "createdAt",
+      header: common("createdAt"),
+      size: 180,
+      cell: ({ row }) => labels.dateTime(row.original.createdAt),
+    },
+  ]
   const requestParameters = endpointFields.filter((field) =>
-    ["path", "query", "header"].includes(field.location),
+    isEndpointRequestParameterLocation(field.location),
   )
   const requestBodyFields = endpointFields.filter(
-    (field) => field.location === "request-body",
+    (field) => field.location === endpointFieldLocationValues.requestBody,
   )
   const responseBodyFields = endpointFields.filter(
-    (field) => field.location === "response-body",
+    (field) => field.location === endpointFieldLocationValues.responseBody,
   )
 
   async function removeEndpoint() {
-    const result = await backoffice.deleteServiceEndpoint(resolvedEndpointId)
+    const result = await backoffice.deleteServiceEndpoint(
+      resolvedEndpointId,
+      sessionAccess.currentUser?.id ?? "",
+    )
     if (!result.ok) {
       snackbar.error(errors(result.error))
       return
     }
     snackbar.success(t("deleted"))
     router.push("/service-endpoints")
+  }
+
+  async function changeLifecycle() {
+    const result = await backoffice.setServiceEndpointLifecycle(
+      resolvedEndpointId,
+      endpointLifecycle === entityStatuses.active
+        ? endpointLifecycleValues.deprecated
+        : endpointLifecycleValues.active,
+      sessionAccess.currentUser?.id ?? "",
+    )
+    if (!result.ok) {
+      snackbar.error(errors(result.error))
+      return
+    }
+    snackbar.success(
+      t(
+        result.value.lifecycle === entityStatuses.active
+          ? "restored"
+          : "deprecatedSuccess",
+      ),
+    )
   }
 
   return (
@@ -1363,9 +1570,35 @@ export function ServiceEndpointDetailPage({
         title={endpoint.name}
         description={t("detailDescription")}
         actions={
-          canUpdate || canDelete ? (
+          canUpdate || canDelete || canChangeLifecycle ? (
             <>
               {canUpdate ? <EndpointEditDialog endpoint={endpoint} /> : null}
+              {canChangeLifecycle ? (
+                <ConfirmAction
+                  trigger={t(
+                    endpoint.lifecycle === entityStatuses.active
+                      ? "deprecate"
+                      : "restoreEndpoint",
+                  )}
+                  title={t(
+                    endpoint.lifecycle === entityStatuses.active
+                      ? "deprecateTitle"
+                      : "restoreTitle",
+                  )}
+                  description={t(
+                    endpoint.lifecycle === entityStatuses.active
+                      ? "deprecateDescription"
+                      : "restoreDescription",
+                  )}
+                  confirmLabel={t(
+                    endpoint.lifecycle === entityStatuses.active
+                      ? "deprecate"
+                      : "restoreEndpoint",
+                  )}
+                  cancelLabel={common("cancel")}
+                  onConfirm={changeLifecycle}
+                />
+              ) : null}
               {canDelete ? (
                 <ConfirmAction
                   trigger={
@@ -1403,6 +1636,18 @@ export function ServiceEndpointDetailPage({
               </UiResourceLink>
             </DetailItem>
             <DetailItem label={t("method")}>{endpoint.method}</DetailItem>
+            <DetailItem label={t("version")}>{endpoint.version}</DetailItem>
+            <DetailItem label={common("status")}>
+              <Badge
+                variant={
+                  endpoint.lifecycle === entityStatuses.active
+                    ? "success"
+                    : "warning"
+                }
+              >
+                {t(endpoint.lifecycle)}
+              </Badge>
+            </DetailItem>
             <DetailItem label={t("path")}>
               <a
                 href={new URL(endpoint.path, service.host).toString()}
@@ -1429,6 +1674,21 @@ export function ServiceEndpointDetailPage({
             fields={requestParameters}
             caption={t("requestParameters")}
             empty={t("requestParametersEmpty")}
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("versionHistory")}</CardTitle>
+          <CardDescription>{t("versionHistoryDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DataTable
+            caption={t("versionHistory")}
+            columns={revisionColumns}
+            data={endpointRevisions}
+            getRowId={(row) => row.id}
+            empty={t("versionHistoryEmpty")}
           />
         </CardContent>
       </Card>
@@ -1509,21 +1769,25 @@ export function ServiceDetailPage({ serviceId }: { serviceId: string }) {
       uiResourceKeys.services.detail.actions.deleteService,
     )
   const canRequestCredential =
-    service.status === "active" &&
+    service.status === entityStatuses.active &&
+    sessionAccess.canAccessUiResource(uiResourceKeys.apiKeys.request.key) &&
     !sessionAccess.ownedCredentialServiceIds.includes(service.id) &&
     backoffice.approvalLines.some(
       (line) =>
-        line.status === "active" &&
+        line.status === entityStatuses.active &&
         line.id === service.credentialTemplateIds.issuance &&
-        line.category === "credential" &&
-        line.type === "api-key",
+        line.category === requestCategoryValues.credential &&
+        line.type === approvalTypeValues.apiKey,
     )
   const canViewEndpointDetail = sessionAccess.canAccessUiResource(
     uiResourceKeys.serviceEndpoints.detail.key,
   )
 
   async function removeService() {
-    const result = await backoffice.deleteService(serviceId)
+    const result = await backoffice.deleteService(
+      serviceId,
+      sessionAccess.currentUser?.id ?? "",
+    )
     if (!result.ok) {
       snackbar.error(errors(result.error))
       return
@@ -1543,12 +1807,15 @@ export function ServiceDetailPage({ serviceId }: { serviceId: string }) {
             {sessionAccess.ownedCredentialServiceIds.includes(
               service.id,
             ) ? null : canRequestCredential ? (
-              <ApiKeyIssuanceDialog
-                templates={backoffice.approvalLines}
-                initialServiceId={service.id}
-                triggerLabel={credentialsT("requestFromDetail")}
-                excludedServiceIds={sessionAccess.ownedCredentialServiceIds}
-              />
+              <Button
+                nativeButton={false}
+                render={
+                  <Link href={`/credentials/request?serviceId=${service.id}`} />
+                }
+              >
+                <KeyRound />
+                {credentialsT("requestFromDetail")}
+              </Button>
             ) : (
               <Button disabled>{credentialsT("requestFromDetail")}</Button>
             )}
@@ -1583,7 +1850,9 @@ export function ServiceDetailPage({ serviceId }: { serviceId: string }) {
         </CardHeader>
         <CardContent>
           <DetailGrid>
-            <DetailItem label={common("code")}>{service.code}</DetailItem>
+            <DetailItem label={t("slug")}>
+              <code>{service.slug}</code>
+            </DetailItem>
             <DetailItem label={t("host")}>{service.host}</DetailItem>
             <DetailItem label={t("type")}>
               <ServiceTypeBadge type={service.type} />
@@ -1622,7 +1891,7 @@ export function ServiceDetailPage({ serviceId }: { serviceId: string }) {
           </DetailGrid>
         </CardContent>
       </Card>
-      {service.type === "internal" ? (
+      {service.type === serviceTypeValues.internal ? (
         <Card>
           <CardHeader>
             <CardTitle>{t("endpoints")}</CardTitle>

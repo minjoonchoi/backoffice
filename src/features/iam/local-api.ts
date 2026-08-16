@@ -1,5 +1,9 @@
+import { employmentStatusValues } from "@/features/iam/model"
 import type { IamApi } from "@/features/iam/api"
-import { hasUiResourcePolicyAccess } from "@/auth/ui-resource-policy-access"
+import {
+  hasUiResourcePolicyAccess,
+  resolveUiResourcePolicyAccess,
+} from "@/auth/ui-resource-policy-access"
 import { uiResourceKeys } from "@/config/menu-registry"
 import { entityIdListSchema } from "@/domain/common"
 import {
@@ -8,36 +12,36 @@ import {
 } from "@/application/api/local-state"
 import type { BackofficeState } from "@/application/state/model"
 import {
-  isSystemManagedGroup,
   isSystemManagedRole,
-  isSystemGroup,
   isSystemRole,
   type BackofficeSystemReferences,
 } from "@/domain/system-references"
 import {
+  applicationInputSchema,
   employmentStatusSchema,
-  groupInputSchema,
   organizationInputSchema,
   roleInputSchema,
   userInputSchema,
   type BackofficeUser,
-  type Group,
+  type Application,
   type Organization,
   type Role,
 } from "@/features/iam/model"
+import { resolveOrganizationMembershipRemovalImpact } from "@/features/iam/relationship-impact"
+import { accessPolicyAssignmentTargets } from "@/features/access-policies/model"
 
-export function synchronizeOrganizationLeaderGroup(
-  groups: Group[],
+export function synchronizeOrganizationLeaderRole(
+  roles: Role[],
   organizations: Organization[],
   systemReferences: BackofficeSystemReferences,
 ) {
   const leaderUserIds = [
     ...new Set(organizations.map((organization) => organization.leaderUserId)),
   ]
-  return groups.map((group) =>
-    group.id === systemReferences.groupIds.organizationLeader
-      ? { ...group, userIds: leaderUserIds }
-      : group,
+  return roles.map((role) =>
+    role.id === systemReferences.roleIds.serviceOperator
+      ? { ...role, userIds: leaderUserIds }
+      : role,
   )
 }
 
@@ -70,11 +74,7 @@ function createsOrganizationCycle(
 function validateIds(
   values: unknown,
   records: readonly { id: string }[],
-  missingError:
-    | "user-not-found"
-    | "organization-not-found"
-    | "role-not-found"
-    | "group-not-found",
+  missingError: "user-not-found" | "organization-not-found" | "role-not-found",
 ) {
   const parsed = entityIdListSchema.safeParse(values)
   if (!parsed.success) return { ok: false, error: "invalid-input" } as const
@@ -84,13 +84,146 @@ function validateIds(
   return { ok: true, ids: parsed.data } as const
 }
 
+function hasAnyUiResourceAccess(
+  state: BackofficeState,
+  requesterId: string,
+  resourceKeys: readonly string[],
+) {
+  return resourceKeys.some((resourceKey) =>
+    hasUiResourcePolicyAccess(state, requesterId, resourceKey),
+  )
+}
+
 export function createLocalIamApi(
   state: BackofficeState,
   updateState: BackofficeStateUpdater,
 ): IamApi {
   return {
-    createOrganization: async (input) => {
+    createApplication: async (input, requesterId) => {
       await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.applications.list.actions.createApplication,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
+      const parsed = applicationInputSchema.safeParse(input)
+      if (!parsed.success) return { ok: false, error: "invalid-input" }
+      if (
+        !state.organizations.some(
+          (organization) => organization.id === parsed.data.ownerOrganizationId,
+        )
+      ) {
+        return { ok: false, error: "organization-not-found" }
+      }
+      const normalizedName = parsed.data.name.toLocaleLowerCase()
+      if (
+        state.applications.some(
+          (application) =>
+            application.name.toLocaleLowerCase() === normalizedName ||
+            application.slug === parsed.data.slug,
+        )
+      ) {
+        return { ok: false, error: "invalid-input" }
+      }
+      const application: Application = {
+        ...parsed.data,
+        ...createRecordBase(),
+      }
+      updateState((current) => ({
+        ...current,
+        applications: [...current.applications, application],
+      }))
+      return { ok: true, value: application }
+    },
+
+    updateApplication: async (id, input, requesterId) => {
+      await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.applications.detail.actions.updateApplication,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
+      const existing = state.applications.find(
+        (application) => application.id === id,
+      )
+      if (!existing) return { ok: false, error: "invalid-input" }
+      const parsed = applicationInputSchema.safeParse(input)
+      if (!parsed.success) return { ok: false, error: "invalid-input" }
+      if (parsed.data.slug !== existing.slug) {
+        return { ok: false, error: "protected-relationship" }
+      }
+      if (
+        !state.organizations.some(
+          (organization) => organization.id === parsed.data.ownerOrganizationId,
+        )
+      ) {
+        return { ok: false, error: "organization-not-found" }
+      }
+      const application: Application = {
+        ...existing,
+        ...parsed.data,
+      }
+      updateState((current) => ({
+        ...current,
+        applications: current.applications.map((candidate) =>
+          candidate.id === id ? application : candidate,
+        ),
+      }))
+      return { ok: true, value: application }
+    },
+
+    deleteApplication: async (id, requesterId) => {
+      await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.applications.detail.actions.deleteApplication,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
+      const application = state.applications.find(
+        (candidate) => candidate.id === id,
+      )
+      if (!application) return { ok: false, error: "invalid-input" }
+      const inUse =
+        state.apiKeys.some((apiKey) => apiKey.applicationId === id) ||
+        state.accessPolicyAssignments.some(
+          (assignment) =>
+            assignment.targetType ===
+              accessPolicyAssignmentTargets.application &&
+            assignment.targetId === id,
+        )
+      if (inUse) return { ok: false, error: "protected-relationship" }
+      updateState((current) => ({
+        ...current,
+        applications: current.applications.filter(
+          (candidate) => candidate.id !== id,
+        ),
+      }))
+      return { ok: true, value: application }
+    },
+
+    createOrganization: async (input, requesterId = "") => {
+      await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.organizations.list.actions.createOrganization,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       const parsed = organizationInputSchema.safeParse(input)
       if (!parsed.success) return { ok: false, error: "invalid-input" }
       if (
@@ -104,15 +237,15 @@ export function createLocalIamApi(
       const leader = state.users.find(
         (user) => user.id === parsed.data.leaderUserId,
       )
-      if (leader?.employmentStatus !== "employed") {
+      if (leader?.employmentStatus !== employmentStatusValues.employed) {
         return { ok: false, error: "user-not-found" }
       }
       const organization = { ...parsed.data, ...createRecordBase() }
       updateState((current) => ({
         ...current,
         organizations: [...current.organizations, organization],
-        groups: synchronizeOrganizationLeaderGroup(
-          current.groups,
+        roles: synchronizeOrganizationLeaderRole(
+          current.roles,
           [...current.organizations, organization],
           current.systemReferences,
         ),
@@ -128,8 +261,17 @@ export function createLocalIamApi(
       return { ok: true, value: organization }
     },
 
-    updateOrganization: async (id, input) => {
+    updateOrganization: async (id, input, requesterId = "") => {
       await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.organizations.detail.actions.updateOrganization,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       const existing = state.organizations.find((item) => item.id === id)
       if (!existing) return { ok: false, error: "organization-not-found" }
       const parsed = organizationInputSchema.safeParse(input)
@@ -150,7 +292,7 @@ export function createLocalIamApi(
       const leader = state.users.find(
         (user) => user.id === parsed.data.leaderUserId,
       )
-      if (leader?.employmentStatus !== "employed") {
+      if (leader?.employmentStatus !== employmentStatusValues.employed) {
         return { ok: false, error: "user-not-found" }
       }
       const organization = {
@@ -163,8 +305,8 @@ export function createLocalIamApi(
         organizations: current.organizations.map((item) =>
           item.id === id ? organization : item,
         ),
-        groups: synchronizeOrganizationLeaderGroup(
-          current.groups,
+        roles: synchronizeOrganizationLeaderRole(
+          current.roles,
           current.organizations.map((item) =>
             item.id === id ? organization : item,
           ),
@@ -179,8 +321,17 @@ export function createLocalIamApi(
       return { ok: true, value: organization }
     },
 
-    addUsersToOrganization: async (id, userIds) => {
+    addUsersToOrganization: async (id, userIds, requesterId = "") => {
       await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.organizations.detail.actions.addOrganizationUser,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       if (!state.organizations.some((item) => item.id === id)) {
         return { ok: false, error: "organization-not-found" }
       }
@@ -199,8 +350,17 @@ export function createLocalIamApi(
       }
     },
 
-    addOrganizationsToUser: async (id, organizationIds) => {
+    addOrganizationsToUser: async (id, organizationIds, requesterId = "") => {
       await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.users.detail.actions.assignUserOrganization,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       const existing = state.users.find((user) => user.id === id)
       if (!existing) return { ok: false, error: "user-not-found" }
       const organizationsResult = validateIds(
@@ -223,8 +383,20 @@ export function createLocalIamApi(
       return { ok: true, value: user }
     },
 
-    removeUsersFromOrganizations: async (userIds, organizationIds) => {
+    removeUsersFromOrganizations: async (
+      userIds,
+      organizationIds,
+      requesterId = "",
+    ) => {
       await Promise.resolve()
+      if (
+        !hasAnyUiResourceAccess(state, requesterId, [
+          uiResourceKeys.organizations.detail.actions.addOrganizationUser,
+          uiResourceKeys.users.detail.actions.assignUserOrganization,
+        ])
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       const usersResult = validateIds(userIds, state.users, "user-not-found")
       if (!usersResult.ok) return usersResult
       const organizationsResult = validateIds(
@@ -235,21 +407,20 @@ export function createLocalIamApi(
       if (!organizationsResult.ok) return organizationsResult
       const selectedUserIds = new Set(usersResult.ids)
       const selectedOrganizationIds = new Set(organizationsResult.ids)
-      if (
-        state.organizations.some(
-          (organization) =>
-            selectedOrganizationIds.has(organization.id) &&
-            selectedUserIds.has(organization.leaderUserId),
-        ) ||
-        state.users.some(
-          (user) =>
-            selectedUserIds.has(user.id) &&
-            user.employmentStatus !== "resigned" &&
-            user.organizationIds.every((organizationId) =>
-              selectedOrganizationIds.has(organizationId),
-            ),
-        )
-      ) {
+      const removesProtectedRelationship = usersResult.ids.some((userId) =>
+        organizationsResult.ids.some(
+          (organizationId) =>
+            state.users
+              .find((user) => user.id === userId)
+              ?.organizationIds.includes(organizationId) &&
+            resolveOrganizationMembershipRemovalImpact(
+              state,
+              userId,
+              organizationId,
+            ).blocked,
+        ),
+      )
+      if (removesProtectedRelationship) {
         return { ok: false, error: "protected-relationship" }
       }
       const users = state.users.map((user) =>
@@ -270,8 +441,17 @@ export function createLocalIamApi(
       }
     },
 
-    createUser: async (input) => {
+    createUser: async (input, requesterId = "") => {
       await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.users.list.actions.createUser,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       const parsed = userInputSchema.safeParse(input)
       if (!parsed.success) return { ok: false, error: "invalid-input" }
       if (
@@ -305,8 +485,17 @@ export function createLocalIamApi(
       return { ok: true, value: user }
     },
 
-    createRole: async (input) => {
+    createRole: async (input, requesterId = "") => {
       await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.roles.list.actions.createRole,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       const parsed = roleInputSchema.safeParse(input)
       if (!parsed.success) return { ok: false, error: "invalid-input" }
       const normalizedName = parsed.data.name.toLocaleLowerCase()
@@ -388,11 +577,10 @@ export function createLocalIamApi(
         role.organizationIds.length > 0 ||
         state.accessPolicyAssignments.some(
           (assignment) =>
-            assignment.targetType === "role" && assignment.targetId === id,
+            assignment.targetType === accessPolicyAssignmentTargets.role &&
+            assignment.targetId === id,
         ) ||
-        state.uiNamespaces.some(
-          (namespace) => namespace.administratorRoleId === id,
-        )
+        state.namespaces.some((namespace) => namespace.managerRoleId === id)
       if (inUse) return { ok: false, error: "role-in-use" }
       updateState((current) => ({
         ...current,
@@ -401,170 +589,16 @@ export function createLocalIamApi(
       return { ok: true, value: role }
     },
 
-    createGroup: async (input) => {
-      await Promise.resolve()
-      const parsed = groupInputSchema.safeParse(input)
-      if (!parsed.success) return { ok: false, error: "invalid-input" }
-      const normalizedName = parsed.data.name.toLocaleLowerCase()
-      if (
-        state.groups.some(
-          (group) => group.name.toLocaleLowerCase() === normalizedName,
-        )
-      ) {
-        return { ok: false, error: "group-name-exists" }
-      }
-      const group = { ...parsed.data, ...createRecordBase(), userIds: [] }
-      updateState((current) => ({
-        ...current,
-        groups: [...current.groups, group],
-      }))
-      return { ok: true, value: group }
-    },
-
-    updateGroup: async (id, input, requesterId) => {
+    assignUsersToRoles: async (userIds, roleIds, requesterId = "") => {
       await Promise.resolve()
       if (
-        !hasUiResourcePolicyAccess(
-          state,
-          requesterId,
-          uiResourceKeys.groups.detail.actions.updateGroup,
-        )
+        !hasAnyUiResourceAccess(state, requesterId, [
+          uiResourceKeys.roles.detail.actions.assignRoleUser,
+          uiResourceKeys.users.detail.actions.assignUserRole,
+        ])
       ) {
         return { ok: false, error: "policy-operation-forbidden" }
       }
-      const existing = state.groups.find((group) => group.id === id)
-      if (!existing) return { ok: false, error: "group-not-found" }
-      if (isSystemGroup(state.systemReferences, id)) {
-        return { ok: false, error: "protected-relationship" }
-      }
-      const parsed = groupInputSchema.safeParse(input)
-      if (!parsed.success) return { ok: false, error: "invalid-input" }
-      const normalizedName = parsed.data.name.toLocaleLowerCase()
-      if (
-        state.groups.some(
-          (group) =>
-            group.id !== id &&
-            group.name.toLocaleLowerCase() === normalizedName,
-        )
-      ) {
-        return { ok: false, error: "group-name-exists" }
-      }
-      const group = { ...existing, ...parsed.data }
-      updateState((current) => ({
-        ...current,
-        groups: current.groups.map((candidate) =>
-          candidate.id === id ? group : candidate,
-        ),
-      }))
-      return { ok: true, value: group }
-    },
-
-    deleteGroup: async (id, requesterId) => {
-      await Promise.resolve()
-      if (
-        !hasUiResourcePolicyAccess(
-          state,
-          requesterId,
-          uiResourceKeys.groups.detail.actions.deleteGroup,
-        )
-      ) {
-        return { ok: false, error: "policy-operation-forbidden" }
-      }
-      const group = state.groups.find((candidate) => candidate.id === id)
-      if (!group) return { ok: false, error: "group-not-found" }
-      if (isSystemGroup(state.systemReferences, id)) {
-        return { ok: false, error: "protected-relationship" }
-      }
-      const inUse =
-        group.userIds.length > 0 ||
-        state.accessPolicyAssignments.some(
-          (assignment) =>
-            assignment.targetType === "group" && assignment.targetId === id,
-        )
-      if (inUse) return { ok: false, error: "group-in-use" }
-      updateState((current) => ({
-        ...current,
-        groups: current.groups.filter((candidate) => candidate.id !== id),
-      }))
-      return { ok: true, value: group }
-    },
-
-    assignUsersToGroups: async (userIds, groupIds) => {
-      await Promise.resolve()
-      const usersResult = validateIds(userIds, state.users, "user-not-found")
-      if (!usersResult.ok) return usersResult
-      const groupsResult = validateIds(
-        groupIds,
-        state.groups,
-        "group-not-found",
-      )
-      if (!groupsResult.ok) return groupsResult
-      if (
-        groupsResult.ids.some((id) =>
-          isSystemManagedGroup(state.systemReferences, id),
-        )
-      ) {
-        return { ok: false, error: "protected-relationship" }
-      }
-      const selectedGroupIds = new Set(groupsResult.ids)
-      const groups = state.groups.map((group) =>
-        selectedGroupIds.has(group.id)
-          ? {
-              ...group,
-              userIds: [
-                ...group.userIds,
-                ...usersResult.ids.filter(
-                  (userId) => !group.userIds.includes(userId),
-                ),
-              ],
-            }
-          : group,
-      )
-      updateState((current) => ({ ...current, groups }))
-      return {
-        ok: true,
-        value: groups.filter((group) => selectedGroupIds.has(group.id)),
-      }
-    },
-
-    unassignUsersFromGroups: async (userIds, groupIds) => {
-      await Promise.resolve()
-      const usersResult = validateIds(userIds, state.users, "user-not-found")
-      if (!usersResult.ok) return usersResult
-      const groupsResult = validateIds(
-        groupIds,
-        state.groups,
-        "group-not-found",
-      )
-      if (!groupsResult.ok) return groupsResult
-      if (
-        groupsResult.ids.some((id) =>
-          isSystemManagedGroup(state.systemReferences, id),
-        )
-      ) {
-        return { ok: false, error: "protected-relationship" }
-      }
-      const selectedUserIds = new Set(usersResult.ids)
-      const selectedGroupIds = new Set(groupsResult.ids)
-      const groups = state.groups.map((group) =>
-        selectedGroupIds.has(group.id)
-          ? {
-              ...group,
-              userIds: group.userIds.filter(
-                (userId) => !selectedUserIds.has(userId),
-              ),
-            }
-          : group,
-      )
-      updateState((current) => ({ ...current, groups }))
-      return {
-        ok: true,
-        value: groups.filter((group) => selectedGroupIds.has(group.id)),
-      }
-    },
-
-    assignUsersToRoles: async (userIds, roleIds) => {
-      await Promise.resolve()
       const usersResult = validateIds(userIds, state.users, "user-not-found")
       if (!usersResult.ok) return usersResult
       const rolesResult = validateIds(roleIds, state.roles, "role-not-found")
@@ -597,8 +631,20 @@ export function createLocalIamApi(
       }
     },
 
-    assignOrganizationsToRoles: async (organizationIds, roleIds) => {
+    assignOrganizationsToRoles: async (
+      organizationIds,
+      roleIds,
+      requesterId = "",
+    ) => {
       await Promise.resolve()
+      if (
+        !hasAnyUiResourceAccess(state, requesterId, [
+          uiResourceKeys.roles.detail.actions.assignRoleOrganization,
+          uiResourceKeys.organizations.detail.actions.assignOrganizationRole,
+        ])
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       const organizationsResult = validateIds(
         organizationIds,
         state.organizations,
@@ -636,8 +682,16 @@ export function createLocalIamApi(
       }
     },
 
-    unassignUsersFromRoles: async (userIds, roleIds) => {
+    unassignUsersFromRoles: async (userIds, roleIds, requesterId = "") => {
       await Promise.resolve()
+      if (
+        !hasAnyUiResourceAccess(state, requesterId, [
+          uiResourceKeys.roles.detail.actions.assignRoleUser,
+          uiResourceKeys.users.detail.actions.assignUserRole,
+        ])
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       const usersResult = validateIds(userIds, state.users, "user-not-found")
       if (!usersResult.ok) return usersResult
       const rolesResult = validateIds(roleIds, state.roles, "role-not-found")
@@ -668,8 +722,20 @@ export function createLocalIamApi(
       }
     },
 
-    unassignOrganizationsFromRoles: async (organizationIds, roleIds) => {
+    unassignOrganizationsFromRoles: async (
+      organizationIds,
+      roleIds,
+      requesterId = "",
+    ) => {
       await Promise.resolve()
+      if (
+        !hasAnyUiResourceAccess(state, requesterId, [
+          uiResourceKeys.roles.detail.actions.assignRoleOrganization,
+          uiResourceKeys.organizations.detail.actions.assignOrganizationRole,
+        ])
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       const organizationsResult = validateIds(
         organizationIds,
         state.organizations,
@@ -705,14 +771,24 @@ export function createLocalIamApi(
       }
     },
 
-    setUserEmploymentStatus: async (id, status) => {
+    setUserEmploymentStatus: async (id, status, requesterId) => {
       await Promise.resolve()
+      if (
+        !resolveUiResourcePolicyAccess(state, requesterId).roleIds.includes(
+          state.systemReferences.roleIds.administrator,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       if (!employmentStatusSchema.safeParse(status).success) {
         return { ok: false, error: "invalid-input" }
       }
       const user = state.users.find((candidate) => candidate.id === id)
       if (!user) return { ok: false, error: "user-not-found" }
-      if (status !== "resigned" && user.organizationIds.length === 0) {
+      if (
+        status !== employmentStatusValues.resigned &&
+        user.organizationIds.length === 0
+      ) {
         return { ok: false, error: "invalid-input" }
       }
       const updated = { ...user, employmentStatus: status }

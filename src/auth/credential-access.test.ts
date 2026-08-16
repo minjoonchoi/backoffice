@@ -34,7 +34,8 @@ describe("credential visibility", () => {
     expect(visibility.requests).toHaveLength(1)
     expect(visibility.credentials[0]?.scopes).toEqual([
       "requester",
-      "ownerOrganization",
+      "serviceOwnerOrganization",
+      "applicationOwnerOrganization",
     ])
   })
 

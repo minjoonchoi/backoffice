@@ -57,8 +57,8 @@ describe("SessionAccessProvider", () => {
     expect(result.current.organizationNames).toEqual(["개발 2팀"])
     expect(result.current.effectiveRoles.map((role) => role.name)).toEqual([
       "Backoffice 일반 사용자",
+      "Backoffice 서비스 운영자",
     ])
-    expect(result.current.groupNames).toEqual(["조직장 그룹"])
     expect(result.current.assignedAccessPolicyIds.length).toBeGreaterThan(0)
     expect(result.current.accessibleMenuIds).toEqual([
       "home",
@@ -133,12 +133,15 @@ describe("SessionAccessProvider", () => {
     if (!organizationId) throw new Error("Organization fixture is missing")
 
     const created = await act(() =>
-      result.current.backoffice.createUser({
-        nickname: "Mason",
-        email: "mason@example.com",
-        employmentStatus: "employed",
-        organizationIds: [organizationId],
-      }),
+      result.current.backoffice.createUser(
+        {
+          nickname: "Mason",
+          email: "mason@example.com",
+          employmentStatus: "employed",
+          organizationIds: [organizationId],
+        },
+        result.current.session.currentUser?.id ?? "",
+      ),
     )
     expect(created.ok).toBe(true)
     if (!created.ok) return

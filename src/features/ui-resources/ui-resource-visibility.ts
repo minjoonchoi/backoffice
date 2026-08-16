@@ -1,7 +1,14 @@
 import type { UiResource } from "@/features/ui-resources/model"
+import { entityStatuses } from "@/domain/common"
 
+export const uiResourceVisibilityValues = {
+  visible: "visible",
+  inactive: "inactive",
+  ancestorInactive: "ancestor-inactive",
+  orphaned: "orphaned",
+} as const
 export type UiResourceVisibility =
-  "visible" | "inactive" | "ancestor-inactive" | "orphaned"
+  (typeof uiResourceVisibilityValues)[keyof typeof uiResourceVisibilityValues]
 
 function resourceIndexKey(resource: Pick<UiResource, "namespaceId" | "key">) {
   return `${resource.namespaceId}\u0000${resource.key}`
@@ -22,19 +29,19 @@ export function resolveUiResourceVisibilities(
     const resolved = visibilities.get(resource.id)
     if (resolved) return resolved
     if (resource.orphanedAt !== null) {
-      visibilities.set(resource.id, "orphaned")
-      return "orphaned"
+      visibilities.set(resource.id, uiResourceVisibilityValues.orphaned)
+      return uiResourceVisibilityValues.orphaned
     }
-    if (resource.status === "inactive") {
-      visibilities.set(resource.id, "inactive")
-      return "inactive"
+    if (resource.status === entityStatuses.inactive) {
+      visibilities.set(resource.id, uiResourceVisibilityValues.inactive)
+      return uiResourceVisibilityValues.inactive
     }
     if (resource.parentKey === null) {
-      visibilities.set(resource.id, "visible")
-      return "visible"
+      visibilities.set(resource.id, uiResourceVisibilityValues.visible)
+      return uiResourceVisibilityValues.visible
     }
     if (visiting.has(resource.id)) {
-      return "ancestor-inactive"
+      return uiResourceVisibilityValues.ancestorInactive
     }
 
     const parent = resourcesByKey.get(
@@ -44,15 +51,17 @@ export function resolveUiResourceVisibilities(
       }),
     )
     if (!parent) {
-      visibilities.set(resource.id, "ancestor-inactive")
-      return "ancestor-inactive"
+      visibilities.set(resource.id, uiResourceVisibilityValues.ancestorInactive)
+      return uiResourceVisibilityValues.ancestorInactive
     }
 
     const nextVisiting = new Set(visiting)
     nextVisiting.add(resource.id)
     const parentVisibility = resolve(parent, nextVisiting)
     const visibility =
-      parentVisibility === "visible" ? "visible" : "ancestor-inactive"
+      parentVisibility === uiResourceVisibilityValues.visible
+        ? uiResourceVisibilityValues.visible
+        : uiResourceVisibilityValues.ancestorInactive
     visibilities.set(resource.id, visibility)
     return visibility
   }

@@ -3,10 +3,12 @@ import { z } from "zod"
 
 import { resolveBackofficeAccess } from "@/auth/local-access"
 import { localDefaultUserId, localFixture } from "@/mocks/fixture"
+import { uiResourceKeys } from "@/config/menu-registry"
 import {
   defaultGeneralUserRole,
   defaultIamOperatorRole,
   defaultPolicyOperatorRole,
+  defaultServiceOperatorRole,
   defaultUiResourceManagerRole,
   initialBackofficeState,
 } from "@/mocks/system-fixture"
@@ -56,12 +58,42 @@ describe("backoffice initial state", () => {
     })
   })
 
+  it.each(["api-key-replace", "api-key-dispose"] as const)(
+    "loads the %s template with the credential lifecycle approval line",
+    (type) => {
+      const template = localFixture.approvalLines.find(
+        (candidate) => candidate.type === type,
+      )
+
+      expect(template?.steps).toMatchObject([
+        {
+          order: 1,
+          stage: 1,
+          kind: "request",
+          assigneeMode: "requester",
+        },
+        {
+          order: 2,
+          stage: 2,
+          kind: "approval",
+          assigneeMode: "request-organization-leader",
+        },
+        {
+          order: 3,
+          stage: 3,
+          kind: "agreement",
+          assigneeMode: "service-owner-organization",
+        },
+      ])
+      expect(template?.steps).toHaveLength(3)
+    },
+  )
+
   it("provides valid and unique entity identifiers", () => {
     const collections = [
       localFixture.organizations,
       localFixture.users,
       localFixture.roles,
-      localFixture.groups,
       localFixture.approvalLines,
       localFixture.accessPolicies,
       localFixture.accessPolicyAssignments,
@@ -71,7 +103,7 @@ describe("backoffice initial state", () => {
       localFixture.serviceEndpoints,
       localFixture.serviceEndpointFields,
       localFixture.apiKeys,
-      localFixture.uiNamespaces,
+      localFixture.namespaces,
       localFixture.uiResources,
     ]
 
@@ -142,16 +174,44 @@ describe("backoffice initial state", () => {
     ).toBe(true)
   })
 
-  it("provides system roles, the general user role, and default groups", () => {
+  it("exposes Backoffice menu operations through the service catalog", () => {
+    const backofficeService = localFixture.services.find(
+      (service) => service.slug === "backoffice-api",
+    )
+    const expectedMenuPaths = [
+      "/v1/home/summary",
+      "/v1/users/list",
+      "/v1/organizations/list",
+      "/v1/roles/list",
+      "/v1/access-policies/list",
+      "/v1/credentials/list",
+      "/v1/request-templates/list",
+      "/v1/services/list",
+      "/v1/service-endpoints/list",
+      "/v1/namespaces/list",
+      "/v1/ui-resources/list",
+      "/v1/audit-logs/list",
+    ]
+
+    expect(backofficeService).toBeDefined()
+    const endpointPaths = new Set(
+      localFixture.serviceEndpoints
+        .filter((endpoint) => endpoint.serviceId === backofficeService?.id)
+        .map((endpoint) => endpoint.path),
+    )
+    expect(expectedMenuPaths.every((path) => endpointPaths.has(path))).toBe(
+      true,
+    )
+  })
+
+  it("provides the system roles", () => {
     expect(localFixture.roles.map((role) => role.name)).toEqual([
       "Backoffice 시스템 관리자",
       "Backoffice 정책 운영자",
       "Backoffice IAM 운영자",
       "Backoffice 일반 사용자",
       "Backoffice UI 리소스 관리자",
-    ])
-    expect(localFixture.groups.map((group) => group.name)).toEqual([
-      "조직장 그룹",
+      "Backoffice 서비스 운영자",
     ])
     expect(
       localFixture.roles.find((role) => role.id === defaultGeneralUserRole.id)
@@ -207,7 +267,7 @@ describe("backoffice initial state", () => {
     expect(
       resolveBackofficeAccess(localFixture, organizationLeader.id),
     ).toEqual({
-      roleIds: [defaultGeneralUserRole.id],
+      roleIds: [defaultGeneralUserRole.id, defaultServiceOperatorRole.id],
       menuIds: [
         "home",
         "approvalDocuments",
@@ -227,7 +287,7 @@ describe("backoffice initial state", () => {
       "Backoffice IAM 운영자 UI 접근",
       "Backoffice 정책 운영자 UI 접근",
       "Backoffice UI 리소스 관리자 UI 접근",
-      "Backoffice 조직장 서비스·엔드포인트 관리 UI 접근",
+      "Backoffice 서비스 운영자 UI 접근",
     ])
     expect(
       initialBackofficeState.accessPolicies.some((policy) =>
@@ -275,10 +335,15 @@ describe("backoffice initial state", () => {
     expect(
       initialBackofficeState.uiResources
         .filter((resource) =>
-          ["users", "organizations", "roles", "groups"].some(
+          ["users", "organizations", "roles"].some(
             (menuId) =>
               resource.key === menuId || resource.key.startsWith(`${menuId}:`),
           ),
+        )
+        .filter(
+          (resource) =>
+            resource.key !==
+            uiResourceKeys.users.detail.actions.changeEmploymentStatus,
         )
         .every((resource) => iamOperatorResourceIds.has(resource.id)),
     ).toBe(true)
@@ -313,7 +378,11 @@ describe("backoffice initial state", () => {
       }
     }
 
-    expect(localFixture.groups[0]?.userIds).toEqual(leaderIds)
+    expect(
+      localFixture.roles.find(
+        (role) => role.id === defaultServiceOperatorRole.id,
+      )?.userIds,
+    ).toEqual(leaderIds)
   })
 
   it("keeps every fixture relationship resolvable", () => {
@@ -322,7 +391,6 @@ describe("backoffice initial state", () => {
       localFixture.organizations.map((item) => item.id),
     )
     const roleIds = new Set(localFixture.roles.map((item) => item.id))
-    const groupIds = new Set(localFixture.groups.map((item) => item.id))
     const approvalLineIds = new Set(
       localFixture.approvalLines.map((item) => item.id),
     )
@@ -335,9 +403,6 @@ describe("backoffice initial state", () => {
     )
     const uiResourceIds = new Set(
       localFixture.uiResources.map((item) => item.id),
-    )
-    const uiNamespaceIds = new Set(
-      localFixture.uiNamespaces.map((item) => item.id),
     )
     const accessPolicyIds = new Set(
       localFixture.accessPolicies.map((item) => item.id),
@@ -363,21 +428,15 @@ describe("backoffice initial state", () => {
       ),
     ).toBe(true)
     expect(
-      localFixture.groups.every((item) =>
-        item.userIds.every((id) => userIds.has(id)),
-      ),
-    ).toBe(true)
-    expect(
-      localFixture.uiNamespaces.every(
+      localFixture.namespaces.every(
         (namespace) =>
-          roleIds.has(namespace.administratorRoleId) &&
-          accessPolicyIds.has(namespace.administratorAccessPolicyId) &&
+          roleIds.has(namespace.managerRoleId) &&
+          accessPolicyIds.has(namespace.managerAccessPolicyId) &&
           localFixture.accessPolicyAssignments.some(
             (assignment) =>
-              assignment.accessPolicyId ===
-                namespace.administratorAccessPolicyId &&
+              assignment.accessPolicyId === namespace.managerAccessPolicyId &&
               assignment.targetType === "role" &&
-              assignment.targetId === namespace.administratorRoleId,
+              assignment.targetId === namespace.managerRoleId,
           ),
       ),
     ).toBe(true)
@@ -416,9 +475,6 @@ describe("backoffice initial state", () => {
             if (resource.type === "ui-resource") {
               return uiResourceIds.has(resource.id)
             }
-            if (resource.type === "ui-namespace") {
-              return uiNamespaceIds.has(resource.id)
-            }
             const endpoint = localFixture.serviceEndpoints.find(
               (item) => item.id === resource.id,
             )
@@ -442,7 +498,9 @@ describe("backoffice initial state", () => {
         if (assignment.targetType === "role") {
           return roleIds.has(assignment.targetId)
         }
-        return groupIds.has(assignment.targetId)
+        return localFixture.applications.some(
+          (application) => application.id === assignment.targetId,
+        )
       }),
     ).toBe(true)
     expect(
@@ -488,7 +546,9 @@ describe("backoffice initial state", () => {
           userIds.has(notification.userId) &&
           (notification.targetType === "approval-document"
             ? approvalDocumentIds.has(notification.targetId)
-            : accessPolicyIds.has(notification.targetId)),
+            : notification.targetType === "access-policy"
+              ? accessPolicyIds.has(notification.targetId)
+              : serviceIds.has(notification.targetId)),
       ),
     ).toBe(true)
     expect(

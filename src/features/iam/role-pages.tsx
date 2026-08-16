@@ -1,8 +1,9 @@
 "use client"
 
+import { accessPolicyAssignmentTargets } from "@/features/access-policies/model"
 import { uiResourceKeys } from "@/config/menu-registry"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Building2, Pencil, ShieldCheck, Trash2, Users } from "lucide-react"
+import { Pencil, ShieldCheck, Trash2, UserRoundX } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
@@ -21,6 +22,7 @@ import {
   FormDialogContent,
 } from "@/components/patterns/form-dialog"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import {
   Card,
   CardContent,
@@ -54,9 +56,12 @@ import {
   CommandErrorMessage,
   useBackofficeLabels,
 } from "@/application/ui/backoffice-ui"
+import { isUnusedRole } from "@/features/iam/role-analysis"
+import { RoleComparisonDialog } from "@/features/iam/role-tools"
 
 function RoleCreationDialog() {
   const backoffice = useBackoffice()
+  const sessionAccess = useSessionAccess()
   const common = useTranslations("backoffice.common")
   const t = useTranslations("backoffice.roles")
   const [open, setOpen] = useState(false)
@@ -72,7 +77,10 @@ function RoleCreationDialog() {
       setError("invalid-input")
       return
     }
-    const result = await backoffice.createRole(parsed.data)
+    const result = await backoffice.createRole(
+      parsed.data,
+      sessionAccess.currentUser?.id ?? "",
+    )
     if (!result.ok) {
       setError(result.error)
       return
@@ -147,6 +155,7 @@ function RoleCreationDialog() {
 
 function AddRoleUsersDialog({ role }: { role: Role }) {
   const backoffice = useBackoffice()
+  const sessionAccess = useSessionAccess()
   const t = useTranslations("backoffice.roles")
   const candidates = backoffice.users.filter(
     (user) => !role.userIds.includes(user.id),
@@ -164,7 +173,13 @@ function AddRoleUsersDialog({ role }: { role: Role }) {
         description: user.email,
       }))}
       successMessage={t("usersAdded")}
-      onAssign={(ids) => backoffice.assignUsersToRoles(ids, [role.id])}
+      onAssign={(ids) =>
+        backoffice.assignUsersToRoles(
+          ids,
+          [role.id],
+          sessionAccess.currentUser?.id ?? "",
+        )
+      }
     />
   )
 }
@@ -267,6 +282,7 @@ function RoleUpdateDialog({ role }: { role: Role }) {
 
 function AddRoleOrganizationsDialog({ role }: { role: Role }) {
   const backoffice = useBackoffice()
+  const sessionAccess = useSessionAccess()
   const t = useTranslations("backoffice.roles")
   const candidates = backoffice.organizations.filter(
     (organization) => !role.organizationIds.includes(organization.id),
@@ -283,7 +299,13 @@ function AddRoleOrganizationsDialog({ role }: { role: Role }) {
         title: organization.name,
       }))}
       successMessage={t("organizationsAdded")}
-      onAssign={(ids) => backoffice.assignOrganizationsToRoles(ids, [role.id])}
+      onAssign={(ids) =>
+        backoffice.assignOrganizationsToRoles(
+          ids,
+          [role.id],
+          sessionAccess.currentUser?.id ?? "",
+        )
+      }
     />
   )
 }
@@ -300,6 +322,9 @@ export function RolesPage() {
   const canViewDetail = sessionAccess.canAccessUiResource(
     uiResourceKeys.roles.detail.key,
   )
+  const canCompare = sessionAccess.canAccessUiResource(
+    uiResourceKeys.roles.list.actions.compareRoles,
+  )
   const columns = useMemo<ColumnDef<Role>[]>(
     () => [
       {
@@ -308,14 +333,13 @@ export function RolesPage() {
       },
       { accessorKey: "description", header: t("roleDescription") },
       {
-        id: "users",
-        header: t("userCount"),
-        cell: ({ row }) => row.original.userIds.length,
-      },
-      {
-        id: "organizations",
-        header: t("organizationCount"),
-        cell: ({ row }) => row.original.organizationIds.length,
+        id: "usage",
+        header: t("usageStatus"),
+        cell: ({ row }) => (
+          <Badge variant={isUnusedRole(row.original) ? "warning" : "success"}>
+            {t(isUnusedRole(row.original) ? "unused" : "inUse")}
+          </Badge>
+        ),
       },
       {
         accessorKey: "createdAt",
@@ -332,26 +356,25 @@ export function RolesPage() {
         eyebrow={t("eyebrow")}
         title={t("title")}
         description={t("description")}
-        actions={canCreate ? <RoleCreationDialog /> : undefined}
+        actions={
+          canCreate || canCompare ? (
+            <>
+              {canCompare ? <RoleComparisonDialog /> : null}
+              {canCreate ? <RoleCreationDialog /> : null}
+            </>
+          ) : undefined
+        }
       />
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <MetricCard
           icon={ShieldCheck}
           title={t("total")}
           value={backoffice.roles.length}
         />
         <MetricCard
-          icon={Users}
-          title={t("assignedUserCount")}
-          value={new Set(backoffice.roles.flatMap((role) => role.userIds)).size}
-        />
-        <MetricCard
-          icon={Building2}
-          title={t("assignedOrganizationCount")}
-          value={
-            new Set(backoffice.roles.flatMap((role) => role.organizationIds))
-              .size
-          }
+          icon={UserRoundX}
+          title={t("unusedCount")}
+          value={backoffice.roles.filter(isUnusedRole).length}
         />
       </div>
       <DataTable
@@ -374,6 +397,11 @@ export function RolesPage() {
             id: "role-description",
             label: t("roleDescription"),
             getValue: (row) => row.description,
+          },
+          {
+            id: "role-usage",
+            label: t("usageStatus"),
+            getValue: (row) => t(isUnusedRole(row) ? "unused" : "inUse"),
           },
         ]}
       />
@@ -478,6 +506,7 @@ export function RoleDetailPage({ roleId }: { roleId: string }) {
                   backoffice.unassignUsersFromRoles(
                     [row.original.id],
                     [role.id],
+                    sessionAccess.currentUser?.id ?? "",
                   )
                 }
               />
@@ -537,6 +566,7 @@ export function RoleDetailPage({ roleId }: { roleId: string }) {
                   backoffice.unassignOrganizationsFromRoles(
                     [row.original.id],
                     [role.id],
+                    sessionAccess.currentUser?.id ?? "",
                   )
                 }
               />
@@ -547,7 +577,8 @@ export function RoleDetailPage({ roleId }: { roleId: string }) {
   ]
   const assignmentCount = backoffice.accessPolicyAssignments.filter(
     (assignment) =>
-      assignment.targetType === "role" && assignment.targetId === role.id,
+      assignment.targetType === accessPolicyAssignmentTargets.role &&
+      assignment.targetId === role.id,
   ).length
   const deleteImpactCount =
     users.length + organizations.length + assignmentCount
@@ -604,10 +635,6 @@ export function RoleDetailPage({ roleId }: { roleId: string }) {
           <DetailGrid>
             <DetailItem label={t("roleDescription")} className="sm:col-span-2">
               {role.description}
-            </DetailItem>
-            <DetailItem label={t("userCount")}>{users.length}</DetailItem>
-            <DetailItem label={t("organizationCount")}>
-              {organizations.length}
             </DetailItem>
             <DetailItem label={common("createdAt")} className="sm:col-span-2">
               {labels.dateTime(role.createdAt)}

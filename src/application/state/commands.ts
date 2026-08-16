@@ -12,92 +12,160 @@ export type RunBackofficeCommand = <Entity>(
 export function createBackofficeCommands(
   apiClient: BackofficeApiClient,
   runCommand: RunBackofficeCommand,
+  getSessionUserId: () => string | null,
 ): BackofficeCommands {
+  const resolveRequesterId = (requesterId?: string) =>
+    requesterId ?? getSessionUserId() ?? ""
   return {
+    createApplication: (input, requesterId) =>
+      runCommand(apiClient.iam.createApplication({ body: input, requesterId })),
+    updateApplication: (id, input, requesterId) =>
+      runCommand(
+        apiClient.iam.updateApplication({
+          applicationId: id,
+          body: input,
+          requesterId,
+        }),
+      ),
+    deleteApplication: (id, requesterId) =>
+      runCommand(
+        apiClient.iam.deleteApplication({
+          applicationId: id,
+          requesterId,
+        }),
+      ),
     markNotificationRead: (notificationId, requesterId) =>
       runCommand(
         apiClient.home.markNotificationRead({ notificationId, requesterId }),
       ),
-    createOrganization: (input) =>
-      runCommand(apiClient.iam.createOrganization({ body: input })),
-    updateOrganization: (id, input) =>
-      runCommand(apiClient.iam.updateOrganization({ id, body: input })),
-    addUsersToOrganization: (id, userIds) =>
+    createOrganization: (input, requesterId) =>
+      runCommand(
+        apiClient.iam.createOrganization({
+          body: input,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
+    updateOrganization: (id, input, requesterId) =>
+      runCommand(
+        apiClient.iam.updateOrganization({
+          id,
+          body: input,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
+    addUsersToOrganization: (id, userIds, requesterId) =>
       runCommand(
         apiClient.iam.addUsersToOrganization({
           organizationId: id,
           userIds,
+          requesterId: resolveRequesterId(requesterId),
         }),
       ),
-    addOrganizationsToUser: (id, organizationIds) =>
+    addOrganizationsToUser: (id, organizationIds, requesterId) =>
       runCommand(
         apiClient.iam.addOrganizationsToUser({
           userId: id,
           organizationIds,
+          requesterId: resolveRequesterId(requesterId),
         }),
       ),
-    removeUsersFromOrganizations: (userIds, organizationIds) =>
+    removeUsersFromOrganizations: (userIds, organizationIds, requesterId) =>
       runCommand(
         apiClient.iam.removeUsersFromOrganizations({
           userIds,
           organizationIds,
+          requesterId: resolveRequesterId(requesterId),
         }),
       ),
-    createUser: (input) =>
-      runCommand(apiClient.iam.createUser({ body: input })),
-    createRole: (input) =>
-      runCommand(apiClient.iam.createRole({ body: input })),
+    createUser: (input, requesterId) =>
+      runCommand(
+        apiClient.iam.createUser({
+          body: input,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
+    createRole: (input, requesterId) =>
+      runCommand(
+        apiClient.iam.createRole({
+          body: input,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
     updateRole: (id, input, requesterId) =>
       runCommand(
         apiClient.iam.updateRole({ roleId: id, body: input, requesterId }),
       ),
     deleteRole: (id, requesterId) =>
       runCommand(apiClient.iam.deleteRole({ roleId: id, requesterId })),
-    createGroup: (input) =>
-      runCommand(apiClient.iam.createGroup({ body: input })),
-    updateGroup: (id, input, requesterId) =>
+    assignUsersToRoles: (userIds, roleIds, requesterId) =>
       runCommand(
-        apiClient.iam.updateGroup({ groupId: id, body: input, requesterId }),
+        apiClient.iam.assignUsersToRoles({
+          userIds,
+          roleIds,
+          requesterId: resolveRequesterId(requesterId),
+        }),
       ),
-    deleteGroup: (id, requesterId) =>
-      runCommand(apiClient.iam.deleteGroup({ groupId: id, requesterId })),
-    assignUsersToGroups: (userIds, groupIds) =>
-      runCommand(apiClient.iam.assignUsersToGroups({ userIds, groupIds })),
-    unassignUsersFromGroups: (userIds, groupIds) =>
-      runCommand(apiClient.iam.unassignUsersFromGroups({ userIds, groupIds })),
-    assignUsersToRoles: (userIds, roleIds) =>
-      runCommand(apiClient.iam.assignUsersToRoles({ userIds, roleIds })),
-    assignOrganizationsToRoles: (organizationIds, roleIds) =>
+    assignOrganizationsToRoles: (organizationIds, roleIds, requesterId) =>
       runCommand(
         apiClient.iam.assignOrganizationsToRoles({
           organizationIds,
           roleIds,
+          requesterId: resolveRequesterId(requesterId),
         }),
       ),
-    unassignUsersFromRoles: (userIds, roleIds) =>
-      runCommand(apiClient.iam.unassignUsersFromRoles({ userIds, roleIds })),
-    unassignOrganizationsFromRoles: (organizationIds, roleIds) =>
+    unassignUsersFromRoles: (userIds, roleIds, requesterId) =>
+      runCommand(
+        apiClient.iam.unassignUsersFromRoles({
+          userIds,
+          roleIds,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
+    unassignOrganizationsFromRoles: (organizationIds, roleIds, requesterId) =>
       runCommand(
         apiClient.iam.unassignOrganizationsFromRoles({
           organizationIds,
           roleIds,
+          requesterId: resolveRequesterId(requesterId),
         }),
       ),
-    setUserEmploymentStatus: (id, status) =>
-      runCommand(apiClient.iam.setUserEmploymentStatus({ userId: id, status })),
-    createApprovalLine: (input) =>
+    setUserEmploymentStatus: (id, status, requesterId) =>
       runCommand(
-        apiClient.requestTemplates.createApprovalLine({ body: input }),
+        apiClient.iam.setUserEmploymentStatus({
+          userId: id,
+          status,
+          requesterId: resolveRequesterId(requesterId),
+        }),
       ),
-    updateApprovalLine: (id, input) =>
+    createApprovalLine: (input, requesterId) =>
       runCommand(
-        apiClient.requestTemplates.updateApprovalLine({ id, body: input }),
+        apiClient.requestTemplates.createApprovalLine({
+          body: input,
+          requesterId: resolveRequesterId(requesterId),
+        }),
       ),
-    setApprovalLineStatus: (id, status) =>
+    cloneApprovalLine: (sourceApprovalLineId, name, requesterId) =>
+      runCommand(
+        apiClient.requestTemplates.cloneApprovalLine({
+          sourceApprovalLineId,
+          name,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
+    updateApprovalLine: (id, input, requesterId) =>
+      runCommand(
+        apiClient.requestTemplates.updateApprovalLine({
+          id,
+          body: input,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
+    setApprovalLineStatus: (id, status, requesterId) =>
       runCommand(
         apiClient.requestTemplates.setApprovalLineStatus({
           approvalLineId: id,
           status,
+          requesterId: resolveRequesterId(requesterId),
         }),
       ),
     createAccessPolicy: (input, requesterId) =>
@@ -107,6 +175,12 @@ export function createBackofficeCommands(
           requesterId,
         }),
       ),
+    analyzeAccessPolicyUpdate: (id, input, requesterId) =>
+      apiClient.accessPolicies.analyzeAccessPolicyUpdate({
+        accessPolicyId: id,
+        body: input,
+        requesterId,
+      }),
     assignAccessPoliciesToTarget: (
       accessPolicyIds,
       targetType,
@@ -147,36 +221,112 @@ export function createBackofficeCommands(
       runCommand(
         apiClient.approvalDocuments.createApprovalDocument({ body: input }),
       ),
-    approveApprovalDocument: (id) =>
+    processApprovalDocument: (input) =>
       runCommand(
-        apiClient.approvalDocuments.approveApprovalDocument({
-          approvalDocumentId: id,
-        }),
+        apiClient.approvalDocuments.processApprovalDocument({ body: input }),
+      ),
+    withdrawApprovalDocument: (input) =>
+      runCommand(
+        apiClient.approvalDocuments.withdrawApprovalDocument({ body: input }),
+      ),
+    resubmitApprovalDocument: (input) =>
+      runCommand(
+        apiClient.approvalDocuments.resubmitApprovalDocument({ body: input }),
       ),
     registerApiKey: (input) =>
       runCommand(apiClient.credentials.registerApiKey({ body: input })),
-    createService: (input) =>
-      runCommand(apiClient.serviceCatalog.createService({ body: input })),
-    updateService: (id, input) =>
-      runCommand(apiClient.serviceCatalog.updateService({ id, body: input })),
-    deleteService: (id) =>
-      runCommand(apiClient.serviceCatalog.deleteService({ id })),
-    createServiceEndpoint: (input) =>
+    updateCredentialLifecycleSettings: (input, requesterId) =>
       runCommand(
-        apiClient.serviceCatalog.createServiceEndpoint({ body: input }),
-      ),
-    updateServiceEndpoint: (id, input) =>
-      runCommand(
-        apiClient.serviceCatalog.updateServiceEndpoint({ id, body: input }),
-      ),
-    deleteServiceEndpoint: (id) =>
-      runCommand(apiClient.serviceCatalog.deleteServiceEndpoint({ id })),
-    createUiNamespace: (input, requesterId) =>
-      runCommand(
-        apiClient.uiResources.createUiNamespace({
+        apiClient.credentials.updateCredentialLifecycleSettings({
           body: input,
           requesterId,
         }),
+      ),
+    emergencyRevokeApiKey: (input) =>
+      runCommand(apiClient.credentials.emergencyRevokeApiKey({ body: input })),
+    createService: (input, requesterId) =>
+      runCommand(
+        apiClient.serviceCatalog.createService({
+          body: input,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
+    updateService: (id, input, requesterId) =>
+      runCommand(
+        apiClient.serviceCatalog.updateService({
+          id,
+          body: input,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
+    deleteService: (id, requesterId) =>
+      runCommand(
+        apiClient.serviceCatalog.deleteService({
+          id,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
+    createServiceEndpoint: (input, requesterId) =>
+      runCommand(
+        apiClient.serviceCatalog.createServiceEndpoint({
+          body: input,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
+    analyzeServiceEndpointSync: (input, requesterId) =>
+      apiClient.serviceCatalog.analyzeServiceEndpointSync({
+        body: input,
+        requesterId,
+      }),
+    synchronizeServiceEndpoints: (input, selectedOperationKeys, requesterId) =>
+      runCommand(
+        apiClient.serviceCatalog.synchronizeServiceEndpoints({
+          body: input,
+          selectedOperationKeys,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
+    updateServiceEndpoint: (id, input, requesterId) =>
+      runCommand(
+        apiClient.serviceCatalog.updateServiceEndpoint({
+          id,
+          body: input,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
+    deleteServiceEndpoint: (id, requesterId) =>
+      runCommand(
+        apiClient.serviceCatalog.deleteServiceEndpoint({
+          id,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
+    setServiceEndpointLifecycle: (id, lifecycle, requesterId) =>
+      runCommand(
+        apiClient.serviceCatalog.setServiceEndpointLifecycle({
+          id,
+          lifecycle,
+          requesterId: resolveRequesterId(requesterId),
+        }),
+      ),
+    createNamespace: (input, requesterId) =>
+      runCommand(
+        apiClient.uiResources.createNamespace({
+          body: input,
+          requesterId,
+        }),
+      ),
+    updateNamespaceManager: (namespaceId, managerRoleId, requesterId) =>
+      runCommand(
+        apiClient.uiResources.updateNamespaceManager({
+          namespaceId,
+          managerRoleId,
+          requesterId,
+        }),
+      ),
+    retireNamespace: (namespaceId, requesterId) =>
+      runCommand(
+        apiClient.uiResources.retireNamespace({ namespaceId, requesterId }),
       ),
     importUiResources: (input, requesterId) =>
       runCommand(
@@ -197,6 +347,13 @@ export function createBackofficeCommands(
         apiClient.uiResources.setUiResourceStatus({
           resourceId,
           status,
+          requesterId,
+        }),
+      ),
+    restoreUiResourceSync: (historyId, requesterId) =>
+      runCommand(
+        apiClient.uiResources.restoreUiResourceSync({
+          historyId,
           requesterId,
         }),
       ),

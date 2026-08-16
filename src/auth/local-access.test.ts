@@ -9,6 +9,7 @@ import {
   defaultGeneralUserRole,
   defaultIamOperatorRole,
   defaultPolicyOperatorRole,
+  defaultServiceOperatorRole,
   defaultUiResourceManagerRole,
 } from "@/mocks/system-fixture"
 
@@ -28,6 +29,7 @@ describe("local backoffice access", () => {
       defaultBackofficeAdminRole.id,
       defaultIamOperatorRole.id,
       defaultGeneralUserRole.id,
+      defaultServiceOperatorRole.id,
     ])
 
     const memberAccess = resolveBackofficeAccess(
@@ -45,13 +47,30 @@ describe("local backoffice access", () => {
       "users",
       "organizations",
       "roles",
-      "groups",
+      "applications",
       "approvalDocuments",
       "services",
       "serviceEndpoints",
       "apiKeys",
       "uiResources",
     ])
+    const administratorUiAccess = resolveUiResourcePolicyAccess(
+      localFixture,
+      findUserId("David"),
+    )
+    const policyOperatorUiAccess = resolveUiResourcePolicyAccess(
+      localFixture,
+      findUserId("Owen"),
+    )
+    expect(administratorUiAccess.resourceKeys).toContain(
+      uiResourceKeys.approvalDocuments.list.actions.analyzePolicyConflicts,
+    )
+    expect(policyOperatorUiAccess.resourceKeys).not.toContain(
+      uiResourceKeys.approvalDocuments.list.actions.analyzePolicyConflicts,
+    )
+    expect(policyOperatorUiAccess.resourceKeys).toContain(
+      uiResourceKeys.approvalDocuments.list.actions.simulatePolicyAccess,
+    )
   })
 
   it("hides menus whose root UI resource is inactive", () => {
@@ -79,7 +98,10 @@ describe("local backoffice access", () => {
       findUserId("Evelyn"),
     )
 
-    expect(directAccess.roleIds).toEqual([defaultGeneralUserRole.id])
+    expect(directAccess.roleIds).toEqual([
+      defaultGeneralUserRole.id,
+      defaultServiceOperatorRole.id,
+    ])
     expect(inheritedAccess.roleIds).toEqual([defaultGeneralUserRole.id])
     expect(inheritedAccess.menuIds).toEqual([
       "home",
@@ -129,6 +151,7 @@ describe("local backoffice access", () => {
       name: "요청 템플릿 조회 UI 접근",
       description: "요청 템플릿의 메뉴, 목록과 상세 화면을 함께 허용합니다.",
       type: "access-grant",
+      managementType: "operator-managed",
       effect: "allow",
       resources: requestTemplateResources.map((resource) => ({
         type: "ui-resource",
@@ -142,6 +165,7 @@ describe("local backoffice access", () => {
       accessPolicyId: policyId,
       targetType: "organization",
       targetId: development2Id,
+      expiresAt: null,
       createdAt: "2026-08-11T00:00:00.000Z",
     })
 
@@ -161,7 +185,10 @@ describe("local backoffice access", () => {
   it("keeps organization leaders out of IAM while preserving operational access", () => {
     const access = resolveBackofficeAccess(localFixture, findUserId("Emma"))
 
-    expect(access.roleIds).toEqual([defaultGeneralUserRole.id])
+    expect(access.roleIds).toEqual([
+      defaultGeneralUserRole.id,
+      localFixture.systemReferences.roleIds.serviceOperator,
+    ])
     expect(access.menuIds).toEqual([
       "home",
       "approvalDocuments",
@@ -177,9 +204,6 @@ describe("local backoffice access", () => {
       uiResourceKeys.services.list.actions.createService,
     )
     expect(uiAccess).not.toContain(uiResourceKeys.roles.list.actions.createRole)
-    expect(uiAccess).not.toContain(
-      uiResourceKeys.groups.list.actions.createGroup,
-    )
   })
 
   it("removes a menu when a matching deny policy applies", () => {
@@ -195,6 +219,7 @@ describe("local backoffice access", () => {
       name: "사용자 메뉴 거부",
       description: "사용자 메뉴와 하위 기능을 거부합니다.",
       type: "access-grant",
+      managementType: "operator-managed",
       effect: "deny",
       resources: [{ type: "ui-resource", id: usersResource.id }],
       status: "active",
@@ -205,6 +230,7 @@ describe("local backoffice access", () => {
       accessPolicyId: policyId,
       targetType: "user",
       targetId: danielId,
+      expiresAt: null,
       createdAt: "2026-08-11T00:00:00.000Z",
     })
 
@@ -226,6 +252,7 @@ describe("local backoffice access", () => {
       name: "사용자 목록 화면 거부",
       description: "사용자 상세 화면과 분리하여 목록 화면만 거부합니다.",
       type: "access-grant",
+      managementType: "operator-managed",
       effect: "deny",
       resources: [{ type: "ui-resource", id: usersList.id }],
       status: "active",
@@ -236,6 +263,7 @@ describe("local backoffice access", () => {
       accessPolicyId: policyId,
       targetType: "user",
       targetId: davidId,
+      expiresAt: null,
       createdAt: "2026-08-11T00:00:00.000Z",
     })
 

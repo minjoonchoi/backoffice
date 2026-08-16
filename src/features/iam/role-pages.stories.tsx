@@ -51,6 +51,10 @@ export const IamOperatorList: Story = {
     await expect(
       canvas.getByRole("button", { name: "역할 생성" }),
     ).toBeVisible()
+    await expect(canvas.getByText("전체 역할")).toBeVisible()
+    await expect(canvas.getByText("미사용 역할")).toBeVisible()
+    await expect(canvas.queryByText("역할 부여 사용자")).not.toBeInTheDocument()
+    await expect(canvas.queryByText("역할 부여 조직")).not.toBeInTheDocument()
   },
 }
 

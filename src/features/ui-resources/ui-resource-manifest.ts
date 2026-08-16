@@ -10,19 +10,24 @@ export const uiResourceKeySchema = z
     /^[a-z][a-z0-9]*(?:[A-Z][a-z0-9]*)*(?::[a-z][a-z0-9]*(?:[A-Z][a-z0-9]*)*)*$/,
   )
 
-export const uiNamespaceKeySchema = z
+export const namespaceKeySchema = z
   .string()
   .trim()
   .min(2)
   .max(60)
   .regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/)
 
-export const uiResourceTypeSchema = z.enum([
-  "menu",
-  "view",
-  "action",
-  "component",
-])
+export const uiResourceTypeValues = {
+  menu: "menu",
+  view: "view",
+  action: "action",
+  component: "component",
+} as const
+export const uiResourceManifestFormats = {
+  yaml: "yaml",
+  json: "json",
+} as const
+export const uiResourceTypeSchema = z.enum(uiResourceTypeValues)
 
 export const uiResourceManifestResourceSchema = z
   .object({
@@ -37,7 +42,7 @@ export const uiResourceManifestResourceSchema = z
 export const uiResourceManifestSchema = z
   .object({
     version: z.literal(1),
-    namespaceKey: uiNamespaceKeySchema,
+    namespaceKey: namespaceKeySchema,
     resources: z.array(uiResourceManifestResourceSchema).min(1).max(1000),
   })
   .strict()
@@ -53,7 +58,8 @@ export type UiResourceManifest = z.infer<typeof uiResourceManifestSchema>
 export type UiResourceManifestResource = z.infer<
   typeof uiResourceManifestResourceSchema
 >
-export type UiResourceManifestFormat = "yaml" | "json"
+export type UiResourceManifestFormat =
+  (typeof uiResourceManifestFormats)[keyof typeof uiResourceManifestFormats]
 
 export function getUiResourceParentKey(key: string): string | null {
   const separatorIndex = key.lastIndexOf(":")
@@ -64,7 +70,9 @@ export function parseUiResourceManifestText(
   source: string,
   format: UiResourceManifestFormat,
 ): unknown {
-  if (format === "json") return JSON.parse(source) as unknown
+  if (format === uiResourceManifestFormats.json) {
+    return JSON.parse(source) as unknown
+  }
 
   const document = parseDocument(source, {
     merge: false,

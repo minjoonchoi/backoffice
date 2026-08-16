@@ -1,7 +1,18 @@
 export type MenuSection =
   "common" | "directory" | "serviceCatalog" | "uiCatalog" | "systemManagement"
 
-export type MenuView = "overview" | "list" | "detail" | "requestDetail"
+export type MenuView =
+  | "overview"
+  | "list"
+  | "detail"
+  | "requestDetail"
+  | "create"
+  | "update"
+  | "request"
+  | "replaceRequest"
+  | "disposeRequest"
+  | "lifecycleSettings"
+  | "sync"
 
 type UiResourceRegistryShape = Record<
   string,
@@ -49,7 +60,6 @@ export const uiResourceRegistry = {
         actions: {
           assignUserOrganization: "사용자 조직 연결",
           assignUserRole: "사용자 역할 부여",
-          assignUserGroup: "사용자 그룹 연결",
           changeEmploymentStatus: "재직 상태 변경",
         },
       },
@@ -77,7 +87,12 @@ export const uiResourceRegistry = {
     section: "directory",
     name: "역할",
     views: {
-      list: { actions: { createRole: "역할 생성" } },
+      list: {
+        actions: {
+          createRole: "역할 생성",
+          compareRoles: "역할 권한 비교",
+        },
+      },
       detail: {
         actions: {
           assignRoleUser: "역할 사용자 추가",
@@ -89,19 +104,17 @@ export const uiResourceRegistry = {
       },
     },
   },
-  groups: {
-    href: "/groups",
+  applications: {
+    href: "/applications",
     defaultView: "list",
     section: "directory",
-    name: "그룹",
+    name: "어플리케이션",
     views: {
-      list: { actions: { createGroup: "그룹 생성" } },
+      list: { actions: { createApplication: "어플리케이션 등록" } },
       detail: {
         actions: {
-          assignGroupUser: "그룹 사용자 추가",
-          assignGroupPolicy: "그룹 정책 부여",
-          updateGroup: "그룹 수정",
-          deleteGroup: "그룹 삭제",
+          updateApplication: "어플리케이션 수정",
+          deleteApplication: "어플리케이션 삭제",
         },
       },
     },
@@ -119,8 +132,14 @@ export const uiResourceRegistry = {
         },
       },
       detail: {
-        actions: { updateRequestTemplate: "요청 템플릿 수정" },
+        actions: {
+          updateRequestTemplate: "요청 템플릿 수정",
+          cloneRequestTemplate: "요청 템플릿 복제",
+          previewRequestTemplate: "요청 템플릿 테스트",
+        },
       },
+      create: { actions: {} },
+      update: { actions: {} },
     },
   },
   approvalDocuments: {
@@ -132,16 +151,27 @@ export const uiResourceRegistry = {
       list: {
         actions: {
           createPolicy: "정책 생성",
-          approveAccessRequest: "정책 부여 요청 승인",
+          analyzePolicyConflicts: "정책 충돌 분석",
+          simulatePolicyAccess: "정책 권한 시뮬레이션",
         },
       },
-      requestDetail: { actions: {} },
+      requestDetail: {
+        actions: {
+          processRequest: "요청 단계 처리",
+          withdrawRequest: "요청 회수",
+          resubmitRequest: "요청 재상신",
+        },
+      },
       detail: {
         actions: {
           updatePolicy: "정책 수정",
           deletePolicy: "정책 삭제",
+          clonePolicy: "정책 복제",
         },
       },
+      create: { actions: {} },
+      update: { actions: {} },
+      request: { actions: {} },
     },
   },
   services: {
@@ -165,13 +195,20 @@ export const uiResourceRegistry = {
     section: "serviceCatalog",
     name: "엔드포인트",
     views: {
-      list: { actions: { createEndpoint: "엔드포인트 등록" } },
+      list: {
+        actions: {
+          createEndpoint: "엔드포인트 등록",
+          syncEndpoints: "OpenAPI 엔드포인트 동기화",
+        },
+      },
       detail: {
         actions: {
           updateEndpoint: "엔드포인트 수정",
           deleteEndpoint: "엔드포인트 삭제",
+          changeEndpointLifecycle: "엔드포인트 수명주기 변경",
         },
       },
+      sync: { actions: {} },
     },
   },
   namespaces: {
@@ -183,21 +220,38 @@ export const uiResourceRegistry = {
       list: {
         actions: { createNamespace: "네임스페이스 생성" },
       },
+      detail: {
+        actions: {
+          changeNamespaceManager: "네임스페이스 관리 역할 변경",
+          retireNamespace: "네임스페이스 폐기",
+        },
+      },
     },
   },
   apiKeys: {
-    href: "/api-keys",
+    href: "/credentials",
     defaultView: "list",
     section: "common",
     name: "자격증명",
     views: {
       list: {
         actions: {
-          approveCredentialRequest: "자격증명 요청 승인",
           registerCredential: "자격증명 등록",
         },
       },
-      detail: { actions: {} },
+      detail: {
+        actions: {
+          emergencyRevokeCredential: "자격증명 긴급 폐기",
+        },
+      },
+      lifecycleSettings: {
+        actions: {
+          updateLifecycleSettings: "자격증명 공통 수명 주기 설정",
+        },
+      },
+      request: { actions: {} },
+      replaceRequest: { actions: {} },
+      disposeRequest: { actions: {} },
     },
   },
   uiResources: {
@@ -211,8 +265,21 @@ export const uiResourceRegistry = {
           importUiResources: "UI 리소스 동기화",
           changeUiResourceStatus: "UI 리소스 상태 변경",
           deleteUiResources: "고아 UI 리소스 삭제",
+          compareUiResourceSyncs: "UI 리소스 동기화 비교",
+          restoreUiResourceSync: "UI 리소스 동기화 복원",
         },
       },
+      sync: { actions: {} },
+    },
+  },
+  auditLogs: {
+    href: "/audit-logs",
+    defaultView: "list",
+    section: "systemManagement",
+    name: "감사",
+    views: {
+      list: { actions: {} },
+      detail: { actions: {} },
     },
   },
 } as const satisfies UiResourceRegistryShape
@@ -330,6 +397,13 @@ const uiResourceViewNames: Record<MenuView, string> = {
   list: "목록",
   detail: "상세",
   requestDetail: "요청 상세",
+  create: "생성",
+  update: "수정",
+  request: "요청",
+  replaceRequest: "교체 요청",
+  disposeRequest: "폐기 요청",
+  lifecycleSettings: "수명 주기 설정",
+  sync: "동기화",
 }
 
 export const uiResourceManifest = {

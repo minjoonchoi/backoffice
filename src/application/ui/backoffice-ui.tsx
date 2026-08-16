@@ -11,25 +11,37 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import type {
-  AccessPolicyEffect,
-  ApprovalDocument,
+import {
+  accessPolicyEffects,
+  approvalDocumentStatuses,
+  type AccessPolicyEffect,
+  type ApprovalDocument,
 } from "@/features/access-policies/model"
 import type {
   ApprovalAssigneeMode,
   ApprovalStepKind,
   ApprovalType,
 } from "@/features/request-templates/model"
-import type { EmploymentStatus } from "@/features/iam/model"
-import type { ServiceType } from "@/features/service-catalog/model"
-import type { EntityStatus, BackofficeErrorCode } from "@/domain/common"
-import { employmentStatuses } from "@/features/iam/model"
+import {
+  employmentStatuses,
+  employmentStatusValues,
+  type EmploymentStatus,
+} from "@/features/iam/model"
+import {
+  serviceTypeValues,
+  type ServiceType,
+} from "@/features/service-catalog/model"
+import {
+  entityStatuses,
+  type EntityStatus,
+  type BackofficeErrorCode,
+} from "@/domain/common"
 
 export function StatusBadge({ status }: { status: EntityStatus }) {
   const t = useTranslations("backoffice.common")
   return (
-    <Badge variant={status === "active" ? "success" : "secondary"}>
-      {status === "active" ? t("active") : t("inactive")}
+    <Badge variant={status === entityStatuses.active ? "success" : "secondary"}>
+      {status === entityStatuses.active ? t("active") : t("inactive")}
     </Badge>
   )
 }
@@ -43,18 +55,24 @@ export function ApprovalStatusBadge({
   return (
     <Badge
       variant={
-        status === "approved"
+        status === approvalDocumentStatuses.approved
           ? "success"
-          : status === "submitted"
+          : status === approvalDocumentStatuses.submitted
             ? "warning"
-            : "secondary"
+            : status === approvalDocumentStatuses.rejected
+              ? "destructive"
+              : "secondary"
       }
     >
-      {status === "approved"
+      {status === approvalDocumentStatuses.approved
         ? t("approvedStatus")
-        : status === "submitted"
+        : status === approvalDocumentStatuses.submitted
           ? t("submittedStatus")
-          : t("draft")}
+          : status === approvalDocumentStatuses.rejected
+            ? t("rejectedStatus")
+            : status === approvalDocumentStatuses.withdrawn
+              ? t("withdrawnStatus")
+              : t("draft")}
     </Badge>
   )
 }
@@ -62,7 +80,9 @@ export function ApprovalStatusBadge({
 export function ServiceTypeBadge({ type }: { type: ServiceType }) {
   const t = useTranslations("backoffice.serviceTypes")
   return (
-    <Badge variant={type === "internal" ? "info" : "outline"}>{t(type)}</Badge>
+    <Badge variant={type === serviceTypeValues.internal ? "info" : "outline"}>
+      {t(type)}
+    </Badge>
   )
 }
 
@@ -73,7 +93,9 @@ export function AccessPolicyEffectBadge({
 }) {
   const t = useTranslations("backoffice.approvalDocuments")
   return (
-    <Badge variant={effect === "allow" ? "success" : "destructive"}>
+    <Badge
+      variant={effect === accessPolicyEffects.allow ? "success" : "destructive"}
+    >
       {t(effect)}
     </Badge>
   )
@@ -88,9 +110,9 @@ export function EmploymentStatusBadge({
   return (
     <Badge
       variant={
-        status === "employed"
+        status === employmentStatusValues.employed
           ? "success"
-          : status === "on-leave"
+          : status === employmentStatusValues.onLeave
             ? "warning"
             : "secondary"
       }
@@ -150,11 +172,11 @@ export function StatusSwitch({
 }: StatusSwitchProps) {
   return (
     <Switch
-      checked={status === "active"}
+      checked={status === entityStatuses.active}
       aria-label={label}
       disabled={disabled}
       onCheckedChange={(checked) => {
-        onChange(checked ? "active" : "inactive")
+        onChange(checked ? entityStatuses.active : entityStatuses.inactive)
       }}
     />
   )

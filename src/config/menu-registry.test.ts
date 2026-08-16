@@ -14,6 +14,14 @@ const viewNames: Record<string, string> = {
   list: "목록",
   detail: "상세",
   requestDetail: "요청 상세",
+  create: "생성",
+  update: "수정",
+  request: "요청",
+  replaceRequest: "교체 요청",
+  disposeRequest: "폐기 요청",
+  lifecycleSettings: "수명 주기 설정",
+  sync: "동기화",
+  import: "가져오기",
 }
 
 describe("UI resource registry SSOT", () => {
@@ -96,8 +104,8 @@ describe("UI resource registry SSOT", () => {
           key: `${viewKey}:${action}`,
           parentKey: viewKey,
           type: "action",
-          name: actionName,
-          description: `${menu.name} 메뉴의 ${actionName} UI 기능입니다.`,
+          name: String(actionName),
+          description: `${menu.name} 메뉴의 ${String(actionName)} UI 기능입니다.`,
         }))
       }),
     )

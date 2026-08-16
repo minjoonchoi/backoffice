@@ -2,33 +2,33 @@ import { z } from "zod"
 
 import { entityIdSchema, type EntityStatus } from "@/domain/common"
 import {
-  uiNamespaceKeySchema,
+  namespaceKeySchema,
   uiResourceManifestSchema,
   type UiResourceManifestResource,
   type UiResourceType,
 } from "@/features/ui-resources/ui-resource-manifest"
 
-export const uiNamespaceInputSchema = z
+export const namespaceInputSchema = z
   .object({
-    key: uiNamespaceKeySchema,
+    key: namespaceKeySchema,
     name: z.string().trim().min(2).max(100),
     description: z.string().trim().min(2).max(500),
-    administratorRoleId: entityIdSchema,
+    managerRoleId: entityIdSchema,
   })
   .strict()
 
 export const uiResourceImportInputSchema = z
   .object({
     manifest: uiResourceManifestSchema,
-    grantAdministratorAccess: z.boolean(),
+    grantManagerAccess: z.boolean(),
   })
   .strict()
 
-export type UiNamespaceInput = z.infer<typeof uiNamespaceInputSchema>
+export type NamespaceInput = z.infer<typeof namespaceInputSchema>
 export type UiResourceImportInput = z.infer<typeof uiResourceImportInputSchema>
-export type UiNamespace = UiNamespaceInput & {
+export type Namespace = NamespaceInput & {
   id: string
-  administratorAccessPolicyId: string
+  managerAccessPolicyId: string
   status: EntityStatus
   lastSyncedAt: string | null
   createdAt: string
@@ -45,10 +45,28 @@ export type UiResourceImportResult = {
   synchronizedAt: string
   addedCount: number
   updatedCount: number
+  restoredCount: number
   orphanedCount: number
-  administratorAccessUpdated: boolean
+  managerAccessUpdated: boolean
   resources: UiResource[]
   orphanedResources: UiResource[]
+}
+
+export type UiResourceSyncHistory = {
+  id: string
+  namespaceId: string
+  synchronizedAt: string
+  synchronizedByUserId: string
+  grantManagerAccess: boolean
+  addedCount: number
+  updatedCount: number
+  restoredCount: number
+  orphanedCount: number
+  resources: UiResource[]
+}
+
+export type UiResourceRestoreResult = UiResourceImportResult & {
+  restoredFromHistoryId: string
 }
 
 export type { UiResourceType }

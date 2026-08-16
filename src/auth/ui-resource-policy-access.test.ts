@@ -23,7 +23,7 @@ function resourceId(key: string) {
 }
 
 describe("UI resource policy access", () => {
-  it("resolves role and group policies and inherits parent resources", () => {
+  it("resolves role policies and inherits parent resources", () => {
     const access = resolveUiResourcePolicyAccess(localFixture, userId("Emma"))
 
     expect(access.resourceKeys).toContain("services:list:createService")
@@ -41,6 +41,7 @@ describe("UI resource policy access", () => {
       name: "서비스 UI 거부",
       description: "서비스 UI 전체를 거부합니다.",
       type: "access-grant",
+      managementType: "operator-managed",
       effect: "deny",
       resources: [{ type: "ui-resource", id: resourceId("services") }],
       status: "active",
@@ -51,6 +52,7 @@ describe("UI resource policy access", () => {
       accessPolicyId: denyPolicyId,
       targetType: "user",
       targetId: userId("David"),
+      expiresAt: null,
       createdAt: "2026-08-11T00:00:00.000Z",
     })
 
@@ -88,8 +90,8 @@ describe("UI resource policy access", () => {
     ).not.toContain("services:list:createService")
 
     const inactiveNamespaceState = structuredClone(localFixture)
-    const namespace = inactiveNamespaceState.uiNamespaces[0]
-    if (!namespace) throw new Error("UI namespace is missing")
+    const namespace = inactiveNamespaceState.namespaces[0]
+    if (!namespace) throw new Error("namespace is missing")
     namespace.status = "inactive"
     expect(
       resolveUiResourcePolicyAccess(inactiveNamespaceState, userId("David"))
@@ -140,8 +142,8 @@ describe("UI resource policy access", () => {
     expect(targets.roleIds).toContain(
       localFixture.systemReferences.roleIds.administrator,
     )
-    expect(targets.groupIds).toContain(
-      localFixture.systemReferences.groupIds.organizationLeader,
+    expect(targets.roleIds).toContain(
+      localFixture.systemReferences.roleIds.serviceOperator,
     )
   })
 })

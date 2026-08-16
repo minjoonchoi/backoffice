@@ -18,6 +18,7 @@
 
 - 화면은 기존의 의미 중심 command를 사용하고 transport 형식을 알지 않는다.
 - `createBackofficeCommands`는 위치·본문·요청자 식별자를 명시한 request DTO로 변환하며 업무 규칙을 구현하지 않는다.
+- 인증 주체가 필요한 command에서 화면이 요청자 식별자를 생략하면 facade가 현재 세션 사용자를 DTO에 채운다. 로컬 API는 식별자가 없거나 해당 UI 리소스 권한이 없으면 허용하지 않는다.
 - `BackofficeProvider`는 client 수명주기, 성공 후 snapshot 재조회와 React 상태 반영만 담당한다.
 - `BackofficeApiClient`는 조회와 IAM, 요청 템플릿, 정책, 요청 문서, 자격증명, 서비스 카탈로그, UI 리소스 API 계약을 묶는 교체 경계다.
 - 성공한 command 뒤에는 client의 snapshot response를 다시 읽는다. 화면은 응답 엔티티를 추측해 별도로 보정하지 않는다.
@@ -35,7 +36,7 @@ Next.js server layout
 
 초기 조회와 command 이후 재조회는 동일한 `getSnapshot` 계약을 사용한다. 현재는 화면에 필요한 조합 데이터를 한 번에 반환하며, client 밖에서 fixture나 저장소를 직접 읽지 않는다.
 
-시스템 기본 역할·그룹·네임스페이스의 ID도 `systemReferences`로 snapshot에 포함한다. 화면과 권한 계산은 코드 상수나 이름 검색 대신 이 응답값을 사용한다. 실제 서버 연동 시 서버가 이 참조를 소유하며, 고정 UUID는 로컬 bootstrap 데이터 안에서만 사용한다.
+시스템 기본 역할·네임스페이스의 ID도 `systemReferences`로 snapshot에 포함한다. 화면과 권한 계산은 코드 상수나 이름 검색 대신 이 응답값을 사용한다. 실제 서버 연동 시 서버가 이 참조를 소유하며, 고정 UUID는 로컬 bootstrap 데이터 안에서만 사용한다.
 
 ### 생성·수정·삭제
 
@@ -99,6 +100,8 @@ src/lib/api-transport.ts   # 공통 HTTP 실행과 응답 schema 검증
 인증 사용자는 서버 세션에서 결정해야 한다. request DTO의 `requesterId` 같은 값은 UI 편의를 위한 현재 계약이며 실제 서버는 이를 신뢰하지 않고 인증 주체, 최신 권한과 최신 데이터로 다시 검증한다.
 
 현재 snapshot 계약은 화면에 필요한 조합 상태를 한 번에 제공한다. 서버 검색·정렬·페이지네이션을 도입할 때는 같은 client 아래에 domain query 계약을 추가하고, mock과 HTTP 구현을 함께 바꾼다. mock과 HTTP를 동시에 호출하거나 실패 시 mock으로 자동 전환하는 fallback은 두지 않는다.
+
+목록 query는 한 종류의 엔티티와 고정된 행 DTO만 반환한다. 한 화면에서 여러 엔티티 유형이 필요하면 `resourceType` union 응답 하나로 합치지 않고 feature client에 유형별 query를 정의하고 화면의 탭·섹션에서 각각 호출한다. 정책 상세의 엔드포인트·UI 리소스가 대표 사례다. 반면 감사 이벤트, 알림과 동기화 작업은 대상 유형을 속성으로 가진 독립 엔티티이므로 한 query의 유형 필터로 조회할 수 있다.
 
 ## 검증 기준
 

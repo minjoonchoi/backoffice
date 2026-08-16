@@ -28,7 +28,7 @@
 - 반드시 유지할 기존 동작:
   - 변경의 영향을 받지 않아야 할 화면, 권한, API와 사용자 흐름
 - 사용자와 권한:
-  - 조회·생성·수정·삭제할 수 있는 사용자·역할·조직·그룹
+  - 조회·생성·수정·삭제할 수 있는 사용자·역할·조직
   - 사용할 수 없어야 하는 대상
 - 데이터와 규칙:
   - 입력·표시 필드, 필수값, 관계, 중복·상태·삭제 제한
@@ -209,7 +209,7 @@ UI command(input)
 `src/config/menu-registry.ts`의 `uiResourceRegistry`를 같은 변경에서 갱신한다.
 
 1. 신규 메뉴는 lowerCamelCase registry key, kebab-case `href`, 영역, 이름과 기본 view를 등록한다.
-2. URL로 접근하는 목록·상세 화면은 `list` 또는 `detail` view를 등록한다.
+2. URL로 접근하는 목록·상세 화면은 `list`·`detail`, 생성·수정·요청·동기화 페이지는 목적에 맞는 독립 view를 등록한다.
 3. API command와 연결되거나 독립적으로 숨겨야 하는 기능은 해당 view의 action으로 등록한다.
 4. 권한 경계 전체가 테이블·카드·도구 모음이면 component 등록 필요성을 검토한다.
 5. 구현에서는 raw string 대신 파생된 `uiResourceKeys`만 사용한다.
@@ -246,6 +246,7 @@ UI command(input)
 4. 같은 domain 상세 이동은 공통 `DataTable`의 행 이동을 사용하고 다른 domain 상세는 권한을 확인하는 text link를 사용한다.
 5. command 실패는 오류 code를 locale 문구로 표시하고 성공했을 때만 Dialog 종료, snackbar 또는 route 이동을 수행한다.
 6. snapshot 배열을 직접 변경하거나 화면 전용 임시 엔티티를 삽입하지 않는다.
+7. 서버 목록은 한 종류의 엔티티와 고정 행 DTO로 설계한다. 여러 엔티티 유형이 필요한 화면은 유형별 query와 탭·섹션으로 분리하고, 서로 다른 엔티티를 union 목록으로 합치지 않는다.
 
 서버는 인증 사용자, 최신 권한과 데이터 무결성을 command 처리 시 다시 검증해야 한다. UI 숨김은 보안 경계가 아니다.
 

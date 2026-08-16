@@ -3,39 +3,60 @@ import type {
   AccessPolicyAssignment,
   ApprovalDocument,
 } from "@/features/access-policies/model"
-import type { ApiKey } from "@/features/credentials/model"
 import type {
+  ApiKey,
+  CredentialLifecycleSettings,
+} from "@/features/credentials/model"
+import type {
+  Application,
   BackofficeUser,
-  Group,
   Organization,
   Role,
 } from "@/features/iam/model"
-import type { ApprovalLine } from "@/features/request-templates/model"
+import type {
+  ApprovalLine,
+  ApprovalLineRevision,
+} from "@/features/request-templates/model"
 import type {
   ManagedService,
   ServiceEndpoint,
   ServiceEndpointField,
+  ServiceEndpointRevision,
 } from "@/features/service-catalog/model"
-import type { UiNamespace, UiResource } from "@/features/ui-resources/model"
+import type {
+  Namespace,
+  UiResource,
+  UiResourceSyncHistory,
+} from "@/features/ui-resources/model"
 import type { BackofficeSystemReferences } from "@/domain/system-references"
+import type { AuditEvent } from "@/features/audit/model"
 import { z } from "zod"
 
-export const userNotificationEventSchema = z.enum([
-  "request-submitted",
-  "resource-created",
-  "access-granted",
-  "access-revoked",
-  "resource-disposed",
-  "api-key-issued",
-  "api-key-replacement-approved",
-  "api-key-disposal-approved",
-  "access-policy-updated",
-])
+export const userNotificationEventValues = {
+  requestSubmitted: "request-submitted",
+  requestRejected: "request-rejected",
+  requestWithdrawn: "request-withdrawn",
+  resourceCreated: "resource-created",
+  accessGranted: "access-granted",
+  accessRevoked: "access-revoked",
+  resourceDisposed: "resource-disposed",
+  apiKeyIssued: "api-key-issued",
+  apiKeyReplacementApproved: "api-key-replacement-approved",
+  apiKeyDisposalApproved: "api-key-disposal-approved",
+  apiKeyEmergencyRevoked: "api-key-emergency-revoked",
+  accessPolicyUpdated: "access-policy-updated",
+  serviceEndpointsSynchronized: "service-endpoints-synchronized",
+} as const
+export const userNotificationTargetTypeValues = {
+  approvalDocument: "approval-document",
+  accessPolicy: "access-policy",
+  service: "service",
+} as const
+export const userNotificationEventSchema = z.enum(userNotificationEventValues)
 export type UserNotificationEvent = z.infer<typeof userNotificationEventSchema>
-export const userNotificationTargetTypeSchema = z.enum([
-  "approval-document",
-  "access-policy",
-])
+export const userNotificationTargetTypeSchema = z.enum(
+  userNotificationTargetTypeValues,
+)
 export type UserNotificationTargetType = z.infer<
   typeof userNotificationTargetTypeSchema
 >
@@ -51,10 +72,11 @@ export type UserNotification = {
 export type BackofficeState = {
   systemReferences: BackofficeSystemReferences
   organizations: Organization[]
+  applications: Application[]
   users: BackofficeUser[]
   roles: Role[]
-  groups: Group[]
   approvalLines: ApprovalLine[]
+  approvalLineRevisions: ApprovalLineRevision[]
   accessPolicies: AccessPolicy[]
   accessPolicyAssignments: AccessPolicyAssignment[]
   approvalDocuments: ApprovalDocument[]
@@ -62,7 +84,11 @@ export type BackofficeState = {
   services: ManagedService[]
   serviceEndpoints: ServiceEndpoint[]
   serviceEndpointFields: ServiceEndpointField[]
+  serviceEndpointRevisions: ServiceEndpointRevision[]
+  credentialLifecycleSettings: CredentialLifecycleSettings
   apiKeys: ApiKey[]
-  uiNamespaces: UiNamespace[]
+  namespaces: Namespace[]
   uiResources: UiResource[]
+  uiResourceSyncHistories: UiResourceSyncHistory[]
+  auditEvents: AuditEvent[]
 }

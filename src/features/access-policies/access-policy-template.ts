@@ -1,3 +1,5 @@
+import { requestCategoryValues } from "@/features/request-templates/model"
+import { entityStatuses } from "@/domain/common"
 import type { BackofficeState } from "@/application/state/model"
 import type { AccessPolicyType } from "@/features/access-policies/model"
 import type { ApprovalLine } from "@/features/request-templates/model"
@@ -10,8 +12,8 @@ export function accessPolicyApprovalLines(
 ): ApprovalLine[] {
   return state.approvalLines.filter(
     (line) =>
-      line.status === "active" &&
-      line.category === "permission" &&
+      line.status === entityStatuses.active &&
+      line.category === requestCategoryValues.permission &&
       line.type === type,
   )
 }

@@ -20,9 +20,7 @@ describe("YAML fixture loader", () => {
 
     expect(loaded.defaultUserId).toBe(localDefaultUserId)
     expect(loaded.state).toEqual(localFixture)
-    expect(loaded.state.uiNamespaces).toEqual(
-      initialBackofficeState.uiNamespaces,
-    )
+    expect(loaded.state.namespaces).toEqual(initialBackofficeState.namespaces)
     expect(loaded.state.uiResources).toEqual(initialBackofficeState.uiResources)
     expect(
       initialBackofficeState.accessPolicies.every((systemPolicy) =>
@@ -51,6 +49,11 @@ describe("YAML fixture loader", () => {
     expect(() => loadFixture(missingDefaultUserSource)).toThrow(
       "default user not found",
     )
+    expect(() =>
+      loadFixture(
+        fixtureSource.replace("version: 1", "version: 1\ngroups: []"),
+      ),
+    ).toThrow()
   })
 
   it("resolves UI resource keys and rejects unknown keys", () => {

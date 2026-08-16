@@ -24,45 +24,44 @@ function findUser(nickname: string) {
 }
 
 describe("assigned access policy resolution", () => {
-  it.each<AccessPolicyAssignmentTarget>([
-    "user",
-    "organization",
-    "role",
-    "group",
-  ])("includes a policy assigned through a %s target", (targetType) => {
-    const state = structuredClone(localFixture)
-    const user = findUser("David")
-    const policy = state.accessPolicies.find((candidate) =>
-      candidate.resources.some((resource) => resource.type === "ui-namespace"),
-    )
-    const namespaceResource = policy?.resources.find(
-      (resource) => resource.type === "ui-namespace",
-    )
-    const targetId =
-      targetType === "user"
-        ? user.id
-        : targetType === "organization"
-          ? user.organizationIds[0]
-          : targetType === "role"
-            ? state.roles.find((role) => role.userIds.includes(user.id))?.id
-            : state.groups.find((group) => group.userIds.includes(user.id))?.id
-    if (!policy || !namespaceResource || !targetId)
-      throw new Error("Assignment fixture is incomplete")
-    state.accessPolicyAssignments = [
-      {
-        id: "99000000-0000-4000-8000-000000000001",
-        accessPolicyId: policy.id,
-        targetType,
-        targetId,
-        createdAt: "2026-08-11T00:00:00.000Z",
-      },
-    ]
+  it.each<AccessPolicyAssignmentTarget>(["user", "organization", "role"])(
+    "includes a policy assigned through a %s target",
+    (targetType) => {
+      const state = structuredClone(localFixture)
+      const user = findUser("David")
+      const policy = state.accessPolicies.find((candidate) =>
+        candidate.resources.some((resource) => resource.type === "ui-resource"),
+      )
+      const uiResource = policy?.resources.find(
+        (resource) => resource.type === "ui-resource",
+      )
+      const targetId =
+        targetType === "user"
+          ? user.id
+          : targetType === "organization"
+            ? user.organizationIds[0]
+            : state.roles.find((role) => role.userIds.includes(user.id))?.id
+      if (!policy || !uiResource || !targetId)
+        throw new Error("Assignment fixture is incomplete")
+      state.accessPolicyAssignments = [
+        {
+          id: "99000000-0000-4000-8000-000000000001",
+          accessPolicyId: policy.id,
+          targetType,
+          targetId,
+          expiresAt: null,
+          createdAt: "2026-08-11T00:00:00.000Z",
+        },
+      ]
 
-    expect(resolveAssignedAccessPolicyIds(state, user.id)).toEqual([policy.id])
-    expect(
-      hasEffectiveAccessPolicyResource(state, user.id, namespaceResource),
-    ).toBe(true)
-  })
+      expect(resolveAssignedAccessPolicyIds(state, user.id)).toEqual([
+        policy.id,
+      ])
+      expect(hasEffectiveAccessPolicyResource(state, user.id, uiResource)).toBe(
+        true,
+      )
+    },
+  )
 
   it("excludes inactive policies and inactive users", () => {
     const state = structuredClone(localFixture)
@@ -76,6 +75,7 @@ describe("assigned access policy resolution", () => {
         accessPolicyId: policy.id,
         targetType: "user",
         targetId: user.id,
+        expiresAt: null,
         createdAt: "2026-08-11T00:00:00.000Z",
       },
     ]
@@ -143,6 +143,7 @@ describe("assigned access policy resolution", () => {
       accessPolicyId: denyPolicy.id,
       targetType: "user",
       targetId: user.id,
+      expiresAt: null,
       createdAt: "2026-08-11T00:00:00.000Z",
     })
 
@@ -175,11 +176,17 @@ describe("assigned access policy resolution", () => {
 
     expect(grant?.paths).toEqual(
       expect.arrayContaining([
-        { type: "role", targetId: role.id, viaOrganizationId: null },
+        {
+          type: "role",
+          targetId: role.id,
+          viaOrganizationId: null,
+          expiresAt: null,
+        },
         {
           type: "role",
           targetId: role.id,
           viaOrganizationId: organizationId,
+          expiresAt: null,
         },
       ]),
     )
@@ -201,6 +208,7 @@ describe("assigned access policy resolution", () => {
       accessPolicyId: assignment.accessPolicyId,
       targetType: "user",
       targetId: user.id,
+      expiresAt: null,
       createdAt: "2026-08-11T00:00:00.000Z",
     })
 
@@ -246,6 +254,97 @@ describe("assigned access policy resolution", () => {
     ])
     expect(impact.removedResources).toEqual([policy.resources[0]])
     expect(impact.assignmentCounts[assignment.targetType]).toBeGreaterThan(0)
-    expect(impact.affectedUserIds.length).toBeGreaterThan(0)
+    expect(impact.notificationRecipientUserIds.length).toBeGreaterThan(0)
+    expect(impact.permissionChanges.length).toBeGreaterThan(0)
+  })
+
+  it("separates policy recipients from effective permission changes", () => {
+    const state = structuredClone(localFixture)
+    const user = findUser("David")
+    const sourcePolicy = state.accessPolicies[0]
+    const [sourceResource, replacementResource] = state.uiResources
+    if (!sourcePolicy || !sourceResource || !replacementResource) {
+      throw new Error("Policy overlap fixture is incomplete")
+    }
+    const policy: AccessPolicy = {
+      ...sourcePolicy,
+      id: "99000000-0000-4000-8000-000000000030",
+      name: "검토 대상 정책",
+      effect: "allow",
+      resources: [{ type: "ui-resource", id: sourceResource.id }],
+    }
+    const coveringPolicy: AccessPolicy = {
+      ...sourcePolicy,
+      id: "99000000-0000-4000-8000-000000000031",
+      name: "중첩 허용 정책",
+      effect: "allow",
+      resources: [
+        { type: "ui-resource", id: sourceResource.id },
+        { type: "ui-resource", id: replacementResource.id },
+      ],
+    }
+    state.roles = []
+    state.accessPolicies = [policy, coveringPolicy]
+    state.accessPolicyAssignments = [policy, coveringPolicy].map(
+      (candidate, index) => ({
+        id: `99000000-0000-4000-8000-00000000003${String(index + 2)}`,
+        accessPolicyId: candidate.id,
+        targetType: "user" as const,
+        targetId: user.id,
+        expiresAt: null,
+        createdAt: "2026-08-11T00:00:00.000Z",
+      }),
+    )
+
+    const impact = resolveAccessPolicyUpdateImpact(state, policy, {
+      ...policy,
+      resources: [{ type: "ui-resource", id: replacementResource.id }],
+    })
+
+    expect(impact.notificationRecipientUserIds).toEqual([user.id])
+    expect(impact.permissionChanges).toEqual([])
+    expect(impact.addedResources).toEqual([
+      { type: "ui-resource", id: replacementResource.id },
+    ])
+    expect(impact.removedResources).toEqual([
+      { type: "ui-resource", id: sourceResource.id },
+    ])
+  })
+
+  it("expires a direct user assignment without expiring the policy", () => {
+    const state = structuredClone(localFixture)
+    const user = findUser("David")
+    const policy = state.accessPolicies[0]
+    if (!policy) throw new Error("Policy fixture is missing")
+    state.roles = []
+    state.accessPolicyAssignments = [
+      {
+        id: "99000000-0000-4000-8000-000000000040",
+        accessPolicyId: policy.id,
+        targetType: "user",
+        targetId: user.id,
+        expiresAt: "2026-08-14T00:00:00.000Z",
+        createdAt: "2026-08-11T00:00:00.000Z",
+      },
+    ]
+
+    expect(
+      resolveAssignedAccessPolicyIds(
+        state,
+        user.id,
+        new Date("2026-08-15T00:00:00.000Z"),
+      ),
+    ).toEqual([])
+
+    const assignment = state.accessPolicyAssignments[0]
+    if (!assignment) throw new Error("Test assignment is missing")
+    assignment.expiresAt = "2026-08-16T00:00:00.000Z"
+    expect(
+      resolveAssignedAccessPolicyIds(
+        state,
+        user.id,
+        new Date("2026-08-15T00:00:00.000Z"),
+      ),
+    ).toEqual([policy.id])
   })
 })

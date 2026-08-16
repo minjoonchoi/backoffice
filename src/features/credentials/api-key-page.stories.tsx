@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { expect, userEvent, waitFor, within } from "storybook/test"
 
 import { SessionAccessProvider } from "@/auth/session-access-provider"
+import { CredentialIssuancePage } from "@/features/credentials/credential-issuance-page"
 import { ApiKeyPage } from "@/features/credentials/api-key-page"
 import { localDefaultUserId, localFixture } from "@/mocks/fixture"
 import type { BackofficeState } from "@/application/state/model"
@@ -140,22 +141,20 @@ export const OwnedCredentialServiceIsExcluded: Story = {
       localSwitchingEnabled
       initialUserId={findUserId("Amelia")}
     >
-      <ApiKeyPage />
+      <CredentialIssuancePage templates={localFixture.approvalLines} />
     </SessionAccessProvider>
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await userEvent.click(canvas.getByRole("button", { name: "자격증명 요청" }))
-    const body = within(canvasElement.ownerDocument.body)
-    const dialog = await body.findByRole("dialog")
-
+    await userEvent.click(
+      canvas.getByRole("radio", { name: /Developer Console/ }),
+    )
     await expect(
-      within(dialog).queryByRole("radio", { name: /Developer API/ }),
+      canvas.queryByRole("radio", { name: /Developer API/ }),
     ).not.toBeInTheDocument()
     await expect(
-      within(dialog).getByRole("radio", { name: /협업 SaaS/ }),
+      canvas.getByRole("radio", { name: /협업 SaaS/ }),
     ).toBeInTheDocument()
-    await userEvent.keyboard("{Escape}")
   },
 }
 

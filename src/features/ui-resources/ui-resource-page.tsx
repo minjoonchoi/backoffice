@@ -2,14 +2,9 @@
 
 import { uiResourceKeys } from "@/config/menu-registry"
 import type { ColumnDef } from "@tanstack/react-table"
-import {
-  Boxes,
-  Check,
-  Layers3,
-  Plus,
-  Trash2,
-  TriangleAlert,
-} from "lucide-react"
+import { Boxes, Layers3, Plus, Trash2, TriangleAlert } from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { useCallback, useMemo, useState } from "react"
 
@@ -17,14 +12,17 @@ import { useSessionAccess } from "@/auth/session-access-provider"
 import { hasEffectiveAccessPolicyResource } from "@/features/access-policies/access-policy-assignment"
 import { resolveUiResourceAccess } from "@/auth/ui-resource-access"
 import { DataTable } from "@/components/patterns/data-table"
+import { EmptyState } from "@/components/patterns/content-state"
 import {
   FormDialog,
   FormDialogContent,
 } from "@/components/patterns/form-dialog"
 import { MetricCard } from "@/components/patterns/metric-card"
 import { PageHeader } from "@/components/patterns/page-header"
+import { ReviewWorkflowProgress } from "@/components/patterns/review-workflow-progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   DialogClose,
@@ -42,11 +40,11 @@ import type {
   UiResource,
   UiResourceImportResult,
   UiResourceType,
-  UiNamespace,
 } from "@/features/ui-resources/model"
-import type { BackofficeErrorCode } from "@/domain/common"
+import { backofficeErrorCodes, type BackofficeErrorCode } from "@/domain/common"
 import {
   parseUiResourceManifestText,
+  uiResourceTypeValues,
   uiResourceManifestSchema,
   type UiResourceManifest,
   type UiResourceManifestFormat,
@@ -60,23 +58,41 @@ import {
   CommandErrorMessage,
   StatusSwitch,
 } from "@/application/ui/backoffice-ui"
-import { resolveUiResourceVisibilities } from "@/features/ui-resources/ui-resource-visibility"
+import {
+  resolveUiResourceVisibilities,
+  uiResourceVisibilityValues,
+} from "@/features/ui-resources/ui-resource-visibility"
+import { UiResourceHistoryPanel } from "@/features/ui-resources/ui-resource-history-panel"
 
 function UiResourceTypeBadge({ type }: { type: UiResourceType }) {
   const t = useTranslations("backoffice.uiResources.types")
   return (
-    <Badge variant={type === "action" ? "info" : "secondary"}>{t(type)}</Badge>
+    <Badge
+      variant={type === uiResourceTypeValues.action ? "info" : "secondary"}
+    >
+      {t(type)}
+    </Badge>
   )
 }
 
-function UiResourceImportDialog({ namespaces }: { namespaces: UiNamespace[] }) {
+export function UiResourceSyncPage() {
   const backoffice = useBackoffice()
   const sessionAccess = useSessionAccess()
+  const router = useRouter()
   const t = useTranslations("backoffice.uiResources")
   const common = useTranslations("backoffice.common")
-  const [open, setOpen] = useState(false)
+  const errors = useTranslations("backoffice.errors")
+  const access = sessionAccess.currentUser
+    ? resolveUiResourceAccess(backoffice, sessionAccess.currentUser.id)
+    : null
+  const manageableNamespaceIds = new Set(access?.manageableNamespaceIds ?? [])
+  const namespaces = backoffice.namespaces.filter((namespace) =>
+    manageableNamespaceIds.has(namespace.id),
+  )
   const [format, setFormat] = useState<UiResourceManifestFormat>("yaml")
-  const [namespaceId, setNamespaceId] = useState<string | null>(null)
+  const [namespaceId, setNamespaceId] = useState<string | null>(
+    namespaces[0]?.id ?? null,
+  )
   const [source, setSource] = useState("")
   const [preview, setPreview] = useState<UiResourceSyncPreview>()
   const [candidateManifest, setCandidateManifest] =
@@ -84,32 +100,43 @@ function UiResourceImportDialog({ namespaces }: { namespaces: UiNamespace[] }) {
   const [selectedResourceKeys, setSelectedResourceKeys] = useState<Set<string>>(
     new Set(),
   )
-  const [grantAdministratorAccess, setGrantAdministratorAccess] = useState(true)
+  const [grantManagerAccess, setGrantManagerAccess] = useState(true)
   const [result, setResult] = useState<UiResourceImportResult>()
   const [selectedOrphanIds, setSelectedOrphanIds] = useState<Set<string>>(
     new Set(),
   )
   const [error, setError] = useState<BackofficeErrorCode>()
   const formId = "ui-resource-import-form"
+  const canSynchronize = Boolean(
+    sessionAccess.currentUser &&
+    sessionAccess.canAccessUiResource(
+      uiResourceKeys.uiResources.list.actions.importUiResources,
+    ) &&
+    hasEffectiveAccessPolicyResource(backoffice, sessionAccess.currentUser.id, {
+      type: "endpoint",
+      id: backoffice.systemReferences.serviceEndpointIds.importUiResources,
+    }) &&
+    namespaces.length > 0,
+  )
 
-  function changeOpen(nextOpen: boolean) {
-    setOpen(nextOpen)
-    setFormat("yaml")
-    setNamespaceId(namespaces[0]?.id ?? null)
-    setSource("")
-    setPreview(undefined)
-    setCandidateManifest(undefined)
-    setSelectedResourceKeys(new Set())
-    setGrantAdministratorAccess(true)
-    setResult(undefined)
-    setSelectedOrphanIds(new Set())
-    setError(undefined)
+  if (!canSynchronize) {
+    return (
+      <EmptyState
+        title={t("add")}
+        description={errors("ui-resource-import-forbidden")}
+        action={
+          <Button nativeButton={false} render={<Link href="/ui-resources" />}>
+            {common("backToList")}
+          </Button>
+        }
+      />
+    )
   }
 
   function review() {
     const namespace = namespaces.find((item) => item.id === namespaceId)
     if (!namespace) {
-      setError("ui-namespace-not-found")
+      setError("namespace-not-found")
       return
     }
 
@@ -138,7 +165,7 @@ function UiResourceImportDialog({ namespaces }: { namespaces: UiNamespace[] }) {
     setSelectedResourceKeys(
       new Set(targetedManifest.resources.map((resource) => resource.key)),
     )
-    setGrantAdministratorAccess(true)
+    setGrantManagerAccess(true)
     setPreview(result.value)
     setError(undefined)
   }
@@ -195,7 +222,7 @@ function UiResourceImportDialog({ namespaces }: { namespaces: UiNamespace[] }) {
     const result = await backoffice.importUiResources(
       {
         manifest: preview.manifest,
-        grantAdministratorAccess,
+        grantManagerAccess,
       },
       requesterId,
     )
@@ -217,14 +244,14 @@ function UiResourceImportDialog({ namespaces }: { namespaces: UiNamespace[] }) {
     setError(undefined)
   }
 
-  const administratorRole = preview
+  const managerRole = preview
     ? backoffice.roles.find(
-        (role) => role.id === preview.namespace.administratorRoleId,
+        (role) => role.id === preview.namespace.managerRoleId,
       )
     : undefined
-  if (preview && !administratorRole) {
+  if (preview && !managerRole) {
     throw new Error(
-      `UI Namespace administrator role not found: ${preview.namespace.administratorRoleId}`,
+      `Namespace management role not found: ${preview.namespace.managerRoleId}`,
     )
   }
 
@@ -253,147 +280,115 @@ function UiResourceImportDialog({ namespaces }: { namespaces: UiNamespace[] }) {
   }
 
   return (
-    <FormDialog open={open} onOpenChange={changeOpen}>
-      <DialogTrigger
-        render={
-          <Button
-            data-ui-resource={
-              uiResourceKeys.uiResources.list.actions.importUiResources
-            }
-          />
-        }
-      >
-        <Plus aria-hidden />
-        {t("add")}
-      </DialogTrigger>
-      <FormDialogContent className="max-h-[min(90svh,52rem)] max-w-4xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
-        <DialogHeader>
-          <DialogTitle>{t("add")}</DialogTitle>
-          <DialogDescription>{t("addDescription")}</DialogDescription>
-        </DialogHeader>
-        <form
-          id={formId}
-          className="grid min-h-0 gap-4 overflow-y-auto pr-1 md:grid-rows-[auto_minmax(0,1fr)_auto] md:overflow-hidden md:pr-0"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (result) return
-            if (preview) void synchronize()
-            else review()
-          }}
-        >
-          <ol className="grid grid-cols-3 gap-2" aria-label={t("progress")}>
-            {[t("inputStep"), t("reviewStep"), t("completeStep")].map(
-              (label, index) => {
-                const stage = result ? 2 : preview ? 1 : 0
-                const active = index === stage
-                const complete = index < stage
-                return (
-                  <li
-                    key={label}
-                    aria-current={active ? "step" : undefined}
-                    className="flex items-center gap-2 rounded-control border px-3 py-2 text-sm"
-                  >
-                    <span
-                      className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold ${
-                        active || complete
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-text-subtle"
-                      }`}
-                    >
-                      {complete ? <Check className="size-3.5" /> : index + 1}
-                    </span>
-                    {label}
-                  </li>
-                )
-              },
-            )}
-          </ol>
-          <div
-            className={
-              result || preview
-                ? "min-h-0 md:overflow-hidden"
-                : "min-h-0 overflow-y-auto pr-1"
-            }
+    <div className="mx-auto grid w-full max-w-5xl gap-6">
+      <PageHeader title={t("add")} description={t("addDescription")} />
+      <Card className="overflow-visible">
+        <CardContent className="grid gap-4">
+          <form
+            id={formId}
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (result) return
+              if (preview) void synchronize()
+              else review()
+            }}
           >
-            {result ? (
-              <UiResourceSyncCompletion
-                result={result}
-                selectedIds={selectedOrphanIds}
-                onSelectedIdsChange={setSelectedOrphanIds}
+            {!result ? (
+              <ReviewWorkflowProgress
+                step={preview ? 2 : 1}
+                label={t("progress")}
               />
-            ) : preview && candidateManifest ? (
-              <UiResourceSyncReview
-                preview={preview}
-                manifest={candidateManifest}
-                selectedKeys={selectedResourceKeys}
-                onSelectionChange={changeReviewSelection}
-                administratorRoleName={administratorRole?.name ?? ""}
-                grantAdministratorAccess={grantAdministratorAccess}
-                onGrantAdministratorAccessChange={setGrantAdministratorAccess}
-              />
-            ) : (
-              <div className="grid gap-4">
-                <FormSelect
-                  label={t("namespace")}
-                  value={namespaceId}
-                  onValueChange={(value) => {
-                    setNamespaceId(value)
-                    setError(undefined)
-                  }}
-                  options={namespaces.map((namespace) => ({
-                    value: namespace.id,
-                    label: `${namespace.name} (${namespace.key})`,
-                  }))}
+            ) : null}
+            <div
+              className={
+                result || preview
+                  ? "min-h-0 md:overflow-hidden"
+                  : "min-h-0 overflow-y-auto pr-1"
+              }
+            >
+              {result ? (
+                <UiResourceSyncCompletion
+                  result={result}
+                  selectedIds={selectedOrphanIds}
+                  onSelectedIdsChange={setSelectedOrphanIds}
                 />
-                <FieldDescription>{t("namespaceDescription")}</FieldDescription>
-                <FormSelect
-                  label={t("format")}
-                  value={format}
-                  onValueChange={(value) => {
-                    if (value) setFormat(value)
-                    setError(undefined)
-                  }}
-                  options={[
-                    { value: "yaml", label: "YAML" },
-                    { value: "json", label: "JSON" },
-                  ]}
+              ) : preview && candidateManifest ? (
+                <UiResourceSyncReview
+                  preview={preview}
+                  manifest={candidateManifest}
+                  selectedKeys={selectedResourceKeys}
+                  onSelectionChange={changeReviewSelection}
+                  managerRoleName={managerRole?.name ?? ""}
+                  grantManagerAccess={grantManagerAccess}
+                  onGrantManagerAccessChange={setGrantManagerAccess}
                 />
-                <Field>
-                  <FieldLabel htmlFor="ui-resource-manifest">
-                    {t("manifest")}
-                  </FieldLabel>
-                  <Textarea
-                    id="ui-resource-manifest"
-                    name="manifest"
-                    className="h-72 max-h-72 resize-none overflow-y-auto font-mono text-xs"
-                    value={source}
-                    required
-                    spellCheck={false}
-                    autoCapitalize="none"
-                    aria-invalid={error === "invalid-input"}
-                    aria-describedby="ui-resource-manifest-description"
-                    onChange={(event) => {
-                      setSource(event.currentTarget.value)
+              ) : (
+                <div className="grid gap-4">
+                  <FormSelect
+                    label={t("namespace")}
+                    value={namespaceId}
+                    onValueChange={(value) => {
+                      setNamespaceId(value)
                       setError(undefined)
                     }}
+                    options={namespaces.map((namespace) => ({
+                      value: namespace.id,
+                      label: `${namespace.name} (${namespace.key})`,
+                    }))}
                   />
-                  <FieldDescription id="ui-resource-manifest-description">
-                    {t("manifestDescription")}
+                  <FieldDescription>
+                    {t("namespaceDescription")}
                   </FieldDescription>
-                </Field>
-              </div>
-            )}
-          </div>
-          <CommandErrorMessage error={error} />
-        </form>
-        <DialogFooter>
+                  <FormSelect
+                    label={t("format")}
+                    value={format}
+                    onValueChange={(value) => {
+                      if (value) setFormat(value)
+                      setError(undefined)
+                    }}
+                    options={[
+                      { value: "yaml", label: "YAML" },
+                      { value: "json", label: "JSON" },
+                    ]}
+                  />
+                  <Field>
+                    <FieldLabel htmlFor="ui-resource-manifest">
+                      {t("manifest")}
+                    </FieldLabel>
+                    <Textarea
+                      id="ui-resource-manifest"
+                      name="manifest"
+                      className="h-72 max-h-72 resize-none overflow-y-auto font-mono text-xs"
+                      value={source}
+                      required
+                      spellCheck={false}
+                      autoCapitalize="none"
+                      aria-invalid={error === backofficeErrorCodes.invalidInput}
+                      aria-describedby="ui-resource-manifest-description"
+                      onChange={(event) => {
+                        setSource(event.currentTarget.value)
+                        setError(undefined)
+                      }}
+                    />
+                    <FieldDescription id="ui-resource-manifest-description">
+                      {t("manifestDescription")}
+                    </FieldDescription>
+                  </Field>
+                </div>
+              )}
+            </div>
+            <CommandErrorMessage error={error} />
+          </form>
+        </CardContent>
+        <CardFooter className="sticky bottom-0 z-10 flex flex-wrap justify-end gap-2 border-t border-border-subtle bg-card py-3">
           {result ? (
             <>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  setOpen(false)
+                  router.replace("/ui-resources")
                 }}
               >
                 {t("finish")}
@@ -425,11 +420,14 @@ function UiResourceImportDialog({ namespaces }: { namespaces: UiNamespace[] }) {
                   {common("previous")}
                 </Button>
               ) : (
-                <DialogClose
-                  render={<Button type="button" variant="outline" />}
+                <Button
+                  type="button"
+                  variant="outline"
+                  nativeButton={false}
+                  render={<Link href="/ui-resources" />}
                 >
                   {common("cancel")}
-                </DialogClose>
+                </Button>
               )}
               <Button
                 type="submit"
@@ -440,9 +438,9 @@ function UiResourceImportDialog({ namespaces }: { namespaces: UiNamespace[] }) {
               </Button>
             </>
           )}
-        </DialogFooter>
-      </FormDialogContent>
-    </FormDialog>
+        </CardFooter>
+      </Card>
+    </div>
   )
 }
 
@@ -475,9 +473,9 @@ function UiResourceSyncCompletion({
         </p>
         <p className="text-sm font-medium text-foreground">
           {t(
-            result.administratorAccessUpdated
-              ? "completeAdministratorGranted"
-              : "completeAdministratorUnchanged",
+            result.managerAccessUpdated
+              ? "completeManagerGranted"
+              : "completeManagerUnchanged",
           )}
         </p>
       </div>
@@ -530,17 +528,17 @@ function UiResourceSyncReview({
   manifest,
   selectedKeys,
   onSelectionChange,
-  administratorRoleName,
-  grantAdministratorAccess,
-  onGrantAdministratorAccessChange,
+  managerRoleName,
+  grantManagerAccess,
+  onGrantManagerAccessChange,
 }: {
   preview: UiResourceSyncPreview
   manifest: UiResourceManifest
   selectedKeys: Set<string>
   onSelectionChange: (resourceKey: string, checked: boolean) => void
-  administratorRoleName: string
-  grantAdministratorAccess: boolean
-  onGrantAdministratorAccessChange: (checked: boolean) => void
+  managerRoleName: string
+  grantManagerAccess: boolean
+  onGrantManagerAccessChange: (checked: boolean) => void
 }) {
   const t = useTranslations("backoffice.uiResources")
   const sortedResources = useMemo(
@@ -587,17 +585,17 @@ function UiResourceSyncReview({
         </p>
         <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-control border border-brand/30 bg-brand-weak px-3 py-2.5">
           <Checkbox
-            checked={grantAdministratorAccess}
-            onCheckedChange={onGrantAdministratorAccessChange}
+            checked={grantManagerAccess}
+            onCheckedChange={onGrantManagerAccessChange}
           />
           <span className="grid min-w-0 gap-0.5">
             <span className="text-sm font-semibold">
-              {t("grantAdministratorAccess", {
-                role: administratorRoleName,
+              {t("grantManagerAccess", {
+                role: managerRoleName,
               })}
             </span>
             <span className="text-caption text-text-subtle">
-              {t("grantAdministratorAccessDescription")}
+              {t("grantManagerAccessDescription")}
             </span>
           </span>
         </label>
@@ -745,7 +743,7 @@ function OrphanedUiResourceCleanupDialog({
         </DialogHeader>
         <ul className="grid max-h-72 gap-2 overflow-y-auto rounded-control border p-2">
           {resources.map((resource) => {
-            const namespace = backoffice.uiNamespaces.find(
+            const namespace = backoffice.namespaces.find(
               (item) => item.id === resource.namespaceId,
             )
             if (!namespace) {
@@ -851,7 +849,7 @@ function UiResourcesTable({
         header: t("namespace"),
         size: 170,
         cell: ({ row }) => {
-          const namespace = backoffice.uiNamespaces.find(
+          const namespace = backoffice.namespaces.find(
             (item) => item.id === row.original.namespaceId,
           )
           if (!namespace) {
@@ -880,9 +878,9 @@ function UiResourcesTable({
             <div className="flex items-center gap-2">
               <Badge
                 variant={
-                  visibility === "visible"
+                  visibility === uiResourceVisibilityValues.visible
                     ? "success"
-                    : visibility === "inactive"
+                    : visibility === uiResourceVisibilityValues.inactive
                       ? "secondary"
                       : "warning"
                 }
@@ -925,7 +923,7 @@ function UiResourcesTable({
       },
     ],
     [
-      backoffice.uiNamespaces,
+      backoffice.namespaces,
       canChangeStatus,
       changeStatus,
       common,
@@ -949,7 +947,7 @@ function UiResourcesTable({
           id: "namespace",
           label: t("namespace"),
           getValue: (row) =>
-            backoffice.uiNamespaces.find((item) => item.id === row.namespaceId)
+            backoffice.namespaces.find((item) => item.id === row.namespaceId)
               ?.name ?? "",
         },
         { id: "name", label: common("name"), getValue: (row) => row.name },
@@ -984,7 +982,7 @@ export function UiResourcesPage() {
     ? resolveUiResourceAccess(backoffice, sessionAccess.currentUser.id)
     : null
   const manageableNamespaceIds = new Set(access?.manageableNamespaceIds ?? [])
-  const visibleNamespaces = backoffice.uiNamespaces.filter((namespace) =>
+  const visibleNamespaces = backoffice.namespaces.filter((namespace) =>
     manageableNamespaceIds.has(namespace.id),
   )
   const visibleResources = backoffice.uiResources.filter((resource) =>
@@ -994,6 +992,7 @@ export function UiResourcesPage() {
     sessionAccess.canAccessUiResource(
       uiResourceKeys.uiResources.list.actions.importUiResources,
     ) &&
+    sessionAccess.canAccessUiResource(uiResourceKeys.uiResources.sync.key) &&
     Boolean(
       sessionAccess.currentUser &&
       hasEffectiveAccessPolicyResource(
@@ -1033,7 +1032,16 @@ export function UiResourcesPage() {
                 />
               ) : null}
               {canImport ? (
-                <UiResourceImportDialog namespaces={visibleNamespaces} />
+                <Button
+                  data-ui-resource={
+                    uiResourceKeys.uiResources.list.actions.importUiResources
+                  }
+                  nativeButton={false}
+                  render={<Link href="/ui-resources/sync" />}
+                >
+                  <Plus aria-hidden />
+                  {t("add")}
+                </Button>
               ) : null}
             </>
           ) : null
@@ -1056,6 +1064,7 @@ export function UiResourcesPage() {
           value={orphanedResources.length}
         />
       </div>
+      <UiResourceHistoryPanel namespaceIds={manageableNamespaceIds} />
       <UiResourcesTable
         data={visibleResources}
         canChangeStatus={canChangeStatus}

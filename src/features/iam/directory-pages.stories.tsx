@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
-import { expect, userEvent, waitFor, within } from "storybook/test"
+import { expect, within } from "storybook/test"
 
 import { SessionAccessProvider } from "@/auth/session-access-provider"
 import {
@@ -8,7 +8,6 @@ import {
   UsersPage,
 } from "@/features/iam/directory-pages"
 import { localDefaultUserId, localFixture } from "@/mocks/fixture"
-import type { BackofficeState } from "@/application/state/model"
 import { BackofficeProvider } from "@/application/state/provider"
 
 function findUserId(nickname: string) {
@@ -28,19 +27,7 @@ const privacyOrganizationId = localFixture.organizations.find(
 if (!privacyOrganizationId) {
   throw new Error("Privacy organization fixture is missing")
 }
-const storyBackoffice: BackofficeState = {
-  ...localFixture,
-  groups: [
-    ...localFixture.groups,
-    {
-      id: "30000000-0000-4000-8000-000000000001",
-      name: "접근 검토 그룹",
-      description: "접근 검토 업무를 담당하는 사용자 그룹입니다.",
-      userIds: [davidId],
-      createdAt: "2026-08-10T00:00:00.000Z",
-    },
-  ],
-}
+const storyBackoffice = localFixture
 
 function UserDetailStory({
   sessionUserId,
@@ -81,22 +68,6 @@ export const AdministratorAssignments: Story = {
     await expect(
       canvas.getByRole("button", { name: "역할 추가" }),
     ).toBeVisible()
-
-    await userEvent.click(canvas.getByRole("button", { name: "그룹 추가" }))
-    const body = within(canvasElement.ownerDocument.body)
-    const dialog = await body.findByRole("dialog")
-    await userEvent.click(
-      within(dialog).getByRole("checkbox", { name: /접근 검토 그룹/ }),
-    )
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "그룹 추가" }),
-    )
-    await waitFor(async () => {
-      await expect(dialog).not.toBeInTheDocument()
-    })
-    await expect(
-      canvas.getByRole("link", { name: "접근 검토 그룹" }),
-    ).toBeVisible()
   },
 }
 
@@ -111,20 +82,20 @@ export const IamOperatorAssignments: Story = {
       canvas.getByRole("link", { name: "Backoffice 시스템 관리자" }),
     ).toBeVisible()
     await expect(
-      canvas.getByRole("link", { name: "접근 검토 그룹" }),
-    ).toBeVisible()
-    await expect(
-      canvas.getByRole("link", { name: "조직장 그룹" }),
-    ).toBeVisible()
-    await expect(
       canvas.getByRole("button", { name: "조직 추가" }),
     ).toBeVisible()
     await expect(
       canvas.getByRole("button", { name: "역할 추가" }),
     ).toBeVisible()
     await expect(
-      canvas.getByRole("button", { name: "그룹 추가" }),
-    ).toBeVisible()
+      canvas.queryByRole("heading", { name: "자격증명 이력" }),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole("heading", { name: "요청 이력" }),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole("heading", { name: "요청 템플릿 참여" }),
+    ).not.toBeInTheDocument()
   },
 }
 
@@ -207,5 +178,11 @@ export const IamOperatorOrganizationManagement: Story = {
     await expect(
       canvas.getByRole("button", { name: "역할 추가" }),
     ).toBeVisible()
+    await expect(
+      canvas.queryByRole("heading", { name: "조직 관계 변경 영향" }),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole("heading", { name: "포함된 요청 템플릿" }),
+    ).not.toBeInTheDocument()
   },
 }

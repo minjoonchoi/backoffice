@@ -1,13 +1,17 @@
 import type { BackofficeState } from "@/application/state/model"
-import type { ApprovalDocument } from "@/features/access-policies/model"
+import {
+  approvalDocumentKinds,
+  type ApprovalDocument,
+} from "@/features/access-policies/model"
+import { approvalTypeValues } from "@/features/request-templates/model"
 import type { ApiKey } from "@/features/credentials/model"
 import { resolveAuthorizationSubject } from "@/auth/authorization-subject"
 
 type CredentialAccessState = Pick<
   BackofficeState,
   | "apiKeys"
+  | "applications"
   | "approvalDocuments"
-  | "groups"
   | "roles"
   | "services"
   | "systemReferences"
@@ -16,16 +20,23 @@ type CredentialAccessState = Pick<
 
 export type CredentialRequest = Extract<
   ApprovalDocument,
-  { documentKind: "api-key-issuance" | "api-key-lifecycle" }
+  {
+    documentKind:
+      | typeof approvalDocumentKinds.apiKeyIssuance
+      | typeof approvalDocumentKinds.apiKeyLifecycle
+  }
 >
 
 export type CredentialIssuanceRequest = Extract<
   CredentialRequest,
-  { documentKind: "api-key-issuance" }
+  { documentKind: typeof approvalDocumentKinds.apiKeyIssuance }
 >
 
 export type CredentialScope =
-  "administrator" | "requester" | "ownerOrganization"
+  | "administrator"
+  | "requester"
+  | "applicationOwnerOrganization"
+  | "serviceOwnerOrganization"
 
 export type VisibleCredential = Readonly<{
   credential: ApiKey
@@ -55,8 +66,8 @@ export function resolveCredentialVisibility(
   )
   const credentialRequests = state.approvalDocuments.filter(
     (document): document is CredentialRequest =>
-      document.documentKind === "api-key-issuance" ||
-      document.documentKind === "api-key-lifecycle",
+      document.documentKind === approvalDocumentKinds.apiKeyIssuance ||
+      document.documentKind === approvalDocumentKinds.apiKeyLifecycle,
   )
 
   function resolveServiceOwnerOrganizationId(serviceId: string): string {
@@ -65,8 +76,18 @@ export function resolveCredentialVisibility(
     return service.ownerOrganizationId
   }
 
+  function resolveApplicationOwnerOrganizationId(applicationId: string) {
+    const application = state.applications.find(
+      (item) => item.id === applicationId,
+    )
+    if (!application) {
+      throw new Error(`Credential application not found: ${applicationId}`)
+    }
+    return application.ownerOrganizationId
+  }
+
   function resolveRequestServiceId(document: CredentialRequest): string {
-    if (document.documentKind === "api-key-issuance") {
+    if (document.documentKind === approvalDocumentKinds.apiKeyIssuance) {
       return document.serviceId
     }
     const apiKey = state.apiKeys.find((item) => item.id === document.apiKeyId)
@@ -76,15 +97,29 @@ export function resolveCredentialVisibility(
     return apiKey.serviceId
   }
 
+  function resolveRequestApplicationId(document: CredentialRequest): string {
+    if (document.documentKind === approvalDocumentKinds.apiKeyIssuance) {
+      return document.applicationId
+    }
+    const apiKey = state.apiKeys.find((item) => item.id === document.apiKeyId)
+    if (!apiKey) throw new Error(`Credential not found: ${document.apiKeyId}`)
+    return apiKey.applicationId
+  }
+
   const requests = credentialRequests
     .filter((document) => {
       const ownerOrganizationId = resolveServiceOwnerOrganizationId(
         resolveRequestServiceId(document),
       )
+      const applicationOwnerOrganizationId =
+        resolveApplicationOwnerOrganizationId(
+          resolveRequestApplicationId(document),
+        )
       return (
         isAdministrator ||
         document.requesterId === subject.user.id ||
-        subject.organizationIds.has(ownerOrganizationId)
+        subject.organizationIds.has(ownerOrganizationId) ||
+        subject.organizationIds.has(applicationOwnerOrganizationId)
       )
     })
     .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))
@@ -95,10 +130,10 @@ export function resolveCredentialVisibility(
         (item) => item.id === credential.approvalDocumentId,
       )
       if (
-        document?.documentKind !== "api-key-issuance" &&
+        document?.documentKind !== approvalDocumentKinds.apiKeyIssuance &&
         !(
-          document?.documentKind === "api-key-lifecycle" &&
-          document.type === "api-key-replace"
+          document?.documentKind === approvalDocumentKinds.apiKeyLifecycle &&
+          document.type === approvalTypeValues.apiKeyReplace
         )
       ) {
         throw new Error(
@@ -111,11 +146,16 @@ export function resolveCredentialVisibility(
       const ownerOrganizationId = resolveServiceOwnerOrganizationId(
         credential.serviceId,
       )
+      const applicationOwnerOrganizationId =
+        resolveApplicationOwnerOrganizationId(credential.applicationId)
       const scopes: CredentialScope[] = []
       if (isAdministrator) scopes.push("administrator")
       if (document.requesterId === subject.user.id) scopes.push("requester")
       if (subject.organizationIds.has(ownerOrganizationId)) {
-        scopes.push("ownerOrganization")
+        scopes.push("serviceOwnerOrganization")
+      }
+      if (subject.organizationIds.has(applicationOwnerOrganizationId)) {
+        scopes.push("applicationOwnerOrganization")
       }
       return scopes.length > 0 ? [{ credential, scopes }] : []
     })

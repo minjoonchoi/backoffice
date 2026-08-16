@@ -56,6 +56,18 @@ export const AdministratorServices: Story = {
     await expect(
       modal.queryByRole("combobox", { name: "담당자" }),
     ).not.toBeInTheDocument()
+    await expect(
+      modal.getByRole("combobox", { name: "소유 조직" }),
+    ).toBeVisible()
+    await expect(
+      modal.queryByRole("combobox", { name: "API Key 발급 요청 템플릿" }),
+    ).not.toBeInTheDocument()
+    await expect(
+      modal.queryByRole("combobox", { name: "API Key 교체 요청 템플릿" }),
+    ).not.toBeInTheDocument()
+    await expect(
+      modal.queryByRole("combobox", { name: "API Key 폐기 요청 템플릿" }),
+    ).not.toBeInTheDocument()
     await userEvent.keyboard("{Escape}")
     await expect(
       canvas.getAllByText("내부 서비스", { selector: '[data-slot="badge"]' }),
@@ -91,18 +103,26 @@ export const OrganizationLeaderServices: Story = {
     const dialog = await body.findByRole("dialog")
     await waitFor(() => expect(dialog).toBeVisible())
     const modal = within(dialog)
-    const ownerSelect = modal.getByRole("combobox", { name: "소유 조직" })
-    ownerSelect.focus()
-    await userEvent.keyboard("{Enter}")
-    await body.findByRole("listbox")
     await expect(
-      body.getByRole("option", { name: "개발 2팀" }),
-    ).toBeInTheDocument()
-    await expect(
-      body.queryByRole("option", { name: "개인정보보호팀" }),
+      modal.queryByRole("combobox", { name: "소유 조직" }),
     ).not.toBeInTheDocument()
-    await userEvent.keyboard("{Escape}")
-    await userEvent.keyboard("{Escape}")
+    await userEvent.type(modal.getByRole("textbox", { name: "이름" }), "팀 API")
+    await userEvent.type(
+      modal.getByRole("textbox", { name: "Slug" }),
+      "team-api",
+    )
+    await userEvent.type(
+      modal.getByRole("textbox", { name: "호스트" }),
+      "https://team-api.example.com",
+    )
+    await userEvent.click(modal.getByRole("combobox", { name: "서비스 유형" }))
+    await userEvent.click(
+      await body.findByRole("option", { name: "내부 서비스" }),
+    )
+    await userEvent.click(modal.getByRole("button", { name: "등록" }))
+    await waitFor(() => expect(dialog).not.toBeVisible())
+    const createdRow = canvas.getByRole("row", { name: "팀 API 상세 보기" })
+    await expect(within(createdRow).getByText("개발 2팀")).toBeVisible()
   },
 }
 
@@ -179,8 +199,9 @@ export const AdministratorEndpoints: Story = {
       canvasElement.querySelectorAll("col")[methodIndex],
     ).toHaveAttribute("style", "width: 80px;")
     await expect(
-      canvas.queryByRole("columnheader", { name: "상태" }),
-    ).not.toBeInTheDocument()
+      canvas.getByRole("columnheader", { name: "상태" }),
+    ).toBeVisible()
+    await expect(canvas.getAllByText("사용 중")[0]).toBeVisible()
     await expect(
       canvas.getByRole("columnheader", { name: "서비스" }),
     ).toBeVisible()
@@ -279,7 +300,12 @@ export const ServiceDetailReadOnlyStatus: Story = {
     if (!service) throw new Error("Service detail story requires a service")
     return (
       <BackofficeProvider initialState={localFixture}>
-        <ServiceDetailPage serviceId={service.id} />
+        <SessionAccessProvider
+          localSwitchingEnabled
+          initialUserId={findUserId("Daniel")}
+        >
+          <ServiceDetailPage serviceId={service.id} />
+        </SessionAccessProvider>
       </BackofficeProvider>
     )
   },
@@ -297,13 +323,12 @@ export const ServiceDetailReadOnlyStatus: Story = {
     await expect(
       within(endpointTable).queryByRole("columnheader", { name: "서비스" }),
     ).not.toBeInTheDocument()
-    await userEvent.click(canvas.getByRole("button", { name: "요청하기" }))
-    const body = within(canvasElement.ownerDocument.body)
-    const dialog = await body.findByRole("dialog")
     await expect(
-      within(dialog).getByRole("radio", { name: /Developer API/ }),
-    ).toBeChecked()
-    await userEvent.keyboard("{Escape}")
+      canvas.getByRole("button", { name: "요청하기" }),
+    ).toHaveAttribute(
+      "href",
+      "/credentials/request?serviceId=60000000-0000-4000-8000-000000000001",
+    )
     await expect(canvas.queryAllByRole("switch")).toHaveLength(0)
   },
 }

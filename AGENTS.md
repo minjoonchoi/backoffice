@@ -16,6 +16,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 구현 전에 프로젝트 구조와 유사 코드를 확인한다.
 - 기존 네이밍, 설계 패턴, 라이브러리를 따른다.
 - 같은 기능을 중복 구현하지 않는다.
+- 상태·유형·대상처럼 조건에 쓰이는 문자열은 [프로젝트 코드 구조](docs/project-structure.md#도메인-식별값과-문자열)의 도메인 상수 규칙을 따른다.
 
 ## 2. 최소 범위 변경
 

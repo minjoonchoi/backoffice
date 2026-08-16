@@ -1,12 +1,18 @@
-import { canManageUiNamespace } from "@/auth/ui-resource-access"
+import { accessPolicyEffects } from "@/features/access-policies/model"
+import { accessPolicyResourceTypes } from "@/features/access-policies/model"
+import { accessPolicyAssignmentTargets } from "@/features/access-policies/model"
+import { entityStatuses } from "@/domain/common"
+import { canManageNamespace } from "@/auth/ui-resource-access"
 import { hasUiResourcePolicyAccess } from "@/auth/ui-resource-policy-access"
 import { hasEffectiveAccessPolicyResource } from "@/features/access-policies/access-policy-assignment"
+import { isAccessPolicyEffective } from "@/features/access-policies/access-policy-status"
 import { uiResourceKeys } from "@/config/menu-registry"
 import type {
   AccessPolicy,
   AccessPolicyAssignment,
   AccessPolicyResource,
 } from "@/features/access-policies/model"
+import { accessPolicyManagementTypes } from "@/features/access-policies/model"
 import type { UiResourceApi } from "@/features/ui-resources/api"
 import {
   entityIdListSchema,
@@ -21,10 +27,11 @@ import {
 import type { BackofficeState } from "@/application/state/model"
 import { uiResourceManagerUiResourceKeys } from "@/config/system-ui-access"
 import {
-  uiNamespaceInputSchema,
+  namespaceInputSchema,
   uiResourceImportInputSchema,
-  type UiNamespace,
+  type Namespace,
   type UiResource,
+  type UiResourceSyncHistory,
 } from "@/features/ui-resources/model"
 import { previewUiResourceSync } from "@/features/ui-resources/ui-resource-sync"
 
@@ -52,9 +59,7 @@ export function createLocalUiResourceApi(
       if (!parsed.success) return { ok: false, error: "invalid-input" }
       const preview = previewUiResourceSync(state, parsed.data.manifest)
       if (!preview.ok) return preview
-      if (
-        !canManageUiNamespace(state, requesterId, preview.value.namespace.id)
-      ) {
+      if (!canManageNamespace(state, requesterId, preview.value.namespace.id)) {
         return { ok: false, error: "ui-resource-import-forbidden" }
       }
       const currentResourcesByKey = new Map(
@@ -70,7 +75,7 @@ export function createLocalUiResourceApi(
             : {
                 ...resource,
                 namespaceId: preview.value.namespace.id,
-                status: "active",
+                status: entityStatuses.active,
                 orphanedAt: null,
                 ...createRecordBase(),
               }
@@ -81,25 +86,40 @@ export function createLocalUiResourceApi(
         ...resource,
         orphanedAt: resource.orphanedAt ?? synchronizedAt,
       }))
-      const administratorPolicy = state.accessPolicies.find(
+      const history: UiResourceSyncHistory = {
+        id: crypto.randomUUID(),
+        namespaceId: preview.value.namespace.id,
+        synchronizedAt,
+        synchronizedByUserId: requesterId,
+        grantManagerAccess: parsed.data.grantManagerAccess,
+        addedCount: preview.value.added.length,
+        updatedCount: preview.value.updated.length,
+        restoredCount: preview.value.restored.length,
+        orphanedCount: orphanedResources.length,
+        resources: structuredClone([
+          ...importedResources,
+          ...orphanedResources,
+        ]),
+      }
+      const managerPolicy = state.accessPolicies.find(
         (policy) =>
-          policy.id === preview.value.namespace.administratorAccessPolicyId &&
-          policy.effect === "allow",
+          policy.id === preview.value.namespace.managerAccessPolicyId &&
+          policy.effect === accessPolicyEffects.allow,
       )
-      const hasAdministratorAssignment =
-        administratorPolicy !== undefined &&
+      const hasManagerAssignment =
+        managerPolicy !== undefined &&
         state.accessPolicyAssignments.some(
           (assignment) =>
-            assignment.accessPolicyId === administratorPolicy.id &&
-            assignment.targetType === "role" &&
-            assignment.targetId === preview.value.namespace.administratorRoleId,
+            assignment.accessPolicyId === managerPolicy.id &&
+            assignment.targetType === accessPolicyAssignmentTargets.role &&
+            assignment.targetId === preview.value.namespace.managerRoleId,
         )
-      if (!administratorPolicy || !hasAdministratorAssignment) {
+      if (!managerPolicy || !hasManagerAssignment) {
         return { ok: false, error: "ui-resource-not-found" }
       }
       updateState((current) => ({
         ...current,
-        uiNamespaces: current.uiNamespaces.map((namespace) =>
+        namespaces: current.namespaces.map((namespace) =>
           namespace.id === preview.value.namespace.id
             ? { ...namespace, lastSyncedAt: synchronizedAt }
             : namespace,
@@ -112,7 +132,7 @@ export function createLocalUiResourceApi(
           ...orphanedResources,
         ],
         accessPolicies: current.accessPolicies.map((policy) => {
-          if (policy.id !== administratorPolicy.id) return policy
+          if (policy.id !== managerPolicy.id) return policy
           const currentNamespaceResourceIds = new Set(
             current.uiResources
               .filter(
@@ -124,14 +144,14 @@ export function createLocalUiResourceApi(
           const importedResourceIds = new Set(
             importedResources.map((resource) => resource.id),
           )
-          const otherAdministratorPolicyIds = new Set(
+          const otherManagerPolicyIds = new Set(
             current.accessPolicyAssignments
               .filter(
                 (assignment) =>
                   assignment.accessPolicyId !== policy.id &&
-                  assignment.targetType === "role" &&
-                  assignment.targetId ===
-                    preview.value.namespace.administratorRoleId,
+                  assignment.targetType ===
+                    accessPolicyAssignmentTargets.role &&
+                  assignment.targetId === preview.value.namespace.managerRoleId,
               )
               .map((assignment) => assignment.accessPolicyId),
           )
@@ -139,22 +159,24 @@ export function createLocalUiResourceApi(
             current.accessPolicies
               .filter(
                 (candidate) =>
-                  candidate.status === "active" &&
-                  candidate.effect === "allow" &&
-                  otherAdministratorPolicyIds.has(candidate.id),
+                  isAccessPolicyEffective(candidate) &&
+                  candidate.effect === accessPolicyEffects.allow &&
+                  otherManagerPolicyIds.has(candidate.id),
               )
               .flatMap((candidate) =>
                 candidate.resources.flatMap((resource) =>
-                  resource.type === "ui-resource" ? [resource.id] : [],
+                  resource.type === accessPolicyResourceTypes.uiResource
+                    ? [resource.id]
+                    : [],
                 ),
               ),
           )
           const preservedResources = policy.resources.filter(
             (resource) =>
-              resource.type !== "ui-resource" ||
+              resource.type !== accessPolicyResourceTypes.uiResource ||
               !currentNamespaceResourceIds.has(resource.id),
           )
-          const administratorResources = parsed.data.grantAdministratorAccess
+          const managerResources = parsed.data.grantManagerAccess
             ? importedResources.flatMap((resource) =>
                 grantedByOtherPolicies.has(resource.id)
                   ? []
@@ -167,16 +189,17 @@ export function createLocalUiResourceApi(
               )
             : policy.resources.filter(
                 (resource) =>
-                  resource.type === "ui-resource" &&
+                  resource.type === accessPolicyResourceTypes.uiResource &&
                   currentNamespaceResourceIds.has(resource.id) &&
                   importedResourceIds.has(resource.id),
               )
           return {
             ...policy,
-            status: "active",
-            resources: [...preservedResources, ...administratorResources],
+            status: entityStatuses.active,
+            resources: [...preservedResources, ...managerResources],
           }
         }),
+        uiResourceSyncHistories: [...current.uiResourceSyncHistories, history],
       }))
       return {
         ok: true,
@@ -184,10 +207,10 @@ export function createLocalUiResourceApi(
           namespaceId: preview.value.namespace.id,
           synchronizedAt,
           addedCount: preview.value.added.length,
-          updatedCount:
-            preview.value.updated.length + preview.value.restored.length,
+          updatedCount: preview.value.updated.length,
+          restoredCount: preview.value.restored.length,
           orphanedCount: orphanedResources.length,
-          administratorAccessUpdated: parsed.data.grantAdministratorAccess,
+          managerAccessUpdated: parsed.data.grantManagerAccess,
           resources: importedResources,
           orphanedResources,
         },
@@ -216,12 +239,12 @@ export function createLocalUiResourceApi(
         resources.some(
           (resource) =>
             resource.orphanedAt === null ||
-            !canManageUiNamespace(state, requesterId, resource.namespaceId),
+            !canManageNamespace(state, requesterId, resource.namespaceId),
         )
       ) {
         return resources.some(
           (resource) =>
-            !canManageUiNamespace(state, requesterId, resource.namespaceId),
+            !canManageNamespace(state, requesterId, resource.namespaceId),
         )
           ? { ok: false, error: "ui-resource-delete-forbidden" }
           : { ok: false, error: "invalid-input" }
@@ -235,7 +258,8 @@ export function createLocalUiResourceApi(
         state.accessPolicies.some((policy) =>
           policy.resources.some(
             (resource) =>
-              resource.type === "ui-resource" && resourceIdSet.has(resource.id),
+              resource.type === accessPolicyResourceTypes.uiResource &&
+              resourceIdSet.has(resource.id),
           ),
         ) ||
         state.uiResources.some(
@@ -280,7 +304,7 @@ export function createLocalUiResourceApi(
       if (!resource) return { ok: false, error: "ui-resource-not-found" }
       if (
         resource.orphanedAt !== null ||
-        !canManageUiNamespace(state, requesterId, resource.namespaceId)
+        !canManageNamespace(state, requesterId, resource.namespaceId)
       ) {
         return resource.orphanedAt !== null
           ? { ok: false, error: "invalid-input" }
@@ -296,7 +320,7 @@ export function createLocalUiResourceApi(
       return { ok: true, value: updatedResource }
     },
 
-    createUiNamespace: async (input, requesterId) => {
+    createNamespace: async (input, requesterId) => {
       await Promise.resolve()
       if (
         !hasUiResourcePolicyAccess(
@@ -305,34 +329,29 @@ export function createLocalUiResourceApi(
           uiResourceKeys.namespaces.list.actions.createNamespace,
         )
       ) {
-        return { ok: false, error: "ui-namespace-operation-forbidden" }
+        return { ok: false, error: "namespace-operation-forbidden" }
       }
-      const parsed = uiNamespaceInputSchema.safeParse(input)
+      const parsed = namespaceInputSchema.safeParse(input)
       if (!parsed.success) return { ok: false, error: "invalid-input" }
-      if (
-        !state.roles.some((role) => role.id === parsed.data.administratorRoleId)
-      ) {
+      if (!state.roles.some((role) => role.id === parsed.data.managerRoleId)) {
         return { ok: false, error: "role-not-found" }
       }
       if (
-        state.uiNamespaces.some(
-          (namespace) => namespace.key === parsed.data.key,
-        )
+        state.namespaces.some((namespace) => namespace.key === parsed.data.key)
       ) {
-        return { ok: false, error: "ui-namespace-key-exists" }
+        return { ok: false, error: "namespace-key-exists" }
       }
       if (
-        state.uiNamespaces.some(
+        state.namespaces.some(
           (namespace) =>
             namespace.name.toLocaleLowerCase() ===
             parsed.data.name.toLocaleLowerCase(),
         )
       ) {
-        return { ok: false, error: "ui-namespace-name-exists" }
+        return { ok: false, error: "namespace-name-exists" }
       }
       const namespaceBase = createEntityBase()
       const managementResources: AccessPolicyResource[] = [
-        { type: "ui-namespace", id: namespaceBase.id },
         {
           type: "endpoint",
           id: state.systemReferences.serviceEndpointIds.importUiResources,
@@ -351,45 +370,241 @@ export function createLocalUiResourceApi(
         const resource = state.uiResources.find(
           (candidate) =>
             candidate.namespaceId ===
-              state.systemReferences.uiNamespaceIds.backoffice &&
+              state.systemReferences.namespaceIds.backoffice &&
             candidate.key === key &&
             candidate.orphanedAt === null,
         )
         if (!resource) return { ok: false, error: "ui-resource-not-found" }
         managementResources.push({ type: "ui-resource", id: resource.id })
       }
-      const administratorPolicyBase = createRecordBase()
-      const namespace: UiNamespace = {
+      const managerPolicyBase = createRecordBase()
+      const namespace: Namespace = {
         ...parsed.data,
         ...namespaceBase,
-        administratorAccessPolicyId: administratorPolicyBase.id,
+        managerAccessPolicyId: managerPolicyBase.id,
         lastSyncedAt: null,
       }
-      const administratorPolicy: AccessPolicy = {
-        ...administratorPolicyBase,
-        name: `${namespace.name} 시스템 관리자 접근`,
-        description: `${namespace.name} 시스템 관리자에게 네임스페이스 범위, 동기화 UI 액션과 API 접근을 허용하고 동기화 시 선택된 UI 리소스를 추가합니다.`,
+      const managerPolicy: AccessPolicy = {
+        ...managerPolicyBase,
+        name: `${namespace.name} UI 리소스 관리 접근`,
+        description: `${namespace.name} 관리 역할에 UI 리소스 관리 액션과 동기화 API 접근을 허용하고 동기화 시 선택된 UI 리소스를 추가합니다.`,
         type: "access-grant",
+        managementType: accessPolicyManagementTypes.systemManaged,
         effect: "allow",
         resources: managementResources,
-        status: "active",
+        status: entityStatuses.active,
       }
-      const administratorAssignment: AccessPolicyAssignment = {
+      const managerAssignment: AccessPolicyAssignment = {
         ...createRecordBase(),
-        accessPolicyId: administratorPolicy.id,
+        accessPolicyId: managerPolicy.id,
         targetType: "role",
-        targetId: namespace.administratorRoleId,
+        targetId: namespace.managerRoleId,
+        expiresAt: null,
       }
       updateState((current) => ({
         ...current,
-        uiNamespaces: [...current.uiNamespaces, namespace],
-        accessPolicies: [...current.accessPolicies, administratorPolicy],
+        namespaces: [...current.namespaces, namespace],
+        accessPolicies: [...current.accessPolicies, managerPolicy],
         accessPolicyAssignments: [
           ...current.accessPolicyAssignments,
-          administratorAssignment,
+          managerAssignment,
         ],
       }))
       return { ok: true, value: namespace }
+    },
+
+    updateNamespaceManager: async (namespaceId, managerRoleId, requesterId) => {
+      await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.namespaces.detail.actions.changeNamespaceManager,
+        )
+      ) {
+        return { ok: false, error: "namespace-operation-forbidden" }
+      }
+      if (
+        !entityIdSchema.safeParse(namespaceId).success ||
+        !entityIdSchema.safeParse(managerRoleId).success
+      ) {
+        return { ok: false, error: "invalid-input" }
+      }
+      const namespace = state.namespaces.find(
+        (candidate) => candidate.id === namespaceId,
+      )
+      if (!namespace) return { ok: false, error: "namespace-not-found" }
+      if (!state.roles.some((role) => role.id === managerRoleId)) {
+        return { ok: false, error: "role-not-found" }
+      }
+      const assignment = state.accessPolicyAssignments.find(
+        (candidate) =>
+          candidate.accessPolicyId === namespace.managerAccessPolicyId &&
+          candidate.targetType === accessPolicyAssignmentTargets.role &&
+          candidate.targetId === namespace.managerRoleId,
+      )
+      if (!assignment) return { ok: false, error: "protected-relationship" }
+      const updated = { ...namespace, managerRoleId }
+      updateState((current) => ({
+        ...current,
+        namespaces: current.namespaces.map((candidate) =>
+          candidate.id === namespaceId ? updated : candidate,
+        ),
+        accessPolicyAssignments: current.accessPolicyAssignments.map(
+          (candidate) =>
+            candidate.id === assignment.id
+              ? { ...candidate, targetId: managerRoleId }
+              : candidate,
+        ),
+      }))
+      return { ok: true, value: updated }
+    },
+
+    retireNamespace: async (namespaceId, requesterId) => {
+      await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.namespaces.detail.actions.retireNamespace,
+        )
+      ) {
+        return { ok: false, error: "namespace-operation-forbidden" }
+      }
+      if (!entityIdSchema.safeParse(namespaceId).success) {
+        return { ok: false, error: "invalid-input" }
+      }
+      const namespace = state.namespaces.find(
+        (candidate) => candidate.id === namespaceId,
+      )
+      if (!namespace) return { ok: false, error: "namespace-not-found" }
+      if (namespace.id === state.systemReferences.namespaceIds.backoffice) {
+        return { ok: false, error: "protected-relationship" }
+      }
+      const updated: Namespace = {
+        ...namespace,
+        status: entityStatuses.inactive,
+      }
+      updateState((current) => ({
+        ...current,
+        namespaces: current.namespaces.map((candidate) =>
+          candidate.id === namespaceId ? updated : candidate,
+        ),
+        uiResources: current.uiResources.map((resource) =>
+          resource.namespaceId === namespaceId
+            ? { ...resource, status: entityStatuses.inactive }
+            : resource,
+        ),
+      }))
+      return { ok: true, value: updated }
+    },
+
+    restoreUiResourceSync: async (historyId, requesterId) => {
+      await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.uiResources.list.actions.restoreUiResourceSync,
+        )
+      ) {
+        return { ok: false, error: "ui-resource-import-forbidden" }
+      }
+      if (!entityIdSchema.safeParse(historyId).success) {
+        return { ok: false, error: "invalid-input" }
+      }
+      const source = state.uiResourceSyncHistories.find(
+        (history) => history.id === historyId,
+      )
+      if (!source) return { ok: false, error: "ui-resource-not-found" }
+      const namespace = state.namespaces.find(
+        (candidate) => candidate.id === source.namespaceId,
+      )
+      if (
+        namespace?.status !== entityStatuses.active ||
+        !canManageNamespace(state, requesterId, namespace.id)
+      ) {
+        return { ok: false, error: "ui-resource-import-forbidden" }
+      }
+      const synchronizedAt = new Date().toISOString()
+      const targetSnapshot = source.resources.filter(
+        (resource) => resource.orphanedAt === null,
+      )
+      const targetKeys = new Set(targetSnapshot.map((resource) => resource.key))
+      const currentResources = state.uiResources.filter(
+        (resource) => resource.namespaceId === namespace.id,
+      )
+      const currentByKey = new Map(
+        currentResources.map((resource) => [resource.key, resource]),
+      )
+      const restoredResources = targetSnapshot.map((resource) => {
+        const current = currentByKey.get(resource.key)
+        return {
+          ...resource,
+          id: current?.id ?? resource.id,
+          namespaceId: namespace.id,
+          orphanedAt: null,
+        }
+      })
+      const orphanedResources = currentResources
+        .filter((resource) => !targetKeys.has(resource.key))
+        .map((resource) => ({
+          ...resource,
+          orphanedAt: resource.orphanedAt ?? synchronizedAt,
+        }))
+      const restoredFromOrphan = restoredResources.filter(
+        (resource) => currentByKey.get(resource.key)?.orphanedAt !== null,
+      ).length
+      const addedCount = restoredResources.filter(
+        (resource) => !currentByKey.has(resource.key),
+      ).length
+      const history: UiResourceSyncHistory = {
+        id: crypto.randomUUID(),
+        namespaceId: namespace.id,
+        synchronizedAt,
+        synchronizedByUserId: requesterId,
+        grantManagerAccess: false,
+        addedCount,
+        updatedCount:
+          restoredResources.length - addedCount - restoredFromOrphan,
+        restoredCount: restoredFromOrphan,
+        orphanedCount: orphanedResources.length,
+        resources: structuredClone([
+          ...restoredResources,
+          ...orphanedResources,
+        ]),
+      }
+      updateState((current) => ({
+        ...current,
+        namespaces: current.namespaces.map((candidate) =>
+          candidate.id === namespace.id
+            ? { ...candidate, lastSyncedAt: synchronizedAt }
+            : candidate,
+        ),
+        uiResources: [
+          ...current.uiResources.filter(
+            (resource) => resource.namespaceId !== namespace.id,
+          ),
+          ...restoredResources,
+          ...orphanedResources,
+        ],
+        uiResourceSyncHistories: [...current.uiResourceSyncHistories, history],
+      }))
+      return {
+        ok: true,
+        value: {
+          namespaceId: namespace.id,
+          synchronizedAt,
+          addedCount,
+          updatedCount: history.updatedCount,
+          restoredCount: restoredFromOrphan,
+          orphanedCount: orphanedResources.length,
+          managerAccessUpdated: false,
+          resources: restoredResources,
+          orphanedResources,
+          restoredFromHistoryId: source.id,
+        },
+      }
     },
   }
 }

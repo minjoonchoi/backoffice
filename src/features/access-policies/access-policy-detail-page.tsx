@@ -1,8 +1,11 @@
 "use client"
 
+import { requestCategoryValues } from "@/features/request-templates/model"
+import { approvalTypeValues } from "@/features/request-templates/model"
+import { entityStatuses } from "@/domain/common"
 import { uiResourceKeys } from "@/config/menu-registry"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Trash2 } from "lucide-react"
+import { Pencil, ShieldCheck, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
@@ -18,8 +21,8 @@ import { PageHeader } from "@/components/patterns/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { snackbar } from "@/components/ui/snackbar"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { resolveMissingAccessPolicyResources } from "@/features/access-policies/access-policy-assignment"
-import { AccessPolicyUpdateDialog } from "@/features/access-policies/access-policy-creation-dialog"
 import {
   Card,
   CardContent,
@@ -29,78 +32,223 @@ import {
 } from "@/components/ui/card"
 import {
   resolveAccessPolicyResourceGroups,
-  resolveAccessPolicyUiNamespaces,
   resolveAccessPolicyUiResources,
+  type AccessPolicyEndpointResource,
+  type AccessPolicyResourceGroup,
   type AccessPolicyUiResource,
 } from "@/features/access-policies/access-policy-resources"
 import { resolveAccessPolicyApprovalLine } from "@/features/access-policies/access-policy-template"
-import { ApprovalDocumentDialog } from "@/features/access-policies/approval-document-dialog"
 import { useBackoffice } from "@/application/state/provider"
 import {
   AccessPolicyEffectBadge,
   ServiceTypeBadge,
 } from "@/application/ui/backoffice-ui"
+import { AccessPolicyCloneLink } from "@/features/access-policies/access-policy-tools"
+import { isAccessPolicyEffective } from "@/features/access-policies/access-policy-status"
+import { accessPolicyManagementTypes } from "@/features/access-policies/model"
 
-function AccessPolicyUiResourcesTable({
-  resources,
+type IncludedEndpointResource = AccessPolicyEndpointResource & {
+  service: AccessPolicyResourceGroup["service"]
+}
+
+function AccessPolicyEndpointResourcesTable({
+  resourceGroups,
 }: {
-  resources: AccessPolicyUiResource[]
+  resourceGroups: AccessPolicyResourceGroup[]
 }) {
   const t = useTranslations("backoffice.approvalDocuments")
-  const resourcesT = useTranslations("backoffice.uiResources")
+  const endpointsT = useTranslations("backoffice.endpoints")
+  const common = useTranslations("backoffice.common")
+  const resources = useMemo<IncludedEndpointResource[]>(
+    () =>
+      resourceGroups
+        .flatMap(({ service, endpoints }) =>
+          endpoints.map((resource) => ({ ...resource, service })),
+        )
+        .toSorted((left, right) =>
+          `${left.service.name} ${left.endpoint.path}`.localeCompare(
+            `${right.service.name} ${right.endpoint.path}`,
+          ),
+        ),
+    [resourceGroups],
+  )
+  const columns = useMemo<ColumnDef<IncludedEndpointResource>[]>(
+    () => [
+      {
+        id: "name",
+        header: common("name"),
+        size: 180,
+        cell: ({ row }) => (
+          <UiResourceLink
+            resourceKey={uiResourceKeys.serviceEndpoints.detail.key}
+            href={`/service-endpoints/${row.original.endpoint.id}`}
+          >
+            {row.original.endpoint.name}
+          </UiResourceLink>
+        ),
+      },
+      {
+        id: "scope",
+        header: t("service"),
+        size: 180,
+        cell: ({ row }) => (
+          <span className="flex flex-wrap items-center gap-2">
+            <UiResourceLink
+              resourceKey={uiResourceKeys.services.detail.key}
+              href={`/services/${row.original.service.id}`}
+            >
+              {row.original.service.name}
+            </UiResourceLink>
+            <ServiceTypeBadge type={row.original.service.type} />
+          </span>
+        ),
+      },
+      {
+        id: "identifier",
+        header: t("resourceIdentifier"),
+        size: 260,
+        cell: ({ row }) => (
+          <span className="flex min-w-0 items-center gap-2">
+            <Badge variant="outline">{row.original.endpoint.method}</Badge>
+            <code className="text-xs break-all">
+              {row.original.endpoint.path}
+            </code>
+          </span>
+        ),
+      },
+      {
+        id: "details",
+        header: t("resourceDetails"),
+        size: 360,
+        cell: ({ row }) => {
+          const resource = row.original
+          if (resource.fields.length === 0) {
+            return (
+              <span className="text-sm text-muted-foreground">
+                {t("resourceFieldsEmpty")}
+              </span>
+            )
+          }
+          return (
+            <ul className="grid min-w-[18rem] gap-2">
+              {resource.fields.map((field) => (
+                <li
+                  key={field.id}
+                  className="grid gap-1 border-l-2 border-border-subtle pl-2"
+                >
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <Badge variant="outline">
+                      {endpointsT(`locations.${field.location}`)}
+                    </Badge>
+                    <code className="text-xs break-all">{field.fieldPath}</code>
+                    <Badge variant="secondary">{field.valueType}</Badge>
+                    <span className="text-xs text-text-subtle">
+                      {endpointsT(
+                        field.required
+                          ? "requiredParameter"
+                          : "optionalParameter",
+                      )}
+                    </span>
+                  </span>
+                  <span className="text-xs text-text-subtle">
+                    {field.description}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )
+        },
+      },
+    ],
+    [common, endpointsT, t],
+  )
+
+  return (
+    <DataTable
+      caption={t("includedEndpointResourcesTableCaption")}
+      columns={columns}
+      data={resources}
+      getRowId={(resource) => resource.endpoint.id}
+      empty={t("includedEndpointResourcesEmpty")}
+      filterLabel={common("search")}
+      noResults={common("noResults")}
+      filters={[
+        {
+          id: "name",
+          label: common("name"),
+          getValue: (resource) => resource.endpoint.name,
+        },
+        {
+          id: "identifier",
+          label: t("resourceIdentifier"),
+          getValue: (resource) =>
+            `${resource.endpoint.method} ${resource.endpoint.path}`,
+        },
+        {
+          id: "scope",
+          label: t("service"),
+          getValue: (resource) => resource.service.name,
+        },
+      ]}
+    />
+  )
+}
+
+function AccessPolicyUiResourcesTable({
+  uiResources,
+}: {
+  uiResources: AccessPolicyUiResource[]
+}) {
+  const t = useTranslations("backoffice.approvalDocuments")
   const common = useTranslations("backoffice.common")
   const columns = useMemo<ColumnDef<AccessPolicyUiResource>[]>(
     () => [
       {
         id: "name",
         header: common("name"),
-        size: 180,
-        accessorFn: ({ resource }) => resource.name,
+        cell: ({ row }) => row.original.resource.name,
       },
       {
-        id: "type",
-        header: resourcesT("type"),
-        size: 100,
+        id: "namespace",
+        header: t("resourceNamespace"),
         cell: ({ row }) => (
-          <Badge variant="outline">
-            {t(`uiResourceTypes.${row.original.resource.type}`)}
-          </Badge>
+          <UiResourceLink
+            resourceKey={uiResourceKeys.namespaces.detail.key}
+            href={`/namespaces/${row.original.namespace.id}`}
+          >
+            {row.original.namespace.name}
+          </UiResourceLink>
         ),
       },
       {
-        id: "key",
-        header: resourcesT("key"),
-        size: 280,
+        id: "identifier",
+        header: t("resourceIdentifier"),
         cell: ({ row }) => (
-          <code className="block truncate" title={row.original.resource.key}>
+          <code className="block text-xs break-all">
             {row.original.resource.key}
           </code>
         ),
       },
       {
-        id: "namespace",
-        header: resourcesT("namespace"),
-        size: 160,
-        accessorFn: ({ namespace }) => namespace.name,
+        id: "type",
+        header: t("uiResourceType"),
+        cell: ({ row }) => (
+          <Badge variant="secondary">
+            {t(`uiResourceTypes.${row.original.resource.type}`)}
+          </Badge>
+        ),
       },
     ],
-    [common, resourcesT, t],
-  )
-  const sortedResources = useMemo(
-    () =>
-      [...resources].sort((left, right) =>
-        left.resource.key.localeCompare(right.resource.key),
-      ),
-    [resources],
+    [common, t],
   )
 
   return (
     <DataTable
-      caption={resourcesT("tableCaption")}
+      caption={t("includedUiResourcesTableCaption")}
       columns={columns}
-      data={sortedResources}
+      data={uiResources}
       getRowId={({ resource }) => resource.id}
-      empty={resourcesT("empty")}
+      empty={t("includedUiResourcesEmpty")}
       filterLabel={common("search")}
       noResults={common("noResults")}
       filters={[
@@ -110,22 +258,55 @@ function AccessPolicyUiResourcesTable({
           getValue: ({ resource }) => resource.name,
         },
         {
-          id: "key",
-          label: resourcesT("key"),
+          id: "identifier",
+          label: t("resourceIdentifier"),
           getValue: ({ resource }) => resource.key,
         },
         {
-          id: "type",
-          label: resourcesT("type"),
-          getValue: ({ resource }) => t(`uiResourceTypes.${resource.type}`),
-        },
-        {
           id: "namespace",
-          label: resourcesT("namespace"),
+          label: t("resourceNamespace"),
           getValue: ({ namespace }) => namespace.name,
         },
       ]}
     />
+  )
+}
+
+function AccessPolicyResourcesTabs({
+  resourceGroups,
+  uiResources,
+}: {
+  resourceGroups: AccessPolicyResourceGroup[]
+  uiResources: AccessPolicyUiResource[]
+}) {
+  const t = useTranslations("backoffice.approvalDocuments")
+  const endpointCount = resourceGroups.reduce(
+    (count, group) => count + group.endpoints.length,
+    0,
+  )
+  const defaultTab = endpointCount > 0 ? "endpoint" : "ui-resource"
+
+  return (
+    <Tabs defaultValue={defaultTab}>
+      <div className="overflow-x-auto">
+        <TabsList aria-label={t("includedResourceTypeTabs")}>
+          <TabsTrigger value="endpoint">
+            {t("resourceTypeLabels.endpoint")}
+            <Badge variant="secondary">{endpointCount}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="ui-resource">
+            {t("resourceTypeLabels.ui-resource")}
+            <Badge variant="secondary">{uiResources.length}</Badge>
+          </TabsTrigger>
+        </TabsList>
+      </div>
+      <TabsContent value="endpoint">
+        <AccessPolicyEndpointResourcesTable resourceGroups={resourceGroups} />
+      </TabsContent>
+      <TabsContent value="ui-resource">
+        <AccessPolicyUiResourcesTable uiResources={uiResources} />
+      </TabsContent>
+    </Tabs>
   )
 }
 
@@ -134,8 +315,6 @@ export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
   const sessionAccess = useSessionAccess()
   const router = useRouter()
   const t = useTranslations("backoffice.approvalDocuments")
-  const linesT = useTranslations("backoffice.approvalLines")
-  const endpointsT = useTranslations("backoffice.endpoints")
   const common = useTranslations("backoffice.common")
   const errorsT = useTranslations("backoffice.errors")
   const policy = backoffice.accessPolicies.find((item) => item.id === policyId)
@@ -149,7 +328,10 @@ export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
           sessionAccess.canAccessUiResource(
             uiResourceKeys.approvalDocuments.list.key,
           ) ? (
-            <Button render={<Link href="/approval-documents" />}>
+            <Button
+              nativeButton={false}
+              render={<Link href="/approval-documents" />}
+            >
               {common("backToList")}
             </Button>
           ) : undefined
@@ -160,13 +342,15 @@ export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
 
   const approvalLine = resolveAccessPolicyApprovalLine(backoffice, policy.type)
   const resourceGroups = resolveAccessPolicyResourceGroups(backoffice, policy)
-  const uiNamespaces = resolveAccessPolicyUiNamespaces(backoffice, policy)
   const uiResources = resolveAccessPolicyUiResources(backoffice, policy)
   const canRequest =
-    policy.status === "active" &&
-    approvalLine.status === "active" &&
-    approvalLine.category === "permission" &&
-    approvalLine.type === "access-grant"
+    isAccessPolicyEffective(policy) &&
+    approvalLine.status === entityStatuses.active &&
+    approvalLine.category === requestCategoryValues.permission &&
+    approvalLine.type === approvalTypeValues.accessGrant
+  const canOpenRequestPage = sessionAccess.canAccessUiResource(
+    uiResourceKeys.approvalDocuments.request.key,
+  )
   const missingResources = sessionAccess.currentUser
     ? resolveMissingAccessPolicyResources(
         backoffice,
@@ -176,18 +360,31 @@ export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
     : policy.resources
   const isAssigned = missingResources.length === 0
   const canUpdate =
-    policy.status === "active" &&
+    policy.managementType === accessPolicyManagementTypes.operatorManaged &&
+    policy.status === entityStatuses.active &&
     sessionAccess.canAccessUiResource(
       uiResourceKeys.approvalDocuments.detail.actions.updatePolicy,
+    ) &&
+    sessionAccess.canAccessUiResource(
+      uiResourceKeys.approvalDocuments.update.key,
     )
   const canDelete =
-    policy.status === "active" &&
+    policy.managementType === accessPolicyManagementTypes.operatorManaged &&
+    policy.status === entityStatuses.active &&
     sessionAccess.canAccessUiResource(
       uiResourceKeys.approvalDocuments.detail.actions.deletePolicy,
     )
-  const canViewEndpointDetail = sessionAccess.canAccessUiResource(
-    uiResourceKeys.serviceEndpoints.detail.key,
-  )
+  const canClone =
+    policy.managementType === accessPolicyManagementTypes.operatorManaged &&
+    sessionAccess.canAccessUiResource(
+      uiResourceKeys.approvalDocuments.detail.actions.clonePolicy,
+    ) &&
+    sessionAccess.canAccessUiResource(
+      uiResourceKeys.approvalDocuments.create.key,
+    ) &&
+    sessionAccess.canAccessUiResource(
+      uiResourceKeys.approvalDocuments.list.actions.createPolicy,
+    )
   const assignmentCount = backoffice.accessPolicyAssignments.filter(
     (assignment) => assignment.accessPolicyId === policy.id,
   ).length
@@ -214,16 +411,32 @@ export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
         description={t("detailDescription")}
         actions={
           <div className="flex flex-wrap gap-2">
-            {isAssigned ? null : canRequest ? (
-              <ApprovalDocumentDialog
-                policy={policy}
-                approvalLine={approvalLine}
-                triggerLabel={t("requestFromDetail")}
-              />
+            {policy.managementType ===
+              accessPolicyManagementTypes.systemManaged ||
+            isAssigned ? null : canRequest && canOpenRequestPage ? (
+              <Button
+                nativeButton={false}
+                render={
+                  <Link href={`/approval-documents/${policy.id}/request`} />
+                }
+              >
+                <ShieldCheck />
+                {t("requestFromDetail")}
+              </Button>
             ) : (
               <Button disabled>{t("requestFromDetail")}</Button>
             )}
-            {canUpdate ? <AccessPolicyUpdateDialog policy={policy} /> : null}
+            {canClone ? <AccessPolicyCloneLink policy={policy} /> : null}
+            {canUpdate ? (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href={`/approval-documents/${policy.id}/edit`} />}
+              >
+                <Pencil />
+                {t("updatePolicy")}
+              </Button>
+            ) : null}
             {canDelete ? (
               <ConfirmAction
                 trigger={
@@ -268,9 +481,37 @@ export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
             <DetailItem label={t("effect")}>
               <AccessPolicyEffectBadge effect={policy.effect} />
             </DetailItem>
-            <DetailItem label={linesT("title")}>{approvalLine.name}</DetailItem>
+            <DetailItem label={t("managementType")}>
+              <Badge
+                variant={
+                  policy.managementType ===
+                  accessPolicyManagementTypes.systemManaged
+                    ? "info"
+                    : "outline"
+                }
+              >
+                {t(`managementTypes.${policy.managementType}`)}
+              </Badge>
+            </DetailItem>
             <DetailItem label={t("policyDescription")}>
               {policy.description}
+            </DetailItem>
+            <DetailItem label={common("status")}>
+              <Badge
+                variant={
+                  isAccessPolicyEffective(policy)
+                    ? "success"
+                    : policy.status === entityStatuses.inactive
+                      ? "secondary"
+                      : "warning"
+                }
+              >
+                {policy.status === entityStatuses.inactive
+                  ? common("inactive")
+                  : isAccessPolicyEffective(policy)
+                    ? common("active")
+                    : t("expired")}
+              </Badge>
             </DetailItem>
           </DetailGrid>
         </CardContent>
@@ -281,166 +522,10 @@ export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
           <CardDescription>{t("resourcesDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4">
-            {resourceGroups.map(({ service, endpoints }) => (
-              <section
-                key={service.id}
-                aria-labelledby={`policy-service-${service.id}`}
-                className="grid gap-3 rounded-card border border-border-subtle bg-surface-subtle p-4"
-              >
-                <div className="grid gap-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <UiResourceLink
-                      resourceKey={uiResourceKeys.services.detail.key}
-                      id={`policy-service-${service.id}`}
-                      href={`/services/${service.id}`}
-                      className="font-semibold text-primary hover:underline"
-                    >
-                      {service.name}
-                    </UiResourceLink>
-                    <ServiceTypeBadge type={service.type} />
-                    <Badge variant="secondary">
-                      {t("endpointCount", { count: endpoints.length })}
-                    </Badge>
-                  </div>
-                  <code className="text-xs break-all text-text-subtle">
-                    {service.host}
-                  </code>
-                </div>
-                <ul className="grid gap-3">
-                  {endpoints.map(({ endpoint, fields }) => (
-                    <li
-                      key={endpoint.id}
-                      className="grid gap-4 rounded-card border border-border-subtle bg-surface p-4"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="grid min-w-0 gap-1.5">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline">{endpoint.method}</Badge>
-                            <h3 className="font-medium">{endpoint.name}</h3>
-                          </div>
-                          <code className="text-sm break-all text-text-subtle">
-                            {endpoint.path}
-                          </code>
-                        </div>
-                        {canViewEndpointDetail ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            nativeButton={false}
-                            render={
-                              <Link
-                                href={`/service-endpoints/${endpoint.id}`}
-                                aria-label={t("endpointDetail", {
-                                  endpoint: endpoint.name,
-                                })}
-                              />
-                            }
-                          >
-                            {common("details")}
-                          </Button>
-                        ) : null}
-                      </div>
-                      {fields.length > 0 ? (
-                        <div className="overflow-x-auto rounded-control border border-border-subtle">
-                          <table className="w-full min-w-[40rem] text-left text-sm">
-                            <thead className="bg-surface-subtle text-xs text-text-subtle">
-                              <tr>
-                                <th className="px-3 py-2 font-medium">
-                                  {endpointsT("location")}
-                                </th>
-                                <th className="px-3 py-2 font-medium">
-                                  {endpointsT("fieldPath")}
-                                </th>
-                                <th className="px-3 py-2 font-medium">
-                                  {endpointsT("valueType")}
-                                </th>
-                                <th className="px-3 py-2 font-medium">
-                                  {endpointsT("required")}
-                                </th>
-                                <th className="px-3 py-2 font-medium">
-                                  {endpointsT("fieldDescription")}
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border-subtle">
-                              {fields.map((field) => (
-                                <tr key={field.id}>
-                                  <td className="px-3 py-2">
-                                    {endpointsT(`locations.${field.location}`)}
-                                  </td>
-                                  <td className="px-3 py-2 font-mono text-xs">
-                                    {field.fieldPath}
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <Badge variant="secondary">
-                                      {field.valueType}
-                                    </Badge>
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    {endpointsT(
-                                      field.required
-                                        ? "requiredParameter"
-                                        : "optionalParameter",
-                                    )}
-                                  </td>
-                                  <td className="px-3 py-2 text-text-subtle">
-                                    {field.description}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">
-                          {t("resourceFieldsEmpty")}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-            {uiNamespaces.length > 0 ? (
-              <section className="grid gap-3 rounded-card border border-border-subtle bg-surface p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-semibold">
-                    {t("resourceTypeLabels.ui-namespace")}
-                  </h3>
-                  <Badge variant="secondary">
-                    {t("resourceCount", { count: uiNamespaces.length })}
-                  </Badge>
-                </div>
-                <ul className="grid gap-2 sm:grid-cols-2">
-                  {uiNamespaces.map((namespace) => (
-                    <li
-                      key={namespace.id}
-                      className="grid gap-1 rounded-control border border-border-subtle bg-surface-subtle p-3"
-                    >
-                      <span className="font-medium">{namespace.name}</span>
-                      <code className="text-xs text-text-subtle">
-                        {namespace.key}
-                      </code>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-            {uiResources.length > 0 ? (
-              <section className="grid gap-3 rounded-card border border-border-subtle bg-surface p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-semibold">
-                    {t("resourceTypeLabels.ui-resource")}
-                  </h3>
-                  <Badge variant="secondary">
-                    {t("resourceCount", { count: uiResources.length })}
-                  </Badge>
-                </div>
-                <AccessPolicyUiResourcesTable resources={uiResources} />
-              </section>
-            ) : null}
-          </div>
+          <AccessPolicyResourcesTabs
+            resourceGroups={resourceGroups}
+            uiResources={uiResources}
+          />
         </CardContent>
       </Card>
     </div>

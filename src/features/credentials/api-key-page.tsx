@@ -1,8 +1,22 @@
 "use client"
 
+import { approvalDocumentStatuses } from "@/features/access-policies/model"
+import { requestCategoryValues } from "@/features/request-templates/model"
+import { approvalTypeValues } from "@/features/request-templates/model"
+import { approvalDocumentKinds } from "@/features/access-policies/model"
+import { serviceTypeValues } from "@/features/service-catalog/model"
+import { employmentStatusValues } from "@/features/iam/model"
+import { entityStatuses } from "@/domain/common"
 import { uiResourceKeys } from "@/config/menu-registry"
 import type { ColumnDef } from "@tanstack/react-table"
-import { KeyRound, LoaderCircle, Server } from "lucide-react"
+import {
+  CalendarClock,
+  KeyRound,
+  LoaderCircle,
+  RefreshCw,
+  Server,
+  Trash2,
+} from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
 import { useMemo, useState } from "react"
@@ -49,8 +63,6 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { snackbar } from "@/components/ui/snackbar"
-import { ApiKeyIssuanceDialog } from "@/features/credentials/api-key-issuance-dialog"
-import { ApiKeyLifecycleDialog } from "@/features/credentials/api-key-lifecycle-dialog"
 import type { ApprovalDocument } from "@/features/access-policies/model"
 import { apiKeySecretSchema, type ApiKey } from "@/features/credentials/model"
 import { useBackoffice } from "@/application/state/provider"
@@ -60,6 +72,7 @@ import {
   StatusBadge,
   useBackofficeLabels,
 } from "@/application/ui/backoffice-ui"
+import { CredentialEmergencyRevokeDialog } from "@/features/credentials/credential-operations"
 
 type IssuedSecret = {
   keyName: string
@@ -77,20 +90,28 @@ export function ApiKeyPage() {
   const canViewDetail = sessionAccess.canAccessUiResource(
     uiResourceKeys.apiKeys.detail.key,
   )
+  const canViewRequestDetail = sessionAccess.canAccessUiResource(
+    uiResourceKeys.approvalDocuments.requestDetail.key,
+  )
   const [issuedSecret, setIssuedSecret] = useState<IssuedSecret>()
   const [registrationDocument, setRegistrationDocument] =
     useState<CredentialRequest>()
   const [manualSecret, setManualSecret] = useState("")
   const [manualSecretInvalid, setManualSecretInvalid] = useState(false)
   const [registrationPending, setRegistrationPending] = useState(false)
-
-  async function approve(document: CredentialRequest) {
-    const result = await backoffice.approveApprovalDocument(document.id)
-    if (!result.ok) {
-      snackbar.error(errorsT(result.error))
-      return
+  function requestStatusLabel(document: ApprovalDocument) {
+    switch (document.status) {
+      case approvalDocumentStatuses.draft:
+        return documentsT("draft")
+      case approvalDocumentStatuses.submitted:
+        return documentsT("submittedStatus")
+      case approvalDocumentStatuses.approved:
+        return documentsT("approvedStatus")
+      case approvalDocumentStatuses.rejected:
+        return documentsT("rejectedStatus")
+      case approvalDocumentStatuses.withdrawn:
+        return documentsT("withdrawnStatus")
     }
-    snackbar.success(documentsT("approved"))
   }
 
   async function register() {
@@ -112,7 +133,7 @@ export function ApiKeyPage() {
       return
     }
     if (
-      service.type === "external" &&
+      service.type === serviceTypeValues.external &&
       !apiKeySecretSchema.safeParse(manualSecret).success
     ) {
       setManualSecretInvalid(true)
@@ -123,7 +144,10 @@ export function ApiKeyPage() {
       const result = await backoffice.registerApiKey({
         approvalDocumentId: registrationDocument.id,
         registeredByUserId,
-        secret: service.type === "external" ? manualSecret : undefined,
+        secret:
+          service.type === serviceTypeValues.external
+            ? manualSecret
+            : undefined,
       })
       if (!result.ok) {
         snackbar.error(errorsT(result.error))
@@ -146,10 +170,20 @@ export function ApiKeyPage() {
 
   const credentialTemplates = backoffice.approvalLines.filter(
     (line) =>
-      line.status === "active" &&
-      line.category === "credential" &&
-      line.type === "api-key",
+      line.status === entityStatuses.active &&
+      line.category === requestCategoryValues.credential &&
+      line.type === approvalTypeValues.apiKey,
   )
+  const canRequestCredential = sessionAccess.canAccessUiResource(
+    uiResourceKeys.apiKeys.request.key,
+  )
+  const canManageLifecycle =
+    sessionAccess.canAccessUiResource(
+      uiResourceKeys.apiKeys.lifecycleSettings.key,
+    ) &&
+    sessionAccess.canAccessUiResource(
+      uiResourceKeys.apiKeys.lifecycleSettings.actions.updateLifecycleSettings,
+    )
   const visibility = useMemo(
     () =>
       resolveCredentialVisibility(
@@ -163,35 +197,36 @@ export function ApiKeyPage() {
   const isAdministrator = sessionAccess.effectiveRoles.some(
     (role) => role.id === backoffice.systemReferences.roleIds.administrator,
   )
-  const canApproveCredentialRequest = sessionAccess.canAccessUiResource(
-    uiResourceKeys.apiKeys.list.actions.approveCredentialRequest,
-  )
   const canRegisterCredentialResource = sessionAccess.canAccessUiResource(
     uiResourceKeys.apiKeys.list.actions.registerCredential,
   )
   function requestApiKey(document: CredentialRequest) {
-    return document.documentKind === "api-key-lifecycle"
+    return document.documentKind === approvalDocumentKinds.apiKeyLifecycle
       ? backoffice.apiKeys.find((item) => item.id === document.apiKeyId)
       : undefined
   }
   function requestServiceId(document: CredentialRequest) {
-    return document.documentKind === "api-key-issuance"
+    return document.documentKind === approvalDocumentKinds.apiKeyIssuance
       ? document.serviceId
       : requestApiKey(document)?.serviceId
   }
   function requestKeyName(document: CredentialRequest) {
-    return document.documentKind === "api-key-issuance"
+    return document.documentKind === approvalDocumentKinds.apiKeyIssuance
       ? document.keyName
       : (requestApiKey(document)?.name ?? "")
   }
   function requestAwsSecretName(document: CredentialRequest) {
-    return document.type === "api-key-dispose" ? "" : document.awsSecretName
+    return document.type === approvalTypeValues.apiKeyDispose
+      ? ""
+      : document.awsSecretName
   }
   function requestAwsSecretKey(document: CredentialRequest) {
-    return document.type === "api-key-dispose" ? "" : document.awsSecretKey
+    return document.type === approvalTypeValues.apiKeyDispose
+      ? ""
+      : document.awsSecretKey
   }
   function canRegisterCredential(document: CredentialRequest) {
-    if (document.type === "api-key-dispose") return false
+    if (document.type === approvalTypeValues.apiKeyDispose) return false
     const serviceId = requestServiceId(document)
     const service = backoffice.services.find((item) => item.id === serviceId)
     if (!service)
@@ -199,7 +234,7 @@ export function ApiKeyPage() {
     const user = sessionAccess.currentUser
     return (
       canRegisterCredentialResource &&
-      user?.employmentStatus === "employed" &&
+      user?.employmentStatus === employmentStatusValues.employed &&
       (isAdministrator ||
         user.organizationIds.includes(service.ownerOrganizationId))
     )
@@ -286,14 +321,14 @@ export function ApiKeyPage() {
           return <Badge variant="success">{t("registeredStatus")}</Badge>
         }
         if (
-          row.original.type === "api-key-dispose" &&
-          row.original.status === "approved"
+          row.original.type === approvalTypeValues.apiKeyDispose &&
+          row.original.status === approvalDocumentStatuses.approved
         ) {
           return <Badge variant="secondary">{t("disposedStatus")}</Badge>
         }
         if (
-          row.original.status === "approved" &&
-          row.original.type !== "api-key-dispose"
+          row.original.status === approvalDocumentStatuses.approved &&
+          row.original.type !== approvalTypeValues.apiKeyDispose
         ) {
           return <Badge variant="warning">{t("registrationPending")}</Badge>
         }
@@ -304,20 +339,11 @@ export function ApiKeyPage() {
       id: "action",
       header: "",
       cell: ({ row }) =>
-        row.original.status === "submitted" && canApproveCredentialRequest ? (
-          <Button
-            size="sm"
-            onClick={() => {
-              void approve(row.original)
-            }}
-          >
-            {documentsT("approve")}
-          </Button>
-        ) : row.original.status === "approved" &&
-          !credentials.some(
-            (apiKey) => apiKey.approvalDocumentId === row.original.id,
-          ) &&
-          canRegisterCredential(row.original) ? (
+        row.original.status === approvalDocumentStatuses.approved &&
+        !credentials.some(
+          (apiKey) => apiKey.approvalDocumentId === row.original.id,
+        ) &&
+        canRegisterCredential(row.original) ? (
           <Button
             size="sm"
             variant="outline"
@@ -333,6 +359,24 @@ export function ApiKeyPage() {
   const columns = useMemo<ColumnDef<ApiKey>[]>(
     () => [
       { accessorKey: "name", header: t("keyName") },
+      {
+        id: "application",
+        header: t("application"),
+        cell: ({ row }) => {
+          const application = backoffice.applications.find(
+            (item) => item.id === row.original.applicationId,
+          )
+          return application ? (
+            <UiResourceLink
+              resourceKey={uiResourceKeys.applications.detail.key}
+              href={`/applications/${application.id}`}
+              className="text-primary hover:underline"
+            >
+              {application.name}
+            </UiResourceLink>
+          ) : null
+        },
+      },
       {
         id: "service",
         header: t("service"),
@@ -383,15 +427,29 @@ export function ApiKeyPage() {
         title={t("title")}
         description={t("description")}
         actions={
-          credentialTemplates.length > 0 ? (
-            <ApiKeyIssuanceDialog
-              templates={credentialTemplates}
-              triggerLabel={t("request")}
-              excludedServiceIds={sessionAccess.ownedCredentialServiceIds}
-            />
-          ) : (
-            <Button disabled>{t("request")}</Button>
-          )
+          <>
+            {canManageLifecycle ? (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/credentials/lifecycle-settings" />}
+              >
+                <CalendarClock />
+                {t("manageLifecycle")}
+              </Button>
+            ) : null}
+            {canRequestCredential && credentialTemplates.length > 0 ? (
+              <Button
+                nativeButton={false}
+                render={<Link href="/credentials/request" />}
+              >
+                <KeyRound />
+                {t("request")}
+              </Button>
+            ) : (
+              <Button disabled>{t("request")}</Button>
+            )}
+          </>
         }
       />
       <div className="grid gap-3 sm:grid-cols-3">
@@ -403,7 +461,10 @@ export function ApiKeyPage() {
         <MetricCard
           icon={KeyRound}
           title={t("activeCount")}
-          value={credentials.filter((item) => item.status === "active").length}
+          value={
+            credentials.filter((item) => item.status === entityStatuses.active)
+              .length
+          }
         />
         <MetricCard
           icon={Server}
@@ -422,6 +483,12 @@ export function ApiKeyPage() {
             columns={requestColumns}
             data={issuanceRequests}
             getRowId={(row) => row.id}
+            getRowHref={(row) =>
+              canViewRequestDetail
+                ? `/approval-documents/requests/${row.id}`
+                : undefined
+            }
+            getRowLabel={(row) => `${row.title} ${common("details")}`}
             empty={t("issuanceHistoryEmpty")}
             filterLabel={common("search")}
             noResults={common("noResults")}
@@ -449,12 +516,7 @@ export function ApiKeyPage() {
               {
                 id: "request-status",
                 label: common("status"),
-                getValue: (row) =>
-                  row.status === "draft"
-                    ? documentsT("draft")
-                    : row.status === "approved"
-                      ? documentsT("approvedStatus")
-                      : documentsT("submittedStatus"),
+                getValue: requestStatusLabel,
               },
             ]}
           />
@@ -472,7 +534,7 @@ export function ApiKeyPage() {
             data={credentials}
             getRowId={(row) => row.id}
             getRowHref={(row) =>
-              canViewDetail ? `/api-keys/${row.id}` : undefined
+              canViewDetail ? `/credentials/${row.id}` : undefined
             }
             getRowLabel={(row) => `${row.name} ${common("details")}`}
             empty={t("empty")}
@@ -512,14 +574,14 @@ export function ApiKeyPage() {
           <DialogHeader>
             <DialogTitle>
               {t(
-                registrationService?.type === "external"
+                registrationService?.type === serviceTypeValues.external
                   ? "externalRegisterTitle"
                   : "internalRegisterTitle",
               )}
             </DialogTitle>
             <DialogDescription>
               {t(
-                registrationService?.type === "external"
+                registrationService?.type === serviceTypeValues.external
                   ? "externalRegisterDescription"
                   : "internalRegisterDescription",
               )}
@@ -551,7 +613,7 @@ export function ApiKeyPage() {
                     : ""}
                 </DetailItem>
               </DetailGrid>
-              {registrationService.type === "external" ? (
+              {registrationService.type === serviceTypeValues.external ? (
                 <Field invalid={manualSecretInvalid}>
                   <FieldLabel htmlFor="external-api-key-secret">
                     {t("externalSecretLabel")}
@@ -601,7 +663,7 @@ export function ApiKeyPage() {
                 <LoaderCircle className="animate-spin" aria-hidden="true" />
               ) : null}
               {t(
-                registrationService?.type === "external"
+                registrationService?.type === serviceTypeValues.external
                   ? "externalRegisterAction"
                   : "internalRegisterAction",
               )}
@@ -658,6 +720,18 @@ export function ApiKeyDetailPage({ apiKeyId }: { apiKeyId: string }) {
   const documentsT = useTranslations("backoffice.approvalDocuments")
   const common = useTranslations("backoffice.common")
   const labels = useBackofficeLabels()
+  const canViewRequestDetail = session.canAccessUiResource(
+    uiResourceKeys.approvalDocuments.requestDetail.key,
+  )
+  const canRequestReplacement = session.canAccessUiResource(
+    uiResourceKeys.apiKeys.replaceRequest.key,
+  )
+  const canRequestDisposal = session.canAccessUiResource(
+    uiResourceKeys.apiKeys.disposeRequest.key,
+  )
+  const canEmergencyRevoke = session.canAccessUiResource(
+    uiResourceKeys.apiKeys.detail.actions.emergencyRevokeCredential,
+  )
   const visibleApiKey = useMemo(
     () =>
       resolveCredentialVisibility(
@@ -674,7 +748,7 @@ export function ApiKeyDetailPage({ apiKeyId }: { apiKeyId: string }) {
         description={t("notFound")}
         action={
           session.canAccessUiResource(uiResourceKeys.apiKeys.list.key) ? (
-            <Button render={<Link href="/api-keys" />}>
+            <Button nativeButton={false} render={<Link href="/credentials" />}>
               {common("backToList")}
             </Button>
           ) : undefined
@@ -686,6 +760,9 @@ export function ApiKeyDetailPage({ apiKeyId }: { apiKeyId: string }) {
   const service = backoffice.services.find(
     (item) => item.id === visibleApiKey.serviceId,
   )
+  const application = backoffice.applications.find(
+    (item) => item.id === visibleApiKey.applicationId,
+  )
   if (!service) throw new Error(`Credential service not found: ${apiKeyId}`)
   const registeredBy = backoffice.users.find(
     (item) => item.id === visibleApiKey.registeredByUserId,
@@ -694,25 +771,27 @@ export function ApiKeyDetailPage({ apiKeyId }: { apiKeyId: string }) {
     .filter(
       (document) =>
         document.id === visibleApiKey.approvalDocumentId ||
-        (document.documentKind === "api-key-lifecycle" &&
+        (document.documentKind === approvalDocumentKinds.apiKeyLifecycle &&
           document.apiKeyId === visibleApiKey.id),
     )
     .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))
   const replacementTemplate = backoffice.approvalLines.find(
     (template) =>
       template.id === service.credentialTemplateIds.replacement &&
-      template.status === "active" &&
-      template.type === "api-key-replace",
+      template.status === entityStatuses.active &&
+      template.type === approvalTypeValues.apiKeyReplace,
   )
   const disposalTemplate = backoffice.approvalLines.find(
     (template) =>
       template.id === service.credentialTemplateIds.disposal &&
-      template.status === "active" &&
-      template.type === "api-key-dispose",
+      template.status === entityStatuses.active &&
+      template.type === approvalTypeValues.apiKeyDispose,
   )
   const submittedTypes = new Set(
     history
-      .filter((document) => document.status === "submitted")
+      .filter(
+        (document) => document.status === approvalDocumentStatuses.submitted,
+      )
       .map((document) => document.type),
   )
   const historyColumns: ColumnDef<ApprovalDocument>[] = [
@@ -759,26 +838,42 @@ export function ApiKeyDetailPage({ apiKeyId }: { apiKeyId: string }) {
         title={visibleApiKey.name}
         description={t("detailDescription")}
         actions={
-          visibleApiKey.status === "active" ? (
+          visibleApiKey.status === entityStatuses.active ? (
             <>
-              {replacementTemplate && !submittedTypes.has("api-key-replace") ? (
-                <ApiKeyLifecycleDialog
-                  apiKey={visibleApiKey}
-                  template={replacementTemplate}
-                  type="api-key-replace"
-                />
+              {canRequestReplacement &&
+              replacementTemplate &&
+              !submittedTypes.has("api-key-replace") ? (
+                <Button
+                  nativeButton={false}
+                  render={
+                    <Link href={`/credentials/${visibleApiKey.id}/replace`} />
+                  }
+                >
+                  <RefreshCw />
+                  {t("requestReplacement")}
+                </Button>
               ) : (
                 <Button disabled>{t("requestReplacement")}</Button>
               )}
-              {disposalTemplate && !submittedTypes.has("api-key-dispose") ? (
-                <ApiKeyLifecycleDialog
-                  apiKey={visibleApiKey}
-                  template={disposalTemplate}
-                  type="api-key-dispose"
-                />
+              {canRequestDisposal &&
+              disposalTemplate &&
+              !submittedTypes.has("api-key-dispose") ? (
+                <Button
+                  variant="outline"
+                  nativeButton={false}
+                  render={
+                    <Link href={`/credentials/${visibleApiKey.id}/dispose`} />
+                  }
+                >
+                  <Trash2 />
+                  {t("requestDisposal")}
+                </Button>
               ) : (
                 <Button disabled>{t("requestDisposal")}</Button>
               )}
+              {canEmergencyRevoke ? (
+                <CredentialEmergencyRevokeDialog credential={visibleApiKey} />
+              ) : null}
             </>
           ) : null
         }
@@ -790,6 +885,19 @@ export function ApiKeyDetailPage({ apiKeyId }: { apiKeyId: string }) {
         <CardContent>
           <DetailGrid>
             <DetailItem label={t("keyName")}>{visibleApiKey.name}</DetailItem>
+            <DetailItem label={t("application")}>
+              {application ? (
+                <UiResourceLink
+                  resourceKey={uiResourceKeys.applications.detail.key}
+                  href={`/applications/${application.id}`}
+                  className="text-primary hover:underline"
+                >
+                  {application.name}
+                </UiResourceLink>
+              ) : (
+                "—"
+              )}
+            </DetailItem>
             <DetailItem label={t("service")}>
               <UiResourceLink
                 resourceKey={uiResourceKeys.services.detail.key}
@@ -811,6 +919,44 @@ export function ApiKeyDetailPage({ apiKeyId }: { apiKeyId: string }) {
             <DetailItem label={t("awsSecretKey")}>
               {visibleApiKey.awsSecretKey}
             </DetailItem>
+            <DetailItem label={t("expiresAt")}>
+              {visibleApiKey.expiresAt
+                ? labels.dateTime(visibleApiKey.expiresAt)
+                : t("notConfigured")}
+            </DetailItem>
+            <DetailItem label={t("rotationIntervalDays")}>
+              {t("days", {
+                count:
+                  backoffice.credentialLifecycleSettings.rotationIntervalDays,
+              })}
+            </DetailItem>
+            <DetailItem label={t("nextRotationAt")}>
+              {visibleApiKey.nextRotationAt
+                ? labels.dateTime(visibleApiKey.nextRotationAt)
+                : t("notConfigured")}
+            </DetailItem>
+            <DetailItem label={t("usageSystems")}>
+              {visibleApiKey.usageSystemNames.length > 0 ? (
+                <span className="flex flex-wrap gap-1">
+                  {visibleApiKey.usageSystemNames.map((name) => (
+                    <Badge key={name} variant="secondary">
+                      {name}
+                    </Badge>
+                  ))}
+                </span>
+              ) : (
+                t("usageSystemsEmpty")
+              )}
+            </DetailItem>
+            {visibleApiKey.emergencyRevokedAt ? (
+              <DetailItem
+                label={t("emergencyRevokedAt")}
+                className="sm:col-span-2"
+              >
+                {labels.dateTime(visibleApiKey.emergencyRevokedAt)} ·{" "}
+                {visibleApiKey.emergencyRevokeReason}
+              </DetailItem>
+            ) : null}
             <DetailItem
               label={t("allowedEndpoints")}
               className="sm:col-span-2 sm:border-r-0"
@@ -865,6 +1011,12 @@ export function ApiKeyDetailPage({ apiKeyId }: { apiKeyId: string }) {
             columns={historyColumns}
             data={history}
             getRowId={(row) => row.id}
+            getRowHref={(row) =>
+              canViewRequestDetail
+                ? `/approval-documents/requests/${row.id}`
+                : undefined
+            }
+            getRowLabel={(row) => `${row.title} ${common("details")}`}
             empty={t("requestHistoryEmpty")}
           />
         </CardContent>

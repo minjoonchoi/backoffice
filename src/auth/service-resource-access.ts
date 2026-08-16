@@ -4,7 +4,7 @@ import { resolveAuthorizationSubject } from "@/auth/authorization-subject"
 
 type ServiceResourceAccessState = Pick<
   BackofficeState,
-  "groups" | "organizations" | "roles" | "systemReferences" | "users"
+  "organizations" | "roles" | "systemReferences" | "users"
 >
 
 export type ServiceResourceAccess = Readonly<{
@@ -29,8 +29,8 @@ export function resolveServiceResourceAccess(
   const isAdministrator = subject.roleIds.has(
     state.systemReferences.roleIds.administrator,
   )
-  const isOrganizationLeader = subject.groupIds.has(
-    state.systemReferences.groupIds.organizationLeader,
+  const isOrganizationLeader = subject.roleIds.has(
+    state.systemReferences.roleIds.serviceOperator,
   )
   const manageableOrganizationIds = isAdministrator
     ? state.organizations.map((organization) => organization.id)

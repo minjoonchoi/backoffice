@@ -1,18 +1,22 @@
-import type { AccessPolicy } from "@/features/access-policies/model"
+import { accessPolicyResourceTypes } from "@/features/access-policies/model"
+import type {
+  AccessPolicy,
+  AccessPolicyResource,
+} from "@/features/access-policies/model"
 import type { BackofficeState } from "@/application/state/model"
 import type {
   ManagedService,
   ServiceEndpoint,
   ServiceEndpointField,
 } from "@/features/service-catalog/model"
-import type { UiNamespace, UiResource } from "@/features/ui-resources/model"
+import type { Namespace, UiResource } from "@/features/ui-resources/model"
 
 type AccessPolicyResourceState = Pick<
   BackofficeState,
   | "services"
   | "serviceEndpoints"
   | "serviceEndpointFields"
-  | "uiNamespaces"
+  | "namespaces"
   | "uiResources"
 >
 
@@ -26,6 +30,59 @@ export type AccessPolicyResourceGroup = {
   endpoints: AccessPolicyEndpointResource[]
 }
 
+export type AccessPolicyResourceDisplay = Readonly<{
+  reference: AccessPolicyResource
+  name: string
+  scope: string | null
+  identifier: string
+}>
+
+export function resolveAccessPolicyResourceDisplay(
+  state: AccessPolicyResourceState,
+  reference: AccessPolicyResource,
+): AccessPolicyResourceDisplay {
+  if (reference.type === accessPolicyResourceTypes.endpoint) {
+    const endpoint = state.serviceEndpoints.find(
+      (candidate) => candidate.id === reference.id,
+    )
+    if (!endpoint) {
+      throw new Error(`Access policy endpoint not found: ${reference.id}`)
+    }
+    const service = state.services.find(
+      (candidate) => candidate.id === endpoint.serviceId,
+    )
+    if (!service) {
+      throw new Error(`Access policy service not found: ${endpoint.serviceId}`)
+    }
+    return {
+      reference,
+      name: endpoint.name,
+      scope: service.name,
+      identifier: `${endpoint.method} ${endpoint.path}`,
+    }
+  }
+  const resource = state.uiResources.find(
+    (candidate) => candidate.id === reference.id,
+  )
+  if (!resource) {
+    throw new Error(`Access policy UI resource not found: ${reference.id}`)
+  }
+  const namespace = state.namespaces.find(
+    (candidate) => candidate.id === resource.namespaceId,
+  )
+  if (!namespace) {
+    throw new Error(
+      `Access policy UI resource namespace not found: ${resource.namespaceId}`,
+    )
+  }
+  return {
+    reference,
+    name: resource.name,
+    scope: namespace.name,
+    identifier: resource.key,
+  }
+}
+
 export function resolveAccessPolicyResourceGroups(
   state: AccessPolicyResourceState,
   policy: AccessPolicy,
@@ -33,7 +90,7 @@ export function resolveAccessPolicyResourceGroups(
   const groups = new Map<string, AccessPolicyResourceGroup>()
 
   for (const resourceReference of policy.resources) {
-    if (resourceReference.type !== "endpoint") continue
+    if (resourceReference.type !== accessPolicyResourceTypes.endpoint) continue
     const endpointId = resourceReference.id
     const endpoint = state.serviceEndpoints.find(
       (candidate) => candidate.id === endpointId,
@@ -65,24 +122,8 @@ export function resolveAccessPolicyResourceGroups(
 }
 
 export type AccessPolicyUiResource = {
-  namespace: UiNamespace
+  namespace: Namespace
   resource: UiResource
-}
-
-export function resolveAccessPolicyUiNamespaces(
-  state: AccessPolicyResourceState,
-  policy: AccessPolicy,
-): UiNamespace[] {
-  return policy.resources.flatMap((reference) => {
-    if (reference.type !== "ui-namespace") return []
-    const namespace = state.uiNamespaces.find(
-      (candidate) => candidate.id === reference.id,
-    )
-    if (!namespace) {
-      throw new Error(`Access policy UI namespace not found: ${reference.id}`)
-    }
-    return [namespace]
-  })
 }
 
 export function resolveAccessPolicyUiResources(
@@ -90,14 +131,14 @@ export function resolveAccessPolicyUiResources(
   policy: AccessPolicy,
 ): AccessPolicyUiResource[] {
   return policy.resources.flatMap((reference) => {
-    if (reference.type !== "ui-resource") return []
+    if (reference.type !== accessPolicyResourceTypes.uiResource) return []
     const resource = state.uiResources.find(
       (candidate) => candidate.id === reference.id,
     )
     if (!resource) {
       throw new Error(`Access policy UI resource not found: ${reference.id}`)
     }
-    const namespace = state.uiNamespaces.find(
+    const namespace = state.namespaces.find(
       (candidate) => candidate.id === resource.namespaceId,
     )
     if (!namespace) {
@@ -119,9 +160,6 @@ export function accessPolicyResourceNames(
     ),
     ...resolveAccessPolicyUiResources(state, policy).map(
       ({ namespace, resource }) => `${namespace.name} / ${resource.name}`,
-    ),
-    ...resolveAccessPolicyUiNamespaces(state, policy).map(
-      (namespace) => namespace.name,
     ),
   ]
   return [...new Set(names)].join(", ")

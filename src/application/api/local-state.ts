@@ -1,4 +1,5 @@
 import type { BackofficeState } from "@/application/state/model"
+import { entityStatuses } from "@/domain/common"
 
 export type BackofficeStateUpdater = (
   update: (current: BackofficeState) => BackofficeState,
@@ -13,8 +14,8 @@ export function createRecordBase(): { id: string; createdAt: string } {
 
 export function createEntityBase(): {
   id: string
-  status: "active"
+  status: typeof entityStatuses.active
   createdAt: string
 } {
-  return { ...createRecordBase(), status: "active" }
+  return { ...createRecordBase(), status: entityStatuses.active }
 }

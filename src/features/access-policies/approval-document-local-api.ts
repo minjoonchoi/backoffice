@@ -1,8 +1,27 @@
+import { approvalDocumentSubmissions } from "@/features/access-policies/model"
+import { approvalDocumentHistoryEventTypes } from "@/features/access-policies/model"
+import { approvalDecisions } from "@/features/access-policies/model"
+import { approvalStepStatuses } from "@/features/access-policies/model"
+import { approvalDocumentStatuses } from "@/features/access-policies/model"
+import { requestTemplateFieldBindingValues } from "@/features/request-templates/model"
+import { approvalStepKindValues } from "@/features/request-templates/model"
+import { requestCategoryValues } from "@/features/request-templates/model"
+import { approvalTypeValues } from "@/features/request-templates/model"
+import { approvalDocumentKinds } from "@/features/access-policies/model"
+import { approvalAssigneeTypes } from "@/features/access-policies/model"
+import { serviceTypeValues } from "@/features/service-catalog/model"
+import { employmentStatusValues } from "@/features/iam/model"
+import { entityStatuses } from "@/domain/common"
 import { hasEffectiveAccessPolicy } from "@/features/access-policies/access-policy-assignment"
 import {
+  approvalDocumentActionInputSchema,
   approvalDocumentInputSchema,
+  approvalDocumentTransitionInputSchema,
+  accessPolicyManagementTypes,
   type AccessPolicyAssignment,
   type ApprovalDocument,
+  type ApprovalDocumentHistoryEvent,
+  type ApprovalDocumentStep,
 } from "@/features/access-policies/model"
 import type { ApprovalDocumentApi } from "@/features/access-policies/api"
 import type { BackofficeStateUpdater } from "@/application/api/local-state"
@@ -13,9 +32,79 @@ import type {
   UserNotificationEvent,
   UserNotificationTargetType,
 } from "@/application/state/model"
-import { resolveOwnedCredentialIds } from "@/features/credentials/credential-ownership"
+import {
+  userNotificationEventValues,
+  userNotificationTargetTypeValues,
+} from "@/application/state/model"
 import type { ResolvedApprovalStep } from "@/features/request-templates/model"
-import { resolveRequestOrganizationLeader } from "@/features/request-templates/approval-assignee"
+import { hasUiResourcePolicyAccess } from "@/auth/ui-resource-policy-access"
+import { uiResourceKeys } from "@/config/menu-registry"
+
+function createHistoryEvent(
+  type: ApprovalDocumentHistoryEvent["type"],
+  actorUserId: string,
+  stepId: string | null,
+  comment: string | null,
+  createdAt = new Date().toISOString(),
+): ApprovalDocumentHistoryEvent {
+  return {
+    id: crypto.randomUUID(),
+    type,
+    actorUserId,
+    stepId,
+    comment,
+    createdAt,
+  }
+}
+
+function activateApprovalSteps(
+  steps: ApprovalDocumentStep[],
+  actorUserId: string,
+  createdAt: string,
+) {
+  const prepared = steps.map<ApprovalDocumentStep>((step) =>
+    step.kind === approvalStepKindValues.request
+      ? {
+          ...step,
+          status: approvalStepStatuses.completed,
+          processedById: actorUserId,
+          processedAt: createdAt,
+          comment: null,
+        }
+      : {
+          ...step,
+          status: approvalStepStatuses.waiting,
+          processedById: null,
+          processedAt: null,
+          comment: null,
+        },
+  )
+  const nextStage = Math.min(
+    ...prepared
+      .filter((step) => step.status === approvalStepStatuses.waiting)
+      .map((step) => step.stage),
+  )
+  return prepared.map<ApprovalDocumentStep>((step) =>
+    step.status === approvalStepStatuses.waiting && step.stage === nextStage
+      ? { ...step, status: approvalStepStatuses.pending }
+      : step,
+  )
+}
+
+function isStepAssignee(
+  state: BackofficeState,
+  step: ApprovalDocumentStep,
+  actorUserId: string,
+) {
+  if (step.assigneeType === approvalAssigneeTypes.user)
+    return step.assigneeId === actorUserId
+  return state.users.some(
+    (user) =>
+      user.id === actorUserId &&
+      user.employmentStatus === employmentStatusValues.employed &&
+      user.organizationIds.includes(step.assigneeId),
+  )
+}
 
 function createUserNotification(
   userId: string,
@@ -37,20 +126,20 @@ function approvalCompletionEvent(
   document: ApprovalDocument,
 ): UserNotificationEvent {
   switch (document.type) {
-    case "resource-create":
-      return "resource-created"
-    case "access-grant":
-      return "access-granted"
-    case "access-revoke":
-      return "access-revoked"
-    case "resource-dispose":
-      return "resource-disposed"
-    case "api-key":
-      return "api-key-issued"
-    case "api-key-replace":
-      return "api-key-replacement-approved"
-    case "api-key-dispose":
-      return "api-key-disposal-approved"
+    case approvalTypeValues.resourceCreate:
+      return userNotificationEventValues.resourceCreated
+    case approvalTypeValues.accessGrant:
+      return userNotificationEventValues.accessGranted
+    case approvalTypeValues.accessRevoke:
+      return userNotificationEventValues.accessRevoked
+    case approvalTypeValues.resourceDispose:
+      return userNotificationEventValues.resourceDisposed
+    case approvalTypeValues.apiKey:
+      return userNotificationEventValues.apiKeyIssued
+    case approvalTypeValues.apiKeyReplace:
+      return userNotificationEventValues.apiKeyReplacementApproved
+    case approvalTypeValues.apiKeyDispose:
+      return userNotificationEventValues.apiKeyDisposalApproved
   }
 }
 
@@ -66,7 +155,7 @@ export function createLocalApprovalDocumentApi(
       const line = state.approvalLines.find(
         (item) => item.id === parsed.data.approvalLineId,
       )
-      if (line?.status !== "active") {
+      if (line?.status !== entityStatuses.active) {
         return { ok: false, error: "approval-line-not-found" }
       }
       const requester = state.users.find(
@@ -76,7 +165,7 @@ export function createLocalApprovalDocumentApi(
         (organization) => organization.id === parsed.data.organizationId,
       )
       if (
-        requester?.employmentStatus !== "employed" ||
+        requester?.employmentStatus !== employmentStatusValues.employed ||
         !requestOrganization ||
         !requester.organizationIds.includes(requestOrganization.id)
       ) {
@@ -84,23 +173,27 @@ export function createLocalApprovalDocumentApi(
       }
       if (
         line.type !== parsed.data.type ||
-        (line.category === "credential") !==
+        (line.category === requestCategoryValues.credential) !==
           parsed.data.type.startsWith("api-key")
       ) {
         return { ok: false, error: "approval-reference-mismatch" }
       }
       const accessPolicyId =
-        parsed.data.documentKind === "general" &&
-        parsed.data.type === "access-grant"
+        parsed.data.documentKind === approvalDocumentKinds.general &&
+        parsed.data.type === approvalTypeValues.accessGrant
           ? parsed.data.accessPolicyId
           : null
       const accessPolicy = state.accessPolicies.find(
         (policy) => policy.id === accessPolicyId,
       )
       if (
-        parsed.data.documentKind === "general" &&
-        parsed.data.type === "access-grant" &&
-        (accessPolicy?.status !== "active" || accessPolicy.type !== line.type)
+        parsed.data.documentKind === approvalDocumentKinds.general &&
+        parsed.data.type === approvalTypeValues.accessGrant &&
+        (accessPolicy?.status !== entityStatuses.active ||
+          accessPolicy.managementType ===
+            accessPolicyManagementTypes.systemManaged ||
+          accessPolicy.type !== line.type ||
+          new Date(parsed.data.expiresAt).getTime() <= Date.now())
       ) {
         return { ok: false, error: "approval-reference-mismatch" }
       }
@@ -112,7 +205,7 @@ export function createLocalApprovalDocumentApi(
         return { ok: false, error: "access-policy-already-assigned" }
       }
       const customFields = line.fields.filter(
-        (field) => field.binding === "custom",
+        (field) => field.binding === requestTemplateFieldBindingValues.custom,
       )
       const fieldValuesMatch =
         parsed.data.fieldValues.every((value) =>
@@ -130,7 +223,7 @@ export function createLocalApprovalDocumentApi(
         return { ok: false, error: "invalid-input" }
       }
       const lifecycleApiKeyId =
-        parsed.data.documentKind === "api-key-lifecycle"
+        parsed.data.documentKind === approvalDocumentKinds.apiKeyLifecycle
           ? parsed.data.apiKeyId
           : null
       const lifecycleApiKey =
@@ -138,34 +231,41 @@ export function createLocalApprovalDocumentApi(
           ? state.apiKeys.find((apiKey) => apiKey.id === lifecycleApiKeyId)
           : undefined
       if (
-        parsed.data.documentKind === "api-key-lifecycle" &&
-        lifecycleApiKey?.status !== "active"
+        parsed.data.documentKind === approvalDocumentKinds.apiKeyLifecycle &&
+        lifecycleApiKey?.status !== entityStatuses.active
       ) {
         return { ok: false, error: "api-key-request-invalid" }
       }
       if (
-        parsed.data.documentKind === "api-key-lifecycle" &&
+        parsed.data.documentKind === approvalDocumentKinds.apiKeyLifecycle &&
         state.approvalDocuments.some(
           (document) =>
-            document.documentKind === "api-key-lifecycle" &&
+            document.documentKind === approvalDocumentKinds.apiKeyLifecycle &&
             document.apiKeyId === lifecycleApiKeyId &&
             document.type === parsed.data.type &&
-            document.status === "submitted",
+            document.status === approvalDocumentStatuses.submitted,
         )
       ) {
         return { ok: false, error: "api-key-request-invalid" }
       }
       const apiKeyServiceId =
-        parsed.data.documentKind === "api-key-issuance"
+        parsed.data.documentKind === approvalDocumentKinds.apiKeyIssuance
           ? parsed.data.serviceId
           : (lifecycleApiKey?.serviceId ?? null)
       const apiKeyService = state.services.find(
         (service) => service.id === apiKeyServiceId,
       )
-      if (apiKeyServiceId !== null && apiKeyService?.status !== "active") {
+      if (
+        apiKeyServiceId !== null &&
+        apiKeyService?.status !== entityStatuses.active
+      ) {
         return { ok: false, error: "api-key-request-invalid" }
       }
-      if (parsed.data.documentKind === "api-key-issuance") {
+      if (parsed.data.documentKind === approvalDocumentKinds.apiKeyIssuance) {
+        const applicationId = parsed.data.applicationId
+        const application = state.applications.find(
+          (candidate) => candidate.id === applicationId,
+        )
         const issuanceServiceId = parsed.data.serviceId
         const endpointIdsValid = parsed.data.endpointIds.every((endpointId) =>
           state.serviceEndpoints.some(
@@ -176,33 +276,35 @@ export function createLocalApprovalDocumentApi(
         )
         if (
           !apiKeyService ||
+          application?.ownerOrganizationId !== requestOrganization.id ||
           !endpointIdsValid ||
-          (apiKeyService.type === "internal" &&
+          (apiKeyService.type === serviceTypeValues.internal &&
             parsed.data.endpointIds.length === 0) ||
-          (apiKeyService.type === "external" &&
+          (apiKeyService.type === serviceTypeValues.external &&
             parsed.data.endpointIds.length > 0)
         ) {
           return { ok: false, error: "api-key-request-invalid" }
         }
       }
-      if (
-        parsed.data.documentKind === "api-key-issuance" &&
-        resolveOwnedCredentialIds(state, requester.id).some((credentialId) =>
+      if (parsed.data.documentKind === approvalDocumentKinds.apiKeyIssuance) {
+        const applicationId = parsed.data.applicationId
+        if (
           state.apiKeys.some(
             (credential) =>
-              credential.id === credentialId &&
-              credential.serviceId === apiKeyServiceId,
-          ),
-        )
-      ) {
-        return { ok: false, error: "credential-already-owned" }
+              credential.applicationId === applicationId &&
+              credential.serviceId === apiKeyServiceId &&
+              credential.status === entityStatuses.active,
+          )
+        ) {
+          return { ok: false, error: "credential-already-owned" }
+        }
       }
       const configuredTemplateId = apiKeyService
-        ? parsed.data.type === "api-key"
+        ? parsed.data.type === approvalTypeValues.apiKey
           ? apiKeyService.credentialTemplateIds.issuance
-          : parsed.data.type === "api-key-replace"
+          : parsed.data.type === approvalTypeValues.apiKeyReplace
             ? apiKeyService.credentialTemplateIds.replacement
-            : parsed.data.type === "api-key-dispose"
+            : parsed.data.type === approvalTypeValues.apiKeyDispose
               ? apiKeyService.credentialTemplateIds.disposal
               : null
         : null
@@ -210,94 +312,72 @@ export function createLocalApprovalDocumentApi(
         return { ok: false, error: "api-key-request-invalid" }
       }
 
-      const resolvedSteps = line.steps.map<ResolvedApprovalStep | null>(
-        (step) => {
-          const assignment = parsed.data.stepAssignments.find(
-            (item) => item.stepId === step.id,
-          )
-          let assignee:
-            | { type: "user"; id: string }
-            | { type: "organization"; id: string }
-            | null = null
-          switch (step.assigneeMode) {
-            case "fixed-user":
-              assignee = { type: "user", id: step.userId }
-              break
-            case "fixed-organization":
-              assignee = {
-                type: "organization",
-                id: step.organizationId,
-              }
-              break
-            case "document-select":
-              assignee = assignment
-                ? { type: "user", id: assignment.userId }
-                : null
-              break
-            case "requester":
-              assignee = { type: "user", id: requester.id }
-              break
-            case "request-organization-leader":
-              {
-                const resolvedLeader = resolveRequestOrganizationLeader(
-                  state,
-                  requestOrganization.id,
-                  requester.id,
-                )
-                assignee = resolvedLeader
-                  ? { type: "user", id: resolvedLeader.leader.id }
-                  : null
-              }
-              break
-            case "request-organization":
-              assignee = {
-                type: "organization",
-                id: requestOrganization.id,
-              }
-              break
-            case "service-owner-organization":
-              assignee = apiKeyService
-                ? {
-                    type: "organization",
-                    id: apiKeyService.ownerOrganizationId,
-                  }
-                : null
-              break
-          }
-          if (!assignee) return null
-          const baseStep = {
-            id: step.id,
-            order: step.order,
-            stage: step.stage,
-            kind: step.kind,
-            assigneeMode: step.assigneeMode,
-          }
-          return {
-            ...baseStep,
-            assigneeType: assignee.type,
-            assigneeId: assignee.id,
-          }
-        },
-      )
+      const requestStep = parsed.data.approvalSteps[0]
       if (
-        resolvedSteps.some((step) => step === null) ||
-        resolvedSteps.some(
+        requestStep?.kind !== approvalStepKindValues.request ||
+        requestStep.assigneeType !== approvalAssigneeTypes.user ||
+        requestStep.assigneeId !== requester.id ||
+        parsed.data.approvalSteps.some((step) =>
+          step.assigneeType === approvalAssigneeTypes.user
+            ? !state.users.some(
+                (user) =>
+                  user.id === step.assigneeId &&
+                  user.employmentStatus === employmentStatusValues.employed,
+              )
+            : !state.organizations.some(
+                (organization) => organization.id === step.assigneeId,
+              ),
+        ) ||
+        parsed.data.approvalSteps.some(
           (step) =>
-            step !== null &&
-            (step.assigneeType === "user"
-              ? !state.users.some(
-                  (user) =>
-                    user.id === step.assigneeId &&
-                    user.employmentStatus === "employed",
-                )
-              : !state.organizations.some(
-                  (organization) => organization.id === step.assigneeId,
-                )),
+            (step.kind === approvalStepKindValues.approval ||
+              step.kind === approvalStepKindValues.agreement) &&
+            step.assigneeType === approvalAssigneeTypes.user &&
+            step.assigneeId === requester.id,
         )
       ) {
         return { ok: false, error: "approval-reference-mismatch" }
       }
 
+      const resolvedSteps = parsed.data.approvalSteps.map<ResolvedApprovalStep>(
+        (step, index) => ({
+          id: step.id,
+          order: index + 1,
+          stage: step.stage,
+          kind: step.kind,
+          assigneeMode:
+            step.kind === approvalStepKindValues.request
+              ? "requester"
+              : step.assigneeType === approvalAssigneeTypes.user
+                ? "document-select"
+                : "fixed-organization",
+          assigneeType: step.assigneeType,
+          assigneeId: step.assigneeId,
+        }),
+      )
+
+      const createdAt = new Date().toISOString()
+      const unresolvedApprovalSteps = resolvedSteps.map<ApprovalDocumentStep>(
+        (step) => ({
+          ...step,
+          status: approvalStepStatuses.waiting,
+          processedById: null,
+          processedAt: null,
+          comment: null,
+        }),
+      )
+      const approvalSteps =
+        parsed.data.submission === approvalDocumentSubmissions.submitted
+          ? activateApprovalSteps(
+              unresolvedApprovalSteps,
+              requester.id,
+              createdAt,
+            )
+          : unresolvedApprovalSteps
+      const initialHistoryType =
+        parsed.data.submission === approvalDocumentSubmissions.submitted
+          ? approvalDocumentHistoryEventTypes.submitted
+          : approvalDocumentHistoryEventTypes.draftSaved
       const base = {
         id: crypto.randomUUID(),
         title: parsed.data.title,
@@ -307,23 +387,34 @@ export function createLocalApprovalDocumentApi(
         content: parsed.data.content,
         fieldValues: parsed.data.fieldValues,
         status: parsed.data.submission,
-        createdAt: new Date().toISOString(),
-        approvalSteps: resolvedSteps.filter((step) => step !== null),
+        createdAt,
+        approvalSteps,
+        history: [
+          createHistoryEvent(
+            initialHistoryType,
+            requester.id,
+            null,
+            null,
+            createdAt,
+          ),
+        ],
       }
       const document: ApprovalDocument =
-        parsed.data.documentKind === "api-key-issuance"
+        parsed.data.documentKind === approvalDocumentKinds.apiKeyIssuance
           ? {
               ...base,
               documentKind: parsed.data.documentKind,
               type: parsed.data.type,
+              applicationId: parsed.data.applicationId,
               serviceId: parsed.data.serviceId,
               endpointIds: parsed.data.endpointIds,
               keyName: parsed.data.keyName,
               awsSecretName: parsed.data.awsSecretName,
               awsSecretKey: parsed.data.awsSecretKey,
             }
-          : parsed.data.documentKind === "api-key-lifecycle" &&
-              parsed.data.type === "api-key-replace"
+          : parsed.data.documentKind ===
+                approvalDocumentKinds.apiKeyLifecycle &&
+              parsed.data.type === approvalTypeValues.apiKeyReplace
             ? {
                 ...base,
                 documentKind: parsed.data.documentKind,
@@ -332,19 +423,20 @@ export function createLocalApprovalDocumentApi(
                 awsSecretName: parsed.data.awsSecretName,
                 awsSecretKey: parsed.data.awsSecretKey,
               }
-            : parsed.data.documentKind === "api-key-lifecycle"
+            : parsed.data.documentKind === approvalDocumentKinds.apiKeyLifecycle
               ? {
                   ...base,
                   documentKind: parsed.data.documentKind,
                   type: parsed.data.type,
                   apiKeyId: parsed.data.apiKeyId,
                 }
-              : parsed.data.type === "access-grant"
+              : parsed.data.type === approvalTypeValues.accessGrant
                 ? {
                     ...base,
                     documentKind: parsed.data.documentKind,
                     type: parsed.data.type,
                     accessPolicyId: parsed.data.accessPolicyId,
+                    expiresAt: parsed.data.expiresAt,
                   }
                 : {
                     ...base,
@@ -352,12 +444,12 @@ export function createLocalApprovalDocumentApi(
                     type: parsed.data.type,
                   }
       const notification =
-        parsed.data.submission === "submitted"
+        parsed.data.submission === approvalDocumentSubmissions.submitted
           ? createUserNotification(
               document.requesterId,
-              "approval-document",
+              userNotificationTargetTypeValues.approvalDocument,
               document.id,
-              "request-submitted",
+              userNotificationEventValues.requestSubmitted,
             )
           : null
       updateState((current) => ({
@@ -370,51 +462,180 @@ export function createLocalApprovalDocumentApi(
       return { ok: true, value: document }
     },
 
-    approveApprovalDocument: async (id) => {
+    processApprovalDocument: async (input) => {
       await Promise.resolve()
-      const document = state.approvalDocuments.find((item) => item.id === id)
+      const parsed = approvalDocumentActionInputSchema.safeParse(input)
+      if (!parsed.success) return { ok: false, error: "invalid-input" }
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          parsed.data.actorUserId,
+          uiResourceKeys.approvalDocuments.requestDetail.actions.processRequest,
+        )
+      ) {
+        return { ok: false, error: "approval-document-action-forbidden" }
+      }
+      const document = state.approvalDocuments.find(
+        (item) => item.id === parsed.data.documentId,
+      )
       if (!document) {
         return { ok: false, error: "approval-document-not-found" }
       }
-      if (document.status !== "submitted") {
+      if (document.status !== approvalDocumentStatuses.submitted) {
         return { ok: false, error: "approval-document-not-submitted" }
       }
+      const step = document.approvalSteps.find(
+        (candidate) => candidate.id === parsed.data.stepId,
+      )
+      if (step?.status !== approvalStepStatuses.pending) {
+        return { ok: false, error: "approval-document-step-not-actionable" }
+      }
+      if (!isStepAssignee(state, step, parsed.data.actorUserId)) {
+        return { ok: false, error: "approval-document-action-forbidden" }
+      }
+      const decisionMatchesStep =
+        step.kind === approvalStepKindValues.reference
+          ? parsed.data.decision === approvalDecisions.acknowledge
+          : (step.kind === approvalStepKindValues.approval ||
+              step.kind === approvalStepKindValues.agreement) &&
+            (parsed.data.decision === approvalDecisions.approve ||
+              parsed.data.decision === approvalDecisions.reject)
+      if (
+        !decisionMatchesStep ||
+        (parsed.data.decision === approvalDecisions.reject &&
+          !parsed.data.comment)
+      ) {
+        return { ok: false, error: "invalid-input" }
+      }
 
-      const approvedDocument: ApprovalDocument = {
+      const processedAt = new Date().toISOString()
+      const processedSteps = document.approvalSteps.map<ApprovalDocumentStep>(
+        (candidate) =>
+          candidate.id === step.id
+            ? {
+                ...candidate,
+                status:
+                  parsed.data.decision === approvalDecisions.reject
+                    ? approvalStepStatuses.rejected
+                    : approvalStepStatuses.completed,
+                processedById: parsed.data.actorUserId,
+                processedAt,
+                comment: parsed.data.comment || null,
+              }
+            : candidate,
+      )
+      const rejected = parsed.data.decision === approvalDecisions.reject
+      const pendingInStage = processedSteps.some(
+        (candidate) =>
+          candidate.stage === step.stage &&
+          candidate.status === approvalStepStatuses.pending,
+      )
+      const nextStage = Math.min(
+        ...processedSteps
+          .filter(
+            (candidate) => candidate.status === approvalStepStatuses.waiting,
+          )
+          .map((candidate) => candidate.stage),
+      )
+      const hasNextStage = Number.isFinite(nextStage)
+      const approvalSteps =
+        !rejected && !pendingInStage && hasNextStage
+          ? processedSteps.map<ApprovalDocumentStep>((candidate) =>
+              candidate.status === approvalStepStatuses.waiting &&
+              candidate.stage === nextStage
+                ? { ...candidate, status: approvalStepStatuses.pending }
+                : candidate,
+            )
+          : processedSteps
+      const completed = !rejected && !pendingInStage && !hasNextStage
+      const eventType: ApprovalDocumentHistoryEvent["type"] = rejected
+        ? "rejected"
+        : step.kind === approvalStepKindValues.agreement
+          ? "agreed"
+          : step.kind === approvalStepKindValues.reference
+            ? "referenced"
+            : "approved"
+      const nextDocument: ApprovalDocument = {
         ...document,
-        status: "approved",
+        status: rejected ? "rejected" : completed ? "approved" : "submitted",
+        approvalSteps,
+        history: [
+          ...document.history,
+          createHistoryEvent(
+            eventType,
+            parsed.data.actorUserId,
+            step.id,
+            parsed.data.comment || null,
+            processedAt,
+          ),
+        ],
+      }
+      if (rejected) {
+        const notification = createUserNotification(
+          document.requesterId,
+          userNotificationTargetTypeValues.approvalDocument,
+          document.id,
+          userNotificationEventValues.requestRejected,
+        )
+        updateState((current) => ({
+          ...current,
+          approvalDocuments: current.approvalDocuments.map((item) =>
+            item.id === document.id ? nextDocument : item,
+          ),
+          notifications: [...current.notifications, notification],
+        }))
+        return { ok: true, value: { document: nextDocument } }
+      }
+      if (!completed) {
+        updateState((current) => ({
+          ...current,
+          approvalDocuments: current.approvalDocuments.map((item) =>
+            item.id === document.id ? nextDocument : item,
+          ),
+        }))
+        return { ok: true, value: { document: nextDocument } }
       }
       if (
-        document.documentKind === "api-key-lifecycle" &&
-        document.type === "api-key-dispose"
+        document.documentKind === approvalDocumentKinds.apiKeyLifecycle &&
+        document.type === approvalTypeValues.apiKeyDispose
       ) {
         const apiKey = state.apiKeys.find(
-          (item) => item.id === document.apiKeyId && item.status === "active",
+          (item) =>
+            item.id === document.apiKeyId &&
+            item.status === entityStatuses.active,
         )
         if (!apiKey) {
           return { ok: false, error: "api-key-request-invalid" }
         }
         const notification = createUserNotification(
           document.requesterId,
-          "approval-document",
+          userNotificationTargetTypeValues.approvalDocument,
           document.id,
           approvalCompletionEvent(document),
         )
         updateState((current) => ({
           ...current,
           approvalDocuments: current.approvalDocuments.map((item) =>
-            item.id === id ? approvedDocument : item,
+            item.id === document.id ? nextDocument : item,
           ),
           apiKeys: current.apiKeys.map((item) =>
-            item.id === apiKey.id ? { ...item, status: "inactive" } : item,
+            item.id === apiKey.id
+              ? { ...item, status: entityStatuses.inactive }
+              : item,
+          ),
+          accessPolicies: current.accessPolicies.map((policy) =>
+            apiKey.accessPolicyId !== null &&
+            policy.id === apiKey.accessPolicyId
+              ? { ...policy, status: entityStatuses.inactive }
+              : policy,
           ),
           notifications: [...current.notifications, notification],
         }))
-        return { ok: true, value: { document: approvedDocument } }
+        return { ok: true, value: { document: nextDocument } }
       }
       if (
-        document.documentKind === "general" &&
-        document.type === "access-grant"
+        document.documentKind === approvalDocumentKinds.general &&
+        document.type === approvalTypeValues.accessGrant
       ) {
         const policy = state.accessPolicies.find(
           (item) => item.id === document.accessPolicyId,
@@ -425,6 +646,7 @@ export function createLocalApprovalDocumentApi(
           accessPolicyId: policy.id,
           targetType: "user",
           targetId: document.requesterId,
+          expiresAt: document.expiresAt,
         }
         const alreadyAssigned = state.accessPolicyAssignments.some(
           (item) =>
@@ -434,23 +656,29 @@ export function createLocalApprovalDocumentApi(
         )
         const notification = createUserNotification(
           document.requesterId,
-          "approval-document",
+          userNotificationTargetTypeValues.approvalDocument,
           document.id,
           approvalCompletionEvent(document),
         )
         updateState((current) => ({
           ...current,
           approvalDocuments: current.approvalDocuments.map((item) =>
-            item.id === id ? approvedDocument : item,
+            item.id === document.id ? nextDocument : item,
           ),
           accessPolicyAssignments: alreadyAssigned
-            ? current.accessPolicyAssignments
+            ? current.accessPolicyAssignments.map((item) =>
+                item.accessPolicyId === assignment.accessPolicyId &&
+                item.targetType === assignment.targetType &&
+                item.targetId === assignment.targetId
+                  ? { ...item, expiresAt: assignment.expiresAt }
+                  : item,
+              )
             : [...current.accessPolicyAssignments, assignment],
           notifications: [...current.notifications, notification],
         }))
-        return { ok: true, value: { document: approvedDocument } }
+        return { ok: true, value: { document: nextDocument } }
       }
-      if (document.documentKind !== "api-key-issuance") {
+      if (document.documentKind !== approvalDocumentKinds.apiKeyIssuance) {
         const notification = createUserNotification(
           document.requesterId,
           "approval-document",
@@ -460,19 +688,169 @@ export function createLocalApprovalDocumentApi(
         updateState((current) => ({
           ...current,
           approvalDocuments: current.approvalDocuments.map((item) =>
-            item.id === id ? approvedDocument : item,
+            item.id === document.id ? nextDocument : item,
           ),
           notifications: [...current.notifications, notification],
         }))
-        return { ok: true, value: { document: approvedDocument } }
+        return { ok: true, value: { document: nextDocument } }
       }
       updateState((current) => ({
         ...current,
         approvalDocuments: current.approvalDocuments.map((item) =>
-          item.id === id ? approvedDocument : item,
+          item.id === document.id ? nextDocument : item,
         ),
       }))
-      return { ok: true, value: { document: approvedDocument } }
+      return { ok: true, value: { document: nextDocument } }
+    },
+
+    withdrawApprovalDocument: async (input) => {
+      await Promise.resolve()
+      const parsed = approvalDocumentTransitionInputSchema.safeParse(input)
+      if (!parsed.success) return { ok: false, error: "invalid-input" }
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          parsed.data.actorUserId,
+          uiResourceKeys.approvalDocuments.requestDetail.actions
+            .withdrawRequest,
+        )
+      ) {
+        return { ok: false, error: "approval-document-action-forbidden" }
+      }
+      const document = state.approvalDocuments.find(
+        (item) => item.id === parsed.data.documentId,
+      )
+      if (!document) {
+        return { ok: false, error: "approval-document-not-found" }
+      }
+      if (
+        document.status !== approvalDocumentStatuses.submitted ||
+        document.requesterId !== parsed.data.actorUserId
+      ) {
+        return { ok: false, error: "approval-document-transition-invalid" }
+      }
+      const createdAt = new Date().toISOString()
+      const withdrawnDocument: ApprovalDocument = {
+        ...document,
+        status: "withdrawn",
+        history: [
+          ...document.history,
+          createHistoryEvent(
+            "withdrawn",
+            parsed.data.actorUserId,
+            null,
+            null,
+            createdAt,
+          ),
+        ],
+      }
+      const notification = createUserNotification(
+        document.requesterId,
+        "approval-document",
+        document.id,
+        "request-withdrawn",
+      )
+      updateState((current) => ({
+        ...current,
+        approvalDocuments: current.approvalDocuments.map((item) =>
+          item.id === document.id ? withdrawnDocument : item,
+        ),
+        notifications: [...current.notifications, notification],
+      }))
+      return { ok: true, value: withdrawnDocument }
+    },
+
+    resubmitApprovalDocument: async (input) => {
+      await Promise.resolve()
+      const parsed = approvalDocumentTransitionInputSchema.safeParse(input)
+      if (!parsed.success) return { ok: false, error: "invalid-input" }
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          parsed.data.actorUserId,
+          uiResourceKeys.approvalDocuments.requestDetail.actions
+            .resubmitRequest,
+        )
+      ) {
+        return { ok: false, error: "approval-document-action-forbidden" }
+      }
+      const document = state.approvalDocuments.find(
+        (item) => item.id === parsed.data.documentId,
+      )
+      if (!document) {
+        return { ok: false, error: "approval-document-not-found" }
+      }
+      const resubmittable =
+        document.status === approvalDocumentStatuses.draft ||
+        document.status === approvalDocumentStatuses.rejected ||
+        document.status === approvalDocumentStatuses.withdrawn
+      if (!resubmittable || document.requesterId !== parsed.data.actorUserId) {
+        return { ok: false, error: "approval-document-transition-invalid" }
+      }
+      const requester = state.users.find(
+        (user) => user.id === document.requesterId,
+      )
+      const template = state.approvalLines.find(
+        (line) => line.id === document.approvalLineId,
+      )
+      if (
+        requester?.employmentStatus !== employmentStatusValues.employed ||
+        !requester.organizationIds.includes(document.organizationId) ||
+        template?.status !== entityStatuses.active
+      ) {
+        return { ok: false, error: "approval-reference-mismatch" }
+      }
+      const referencesValid = document.approvalSteps.every((step) =>
+        step.assigneeType === approvalAssigneeTypes.user
+          ? state.users.some(
+              (user) =>
+                user.id === step.assigneeId &&
+                user.employmentStatus === employmentStatusValues.employed,
+            )
+          : state.organizations.some(
+              (organization) => organization.id === step.assigneeId,
+            ),
+      )
+      if (!referencesValid) {
+        return { ok: false, error: "approval-reference-mismatch" }
+      }
+      const createdAt = new Date().toISOString()
+      const approvalSteps = activateApprovalSteps(
+        document.approvalSteps,
+        parsed.data.actorUserId,
+        createdAt,
+      )
+      const submittedDocument: ApprovalDocument = {
+        ...document,
+        status: "submitted",
+        approvalSteps,
+        history: [
+          ...document.history,
+          createHistoryEvent(
+            document.status === approvalDocumentStatuses.draft
+              ? approvalDocumentHistoryEventTypes.submitted
+              : approvalDocumentHistoryEventTypes.resubmitted,
+            parsed.data.actorUserId,
+            null,
+            null,
+            createdAt,
+          ),
+        ],
+      }
+      const notification = createUserNotification(
+        document.requesterId,
+        "approval-document",
+        document.id,
+        "request-submitted",
+      )
+      updateState((current) => ({
+        ...current,
+        approvalDocuments: current.approvalDocuments.map((item) =>
+          item.id === document.id ? submittedDocument : item,
+        ),
+        notifications: [...current.notifications, notification],
+      }))
+      return { ok: true, value: { document: submittedDocument } }
     },
   }
 }

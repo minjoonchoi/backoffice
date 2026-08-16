@@ -1,6 +1,10 @@
 import { z } from "zod"
 
-export const entityStatusSchema = z.enum(["active", "inactive"])
+export const entityStatuses = {
+  active: "active",
+  inactive: "inactive",
+} as const
+export const entityStatusSchema = z.enum(entityStatuses)
 export const entityIdSchema = z.uuid()
 export const entityIdListSchema = z
   .array(entityIdSchema)
@@ -10,53 +14,66 @@ export const entityIdListSchema = z
 
 export type EntityStatus = z.infer<typeof entityStatusSchema>
 
+export const backofficeErrorCodes = {
+  invalidInput: "invalid-input",
+  organizationNotFound: "organization-not-found",
+  userEmailExists: "user-email-exists",
+  userNicknameExists: "user-nickname-exists",
+  userNotFound: "user-not-found",
+  roleNameExists: "role-name-exists",
+  roleNotFound: "role-not-found",
+  roleInUse: "role-in-use",
+  policyNameExists: "policy-name-exists",
+  policyOperationForbidden: "policy-operation-forbidden",
+  policyNotFound: "policy-not-found",
+  policyAssignmentNotFound: "policy-assignment-not-found",
+  policyAssignmentForbidden: "policy-assignment-forbidden",
+  accessPolicyAlreadyAssigned: "access-policy-already-assigned",
+  protectedRelationship: "protected-relationship",
+  approvalLineNotFound: "approval-line-not-found",
+  approvalLineAmbiguous: "approval-line-ambiguous",
+  approvalReferenceMismatch: "approval-reference-mismatch",
+  requestOrganizationLeaderUnavailable:
+    "request-organization-leader-unavailable",
+  approvalDocumentNotFound: "approval-document-not-found",
+  notificationNotFound: "notification-not-found",
+  notificationOperationForbidden: "notification-operation-forbidden",
+  approvalDocumentNotSubmitted: "approval-document-not-submitted",
+  approvalDocumentActionForbidden: "approval-document-action-forbidden",
+  approvalDocumentStepNotActionable: "approval-document-step-not-actionable",
+  approvalDocumentTransitionInvalid: "approval-document-transition-invalid",
+  approvalDocumentNotApproved: "approval-document-not-approved",
+  apiKeyRequestInvalid: "api-key-request-invalid",
+  credentialAlreadyOwned: "credential-already-owned",
+  apiKeyAlreadyRegistered: "api-key-already-registered",
+  apiKeyRegistrationForbidden: "api-key-registration-forbidden",
+  internalCredentialRegistrationFailed:
+    "internal-credential-registration-failed",
+  serviceSlugExists: "service-slug-exists",
+  serviceNotFound: "service-not-found",
+  endpointServiceInvalid: "endpoint-service-invalid",
+  endpointExists: "endpoint-exists",
+  endpointNotFound: "endpoint-not-found",
+  endpointSyncForbidden: "endpoint-sync-forbidden",
+  uiResourceImportForbidden: "ui-resource-import-forbidden",
+  uiResourceDeleteForbidden: "ui-resource-delete-forbidden",
+  uiResourceStatusForbidden: "ui-resource-status-forbidden",
+  namespaceOperationForbidden: "namespace-operation-forbidden",
+  namespaceKeyExists: "namespace-key-exists",
+  namespaceNameExists: "namespace-name-exists",
+  namespaceNotFound: "namespace-not-found",
+  uiResourceNotFound: "ui-resource-not-found",
+  uiResourceNamespaceMismatch: "ui-resource-namespace-mismatch",
+  uiResourceParentNotFound: "ui-resource-parent-not-found",
+} as const
+
+export const apiResponseErrorCodes = {
+  invalidJson: "invalid-json",
+  invalidInput: backofficeErrorCodes.invalidInput,
+} as const
+
 export type BackofficeErrorCode =
-  | "invalid-input"
-  | "organization-not-found"
-  | "user-email-exists"
-  | "user-nickname-exists"
-  | "user-not-found"
-  | "role-name-exists"
-  | "role-not-found"
-  | "group-name-exists"
-  | "group-not-found"
-  | "role-in-use"
-  | "group-in-use"
-  | "policy-name-exists"
-  | "policy-operation-forbidden"
-  | "policy-not-found"
-  | "policy-assignment-not-found"
-  | "policy-assignment-forbidden"
-  | "access-policy-already-assigned"
-  | "protected-relationship"
-  | "approval-line-not-found"
-  | "approval-line-ambiguous"
-  | "approval-reference-mismatch"
-  | "approval-document-not-found"
-  | "notification-not-found"
-  | "notification-operation-forbidden"
-  | "approval-document-not-submitted"
-  | "approval-document-not-approved"
-  | "api-key-request-invalid"
-  | "credential-already-owned"
-  | "api-key-already-registered"
-  | "api-key-registration-forbidden"
-  | "internal-credential-registration-failed"
-  | "service-code-exists"
-  | "service-not-found"
-  | "endpoint-service-invalid"
-  | "endpoint-exists"
-  | "endpoint-not-found"
-  | "ui-resource-import-forbidden"
-  | "ui-resource-delete-forbidden"
-  | "ui-resource-status-forbidden"
-  | "ui-namespace-operation-forbidden"
-  | "ui-namespace-key-exists"
-  | "ui-namespace-name-exists"
-  | "ui-namespace-not-found"
-  | "ui-resource-not-found"
-  | "ui-resource-namespace-mismatch"
-  | "ui-resource-parent-not-found"
+  (typeof backofficeErrorCodes)[keyof typeof backofficeErrorCodes]
 
 export type CommandResult<Entity> =
   { ok: true; value: Entity } | { ok: false; error: BackofficeErrorCode }

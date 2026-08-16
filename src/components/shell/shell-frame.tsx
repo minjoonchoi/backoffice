@@ -2,9 +2,12 @@
 
 import {
   Building2,
+  AppWindow,
   ChevronRight,
   FilePlus2,
   GitBranch,
+  GripVertical,
+  History,
   House,
   KeyRound,
   PanelsTopLeft,
@@ -16,7 +19,6 @@ import {
   ShieldX,
   SquareDashedMousePointer,
   Users,
-  UserRoundCog,
   X,
   type LucideIcon,
 } from "lucide-react"
@@ -68,7 +70,7 @@ export type ShellLabels = {
   users: string
   organizations: string
   roles: string
-  groups: string
+  applications: string
   namespaces: string
   approvalLines: string
   approvalDocuments: string
@@ -76,12 +78,12 @@ export type ShellLabels = {
   serviceEndpoints: string
   apiKeys: string
   uiResources: string
+  auditLogs: string
   sessionAccess: string
   localCurrentUser: string
   localAuthStatus: string
   organizationCount: string
   roleCount: string
-  groupCount: string
   emptyMemberships: string
   accessibleMenuCount: string
   accessDeniedTitle: string
@@ -98,6 +100,7 @@ export type ShellFrameProps = {
 const SIDEBAR_MIN_WIDTH = 72
 const SIDEBAR_DEFAULT_WIDTH = 256
 const SIDEBAR_MAX_WIDTH = 320
+const SIDEBAR_TEXT_MIN_WIDTH = 192
 
 type ShellFrameStyle = CSSProperties & {
   "--sidebar-width": string
@@ -156,6 +159,7 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
   const [resizingSidebar, setResizingSidebar] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const collapsed = sidebarWidth === SIDEBAR_MIN_WIDTH
+  const iconOnly = sidebarWidth < SIDEBAR_TEXT_MIN_WIDTH
   const shellStyle: ShellFrameStyle = {
     "--sidebar-width": `${String(sidebarWidth)}px`,
   }
@@ -166,14 +170,14 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
       Math.max(SIDEBAR_MIN_WIDTH, nextWidth),
     )
     setSidebarWidth(width)
-    if (width > SIDEBAR_MIN_WIDTH) setExpandedSidebarWidth(width)
+    if (width >= SIDEBAR_TEXT_MIN_WIDTH) setExpandedSidebarWidth(width)
   }
   const menuLabels: Record<MenuKey, string> = {
     home: labels.home,
     users: labels.users,
     organizations: labels.organizations,
     roles: labels.roles,
-    groups: labels.groups,
+    applications: labels.applications,
     namespaces: labels.namespaces,
     approvalLines: labels.approvalLines,
     approvalDocuments: labels.approvalDocuments,
@@ -181,13 +185,14 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
     serviceEndpoints: labels.serviceEndpoints,
     apiKeys: labels.apiKeys,
     uiResources: labels.uiResources,
+    auditLogs: labels.auditLogs,
   }
   const menuIcons: Record<MenuKey, LucideIcon> = {
     home: House,
     users: Users,
     organizations: Building2,
     roles: ShieldCheck,
-    groups: UserRoundCog,
+    applications: AppWindow,
     namespaces: PanelsTopLeft,
     approvalLines: GitBranch,
     approvalDocuments: FilePlus2,
@@ -195,6 +200,7 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
     serviceEndpoints: Network,
     apiKeys: KeyRound,
     uiResources: SquareDashedMousePointer,
+    auditLogs: History,
   }
   const sectionLabels: Record<Exclude<MenuSection, "common">, string> = {
     directory: labels.directory,
@@ -279,11 +285,16 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
               setMobileOpen(false)
             }}
           >
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-semibold text-primary-foreground">
+            <span
+              className={cn(
+                "flex shrink-0 items-center justify-center rounded-lg bg-primary font-semibold text-primary-foreground",
+                iconOnly ? "size-9 text-sm" : "size-7 text-xs",
+              )}
+            >
               B
             </span>
             <span
-              className={cn("truncate font-semibold", collapsed && "lg:hidden")}
+              className={cn("truncate font-semibold", iconOnly && "lg:hidden")}
             >
               Backoffice
             </span>
@@ -316,22 +327,29 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
                   <Link
                     key={item.id}
                     href={item.href}
+                    title={iconOnly ? menuLabels[item.id] : undefined}
                     aria-current={selected ? "page" : undefined}
                     className={cn(
                       "flex h-9 items-center gap-3 overflow-hidden rounded-lg px-3 text-sm font-medium outline-none hover:bg-control-hover focus-visible:ring-3 focus-visible:ring-ring/50",
                       selected &&
                         "bg-brand-weak text-brand-weak-foreground hover:bg-brand-weak",
-                      collapsed && "lg:justify-center lg:px-0",
+                      iconOnly && "lg:h-11 lg:justify-center lg:px-0",
                     )}
                     onClick={() => {
                       setMobileOpen(false)
                     }}
                   >
-                    <Icon className="size-4 shrink-0" aria-hidden />
+                    <Icon
+                      className={cn(
+                        "shrink-0",
+                        iconOnly ? "size-5.5" : "size-4",
+                      )}
+                      aria-hidden
+                    />
                     <span
                       className={cn(
                         "whitespace-nowrap",
-                        collapsed && "lg:sr-only",
+                        iconOnly && "lg:sr-only",
                       )}
                     >
                       {menuLabels[item.id]}
@@ -346,7 +364,7 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
               <p
                 className={cn(
                   "px-3 pb-1 text-[0.6875rem] font-semibold tracking-[0.08em] text-text-disabled uppercase",
-                  collapsed && "lg:sr-only",
+                  iconOnly && "lg:sr-only",
                 )}
               >
                 {section.label}
@@ -359,22 +377,29 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
                   <Link
                     key={item.href}
                     href={item.href}
+                    title={iconOnly ? menuLabels[item.id] : undefined}
                     aria-current={active ? "page" : undefined}
                     className={cn(
                       "flex h-9 items-center gap-3 overflow-hidden rounded-lg px-3 text-sm font-medium text-text-subtle outline-none hover:bg-control-hover hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
                       active &&
                         "bg-brand-weak text-brand-weak-foreground hover:bg-brand-weak",
-                      collapsed && "lg:justify-center lg:px-0",
+                      iconOnly && "lg:h-11 lg:justify-center lg:px-0",
                     )}
                     onClick={() => {
                       setMobileOpen(false)
                     }}
                   >
-                    <Icon className="size-4 shrink-0" aria-hidden="true" />
+                    <Icon
+                      className={cn(
+                        "shrink-0",
+                        iconOnly ? "size-5.5" : "size-4",
+                      )}
+                      aria-hidden="true"
+                    />
                     <span
                       className={cn(
                         "whitespace-nowrap",
-                        collapsed && "lg:sr-only",
+                        iconOnly && "lg:sr-only",
                       )}
                     >
                       {menuLabels[item.id]}
@@ -394,7 +419,7 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
           aria-valuenow={sidebarWidth}
           aria-valuetext={`${String(sidebarWidth)}px`}
           tabIndex={0}
-          className="absolute inset-y-0 -right-1 z-50 hidden w-2 cursor-col-resize touch-none outline-none after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 hover:after:bg-primary focus-visible:after:w-0.5 focus-visible:after:bg-primary lg:block"
+          className="group absolute inset-y-0 -right-1.5 z-50 hidden w-3 cursor-col-resize touch-none items-center justify-center bg-transparent outline-none after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-border-subtle hover:bg-brand-weak/60 hover:after:bg-primary focus-visible:bg-brand-weak focus-visible:after:w-0.5 focus-visible:after:bg-primary lg:flex"
           onDoubleClick={() => {
             resizeSidebar(SIDEBAR_DEFAULT_WIDTH)
           }}
@@ -430,7 +455,11 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
               resizeSidebar(SIDEBAR_MAX_WIDTH)
             }
           }}
-        />
+        >
+          <span className="relative z-10 flex h-10 w-3 items-center justify-center rounded-full border border-border-subtle bg-background text-text-disabled shadow-sm transition-colors group-hover:border-primary group-hover:text-primary group-focus-visible:border-primary group-focus-visible:text-primary">
+            <GripVertical className="size-3" aria-hidden />
+          </span>
+        </div>
       </aside>
 
       <div className="min-w-0">
@@ -492,7 +521,7 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
             {sessionAccess.currentUser ? (
               <TooltipProvider delay={200}>
                 <div
-                  className="flex items-center gap-1"
+                  className="hidden items-center gap-1 sm:flex"
                   aria-label={labels.localCurrentUser}
                 >
                   <MembershipCount
@@ -507,12 +536,6 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
                     names={sessionAccess.effectiveRoles.map(
                       (role) => role.name,
                     )}
-                    emptyLabel={labels.emptyMemberships}
-                  />
-                  <MembershipCount
-                    icon={UserRoundCog}
-                    label={labels.groupCount}
-                    names={sessionAccess.groupNames}
                     emptyLabel={labels.emptyMemberships}
                   />
                 </div>

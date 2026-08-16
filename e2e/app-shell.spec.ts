@@ -18,9 +18,7 @@ test("renders the localized shell and exposes keyboard navigation", async ({
 
   await expect(page.locator("html")).toHaveAttribute("lang", "ko")
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("업무 홈")
-  await expect(
-    page.getByRole("heading", { name: "내 업무 현황" }),
-  ).toBeVisible()
+  await expect(page.getByRole("heading", { name: "보유 정책" })).toBeVisible()
   await expect(page.getByRole("navigation", { name: "홈" })).toBeVisible()
   await expect(page.getByRole("link", { name: "정책" })).toBeVisible()
   await expect(page.getByRole("link", { name: "자격증명" })).toBeVisible()

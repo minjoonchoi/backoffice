@@ -7,10 +7,12 @@ import {
   uiResourceKeys,
   uiResourceManifest,
 } from "@/config/menu-registry"
-import { accessPolicyInputSchema } from "@/features/access-policies/model"
+import {
+  accessPolicyAssignmentTargetSchema,
+  accessPolicyInputSchema,
+} from "@/features/access-policies/model"
 import { approvalLineInputSchema } from "@/features/request-templates/model"
 import {
-  groupInputSchema,
   organizationInputSchema,
   roleInputSchema,
   userInputSchema,
@@ -41,7 +43,7 @@ describe("backoffice input schemas", () => {
       menuDefinitions.find((menu) => menu.id === "serviceEndpoints")?.href,
     ).toBe("/service-endpoints")
     expect(menuDefinitions.find((menu) => menu.id === "apiKeys")?.href).toBe(
-      "/api-keys",
+      "/credentials",
     )
     expect(menuDefinitions.find((menu) => menu.id === "apiKeys")?.section).toBe(
       "common",
@@ -56,7 +58,7 @@ describe("backoffice input schemas", () => {
       menuDefinitions
         .filter((menu) => menu.section === "directory")
         .map((menu) => menu.id),
-    ).toEqual(["users", "organizations", "roles", "groups"])
+    ).toEqual(["users", "organizations", "roles", "applications"])
     expect(
       menuDefinitions
         .filter((menu) => menu.section === "serviceCatalog")
@@ -174,18 +176,6 @@ describe("backoffice input schemas", () => {
     ).toBe(false)
   })
 
-  it("validates group names and descriptions", () => {
-    expect(
-      groupInputSchema.safeParse({
-        name: "조직장 그룹",
-        description: "조직장을 자동으로 동기화합니다.",
-      }).success,
-    ).toBe(true)
-    expect(
-      groupInputSchema.safeParse({ name: "A", description: "그룹" }).success,
-    ).toBe(false)
-  })
-
   it("requires a unique resource set when creating an access policy", () => {
     expect(
       accessPolicyInputSchema.safeParse({
@@ -220,11 +210,10 @@ describe("backoffice input schemas", () => {
     expect(
       accessPolicyInputSchema.safeParse({
         name: "UI 리소스 동기화 허용",
-        description: "동기화 기능에 필요한 서로 다른 유형의 리소스를 묶습니다.",
+        description: "UI 기능과 호출 API를 하나의 정책으로 묶습니다.",
         type: "access-grant",
         effect: "allow",
         resources: [
-          { type: "ui-namespace", id: userId },
           { type: "ui-resource", id: organizationId },
           {
             type: "endpoint",
@@ -233,6 +222,18 @@ describe("backoffice input schemas", () => {
         ],
       }).success,
     ).toBe(true)
+    expect(
+      accessPolicyInputSchema.safeParse({
+        name: "잘못된 네임스페이스 정책",
+        description: "네임스페이스는 정책 리소스로 사용할 수 없습니다.",
+        type: "access-grant",
+        effect: "allow",
+        resources: [{ type: "namespace", id: organizationId }],
+      }).success,
+    ).toBe(false)
+    expect(accessPolicyAssignmentTargetSchema.safeParse("group").success).toBe(
+      false,
+    )
   })
 
   it("accepts fixed, dynamic, and parallel request-template steps", () => {
@@ -435,7 +436,7 @@ describe("backoffice input schemas", () => {
     expect(
       serviceInputSchema.safeParse({
         name: "파트너 API",
-        code: "partner-api",
+        slug: "partner-api",
         host: "https://partner.example.com",
         type: "internal",
         ownerOrganizationId: organizationId,
@@ -445,7 +446,7 @@ describe("backoffice input schemas", () => {
     expect(
       serviceInputSchema.safeParse({
         name: "파트너 API",
-        code: "partner-api",
+        slug: "partner-api",
         host: "https://partner.example.com/v1",
         type: "internal",
         ownerOrganizationId: organizationId,
@@ -455,7 +456,7 @@ describe("backoffice input schemas", () => {
     expect(
       serviceInputSchema.safeParse({
         name: "외부 협업 도구",
-        code: "collaboration-tool",
+        slug: "collaboration-tool",
         host: "https://collaboration.example.com",
         type: "external",
         ownerOrganizationId: organizationId,
@@ -465,7 +466,7 @@ describe("backoffice input schemas", () => {
     expect(
       serviceInputSchema.safeParse({
         name: "과거 SaaS 유형",
-        code: "legacy-saas",
+        slug: "legacy-saas",
         host: "https://legacy.example.com",
         type: "saas",
         ownerOrganizationId: organizationId,

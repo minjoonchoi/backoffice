@@ -1,22 +1,29 @@
+import { accessPolicyAssignmentTargets } from "@/features/access-policies/model"
+import { accessPolicyEffects } from "@/features/access-policies/model"
 import type { BackofficeState } from "@/application/state/model"
 import type {
   AccessPolicy,
-  AccessPolicyInput,
   AccessPolicyResource,
   AccessPolicyAssignmentTarget,
+  AccessPolicyValue,
 } from "@/features/access-policies/model"
 import { resolveAuthorizationSubject } from "@/auth/authorization-subject"
+import { isAccessPolicyEffective } from "@/features/access-policies/access-policy-status"
 
 type AccessPolicyAssignmentState = Pick<
   BackofficeState,
-  "accessPolicies" | "accessPolicyAssignments" | "groups" | "roles" | "users"
+  "accessPolicies" | "accessPolicyAssignments" | "roles" | "users"
 >
 
 export type EffectiveAccessPolicyPath = Readonly<
-  | { type: "user"; targetId: string }
-  | { type: "organization"; targetId: string }
-  | { type: "role"; targetId: string; viaOrganizationId: string | null }
-  | { type: "group"; targetId: string }
+  | { type: "user"; targetId: string; expiresAt: string | null }
+  | { type: "organization"; targetId: string; expiresAt: string | null }
+  | {
+      type: "role"
+      targetId: string
+      viaOrganizationId: string | null
+      expiresAt: string | null
+    }
 >
 
 export type EffectiveAccessPolicyGrant = Readonly<{
@@ -25,7 +32,12 @@ export type EffectiveAccessPolicyGrant = Readonly<{
 }>
 
 export type AccessPolicyUpdateImpact = Readonly<{
-  affectedUserIds: readonly string[]
+  permissionChanges: readonly Readonly<{
+    userId: string
+    gainedResources: readonly AccessPolicyResource[]
+    lostResources: readonly AccessPolicyResource[]
+  }>[]
+  notificationRecipientUserIds: readonly string[]
   assignmentCounts: Readonly<Record<AccessPolicyAssignmentTarget, number>>
   addedResources: readonly AccessPolicyResource[]
   removedResources: readonly AccessPolicyResource[]
@@ -34,32 +46,59 @@ export type AccessPolicyUpdateImpact = Readonly<{
   effectChanged: boolean
 }>
 
+export function isAccessPolicyAssignmentEffective(
+  assignment: Pick<
+    AccessPolicyAssignmentState["accessPolicyAssignments"][number],
+    "expiresAt"
+  >,
+  now = new Date(),
+) {
+  return (
+    assignment.expiresAt === null ||
+    new Date(assignment.expiresAt).getTime() > now.getTime()
+  )
+}
+
 export function resolveEffectiveAccessPolicyGrants(
   state: AccessPolicyAssignmentState,
   userId: string,
+  now = new Date(),
 ): readonly EffectiveAccessPolicyGrant[] {
   const subject = resolveAuthorizationSubject(state, userId)
   if (!subject) return []
 
   return state.accessPolicies
-    .filter((policy) => policy.status === "active")
+    .filter((policy) => isAccessPolicyEffective(policy))
     .flatMap((policy): EffectiveAccessPolicyGrant[] => {
       const paths = state.accessPolicyAssignments
-        .filter((assignment) => assignment.accessPolicyId === policy.id)
+        .filter(
+          (assignment) =>
+            assignment.accessPolicyId === policy.id &&
+            isAccessPolicyAssignmentEffective(assignment, now),
+        )
         .flatMap((assignment): EffectiveAccessPolicyPath[] => {
-          if (assignment.targetType === "user") {
+          if (assignment.targetType === accessPolicyAssignmentTargets.user) {
             return assignment.targetId === subject.user.id
-              ? [{ type: "user", targetId: assignment.targetId }]
+              ? [
+                  {
+                    type: "user",
+                    targetId: assignment.targetId,
+                    expiresAt: assignment.expiresAt,
+                  },
+                ]
               : []
           }
-          if (assignment.targetType === "organization") {
+          if (
+            assignment.targetType === accessPolicyAssignmentTargets.organization
+          ) {
             return subject.organizationIds.has(assignment.targetId)
-              ? [{ type: "organization", targetId: assignment.targetId }]
-              : []
-          }
-          if (assignment.targetType === "group") {
-            return subject.groupIds.has(assignment.targetId)
-              ? [{ type: "group", targetId: assignment.targetId }]
+              ? [
+                  {
+                    type: "organization",
+                    targetId: assignment.targetId,
+                    expiresAt: assignment.expiresAt,
+                  },
+                ]
               : []
           }
           const role = state.roles.find(
@@ -72,6 +111,7 @@ export function resolveEffectiveAccessPolicyGrants(
               type: "role",
               targetId: role.id,
               viaOrganizationId: null,
+              expiresAt: assignment.expiresAt,
             })
           }
           for (const organizationId of role.organizationIds) {
@@ -80,6 +120,7 @@ export function resolveEffectiveAccessPolicyGrants(
                 type: "role",
                 targetId: role.id,
                 viaOrganizationId: organizationId,
+                expiresAt: assignment.expiresAt,
               })
             }
           }
@@ -116,7 +157,7 @@ export function resolveAccessPolicyAssignmentAffectedUserIds(
 export function resolveAccessPolicyUpdateImpact(
   state: AccessPolicyAssignmentState,
   policy: AccessPolicy,
-  input: AccessPolicyInput,
+  input: AccessPolicyValue,
 ): AccessPolicyUpdateImpact {
   const assignments = state.accessPolicyAssignments.filter(
     (assignment) => assignment.accessPolicyId === policy.id,
@@ -125,18 +166,74 @@ export function resolveAccessPolicyUpdateImpact(
     user: 0,
     organization: 0,
     role: 0,
-    group: 0,
+    application: 0,
   }
   for (const assignment of assignments) {
     assignmentCounts[assignment.targetType] += 1
   }
+  const notificationRecipientUserIds = state.users.flatMap((user) => {
+    const subject = resolveAuthorizationSubject(state, user.id)
+    if (!subject) return []
+    const receivesPolicy = assignments.some((assignment) =>
+      assignment.targetType === accessPolicyAssignmentTargets.user
+        ? assignment.targetId === subject.user.id
+        : assignment.targetType === accessPolicyAssignmentTargets.organization
+          ? subject.organizationIds.has(assignment.targetId)
+          : assignment.targetType === accessPolicyAssignmentTargets.role
+            ? subject.roleIds.has(assignment.targetId)
+            : false,
+    )
+    return receivesPolicy ? [user.id] : []
+  })
+  const comparedResources = [
+    ...policy.resources,
+    ...input.resources.filter(
+      (resource) =>
+        !policy.resources.some((candidate) =>
+          matchesResource(candidate, resource),
+        ),
+    ),
+  ]
+  const nextPolicy: AccessPolicy = {
+    ...policy,
+    ...input,
+    name: input.name.trim(),
+    description: input.description.trim(),
+  }
+  const nextState: AccessPolicyAssignmentState = {
+    ...state,
+    accessPolicies: state.accessPolicies.map((candidate) =>
+      candidate.id === policy.id ? nextPolicy : candidate,
+    ),
+  }
+  const now = new Date()
+  const permissionChanges = notificationRecipientUserIds.flatMap((userId) => {
+    const gainedResources: AccessPolicyResource[] = []
+    const lostResources: AccessPolicyResource[] = []
+    for (const resource of comparedResources) {
+      const allowedBefore = hasEffectiveAccessPolicyResource(
+        state,
+        userId,
+        resource,
+        now,
+      )
+      const allowedAfter = hasEffectiveAccessPolicyResource(
+        nextState,
+        userId,
+        resource,
+        now,
+      )
+      if (!allowedBefore && allowedAfter) gainedResources.push(resource)
+      if (allowedBefore && !allowedAfter) lostResources.push(resource)
+    }
+    return gainedResources.length > 0 || lostResources.length > 0
+      ? [{ userId, gainedResources, lostResources }]
+      : []
+  })
 
   return {
-    affectedUserIds: state.users.flatMap((user) =>
-      resolveAssignedAccessPolicyIds(state, user.id).includes(policy.id)
-        ? [user.id]
-        : [],
-    ),
+    permissionChanges,
+    notificationRecipientUserIds,
     assignmentCounts,
     addedResources: input.resources.filter(
       (resource) =>
@@ -159,12 +256,13 @@ export function resolveAccessPolicyUpdateImpact(
 export function resolveAssignedAccessPolicyIds(
   state: AccessPolicyAssignmentState,
   userId: string,
+  now = new Date(),
 ): readonly string[] {
   const subject = resolveAuthorizationSubject(state, userId)
   if (!subject) return []
   const activePolicyIds = new Set(
     state.accessPolicies
-      .filter((policy) => policy.status === "active")
+      .filter((policy) => isAccessPolicyEffective(policy))
       .map((policy) => policy.id),
   )
 
@@ -174,13 +272,15 @@ export function resolveAssignedAccessPolicyIds(
         .filter(
           (assignment) =>
             activePolicyIds.has(assignment.accessPolicyId) &&
-            (assignment.targetType === "user"
+            isAccessPolicyAssignmentEffective(assignment, now) &&
+            (assignment.targetType === accessPolicyAssignmentTargets.user
               ? assignment.targetId === subject.user.id
-              : assignment.targetType === "organization"
+              : assignment.targetType ===
+                  accessPolicyAssignmentTargets.organization
                 ? subject.organizationIds.has(assignment.targetId)
-                : assignment.targetType === "role"
+                : assignment.targetType === accessPolicyAssignmentTargets.role
                   ? subject.roleIds.has(assignment.targetId)
-                  : subject.groupIds.has(assignment.targetId)),
+                  : false),
         )
         .map((assignment) => assignment.accessPolicyId),
     ),
@@ -198,21 +298,26 @@ export function hasEffectiveAccessPolicyResource(
   state: AccessPolicyAssignmentState,
   userId: string,
   resource: AccessPolicyResource,
+  now = new Date(),
 ) {
   const assignedPolicyIds = new Set(
-    resolveAssignedAccessPolicyIds(state, userId),
+    resolveAssignedAccessPolicyIds(state, userId, now),
   )
   const matchingPolicies = state.accessPolicies.filter(
     (policy) =>
-      policy.status === "active" &&
+      isAccessPolicyEffective(policy) &&
       assignedPolicyIds.has(policy.id) &&
       policy.resources.some((candidate) =>
         matchesResource(candidate, resource),
       ),
   )
   return (
-    matchingPolicies.some((policy) => policy.effect === "allow") &&
-    !matchingPolicies.some((policy) => policy.effect === "deny")
+    matchingPolicies.some(
+      (policy) => policy.effect === accessPolicyEffects.allow,
+    ) &&
+    !matchingPolicies.some(
+      (policy) => policy.effect === accessPolicyEffects.deny,
+    )
   )
 }
 
@@ -226,7 +331,7 @@ export function resolveMissingAccessPolicyResources(
   )
   const assignedPolicies = state.accessPolicies.filter(
     (candidate) =>
-      candidate.status === "active" && assignedPolicyIds.has(candidate.id),
+      isAccessPolicyEffective(candidate) && assignedPolicyIds.has(candidate.id),
   )
 
   return policy.resources.filter((resource) => {
@@ -235,12 +340,18 @@ export function resolveMissingAccessPolicyResources(
         matchesResource(candidateResource, resource),
       ),
     )
-    if (policy.effect === "deny") {
-      return !matchingPolicies.some((candidate) => candidate.effect === "deny")
+    if (policy.effect === accessPolicyEffects.deny) {
+      return !matchingPolicies.some(
+        (candidate) => candidate.effect === accessPolicyEffects.deny,
+      )
     }
     return (
-      !matchingPolicies.some((candidate) => candidate.effect === "allow") ||
-      matchingPolicies.some((candidate) => candidate.effect === "deny")
+      !matchingPolicies.some(
+        (candidate) => candidate.effect === accessPolicyEffects.allow,
+      ) ||
+      matchingPolicies.some(
+        (candidate) => candidate.effect === accessPolicyEffects.deny,
+      )
     )
   })
 }

@@ -10,9 +10,8 @@ type AccessState = Pick<
   BackofficeState,
   | "accessPolicies"
   | "accessPolicyAssignments"
-  | "groups"
   | "roles"
-  | "uiNamespaces"
+  | "namespaces"
   | "uiResources"
   | "users"
 >

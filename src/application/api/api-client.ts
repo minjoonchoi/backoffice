@@ -60,6 +60,7 @@ export interface BackofficeApiClient {
 
 export type BackofficeApiClientFactory = (options: {
   initialState: BackofficeState
+  getActorUserId?: () => string | null
 }) => BackofficeApiClient
 
 export type BackofficeSnapshotClient = Pick<BackofficeApiClient, "getSnapshot">

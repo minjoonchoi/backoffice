@@ -1,11 +1,17 @@
+import { approvalAssigneeModeValues } from "@/features/request-templates/model"
+import { approvalTypeValues } from "@/features/request-templates/model"
+import { employmentStatusValues } from "@/features/iam/model"
 import type { RequestTemplateApi } from "@/features/request-templates/api"
-import { entityStatusSchema } from "@/domain/common"
+import { hasUiResourcePolicyAccess } from "@/auth/ui-resource-policy-access"
+import { uiResourceKeys } from "@/config/menu-registry"
+import { entityStatuses, entityStatusSchema } from "@/domain/common"
 import type { BackofficeStateUpdater } from "@/application/api/local-state"
 import type { BackofficeState } from "@/application/state/model"
 import {
   approvalLineInputSchema,
   type ApprovalLine,
   type ApprovalLineInput,
+  type ApprovalLineRevision,
 } from "@/features/request-templates/model"
 
 function referencesMatch(
@@ -13,13 +19,14 @@ function referencesMatch(
   state: Pick<BackofficeState, "organizations" | "users">,
 ) {
   return input.steps.every((step) => {
-    if (step.assigneeMode === "fixed-user") {
+    if (step.assigneeMode === approvalAssigneeModeValues.fixedUser) {
       return state.users.some(
         (user) =>
-          user.id === step.userId && user.employmentStatus === "employed",
+          user.id === step.userId &&
+          user.employmentStatus === employmentStatusValues.employed,
       )
     }
-    if (step.assigneeMode === "fixed-organization") {
+    if (step.assigneeMode === approvalAssigneeModeValues.fixedOrganization) {
       return state.organizations.some(
         (organization) => organization.id === step.organizationId,
       )
@@ -32,7 +39,7 @@ function hasRequiredCredentialBindings(
   input: Pick<ApprovalLineInput, "type" | "fields">,
 ) {
   const requiredBindings =
-    input.type === "api-key"
+    input.type === approvalTypeValues.apiKey
       ? [
           "service-id",
           "request-organization-id",
@@ -41,14 +48,14 @@ function hasRequiredCredentialBindings(
           "aws-secret-key",
           "content",
         ]
-      : input.type === "api-key-replace"
+      : input.type === approvalTypeValues.apiKeyReplace
         ? [
             "request-organization-id",
             "aws-secret-name",
             "aws-secret-key",
             "content",
           ]
-        : input.type === "api-key-dispose"
+        : input.type === approvalTypeValues.apiKeyDispose
           ? ["request-organization-id", "content"]
           : []
   return requiredBindings.every((binding) =>
@@ -61,8 +68,17 @@ export function createLocalRequestTemplateApi(
   updateState: BackofficeStateUpdater,
 ): RequestTemplateApi {
   return {
-    createApprovalLine: async (input) => {
+    createApprovalLine: async (input, requesterId = "") => {
       await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.approvalLines.list.actions.createRequestTemplate,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       const parsed = approvalLineInputSchema.safeParse(input)
       if (!parsed.success) return { ok: false, error: "invalid-input" }
       if (!hasRequiredCredentialBindings(parsed.data)) {
@@ -73,10 +89,11 @@ export function createLocalRequestTemplateApi(
       }
       const approvalLine: ApprovalLine = {
         id: crypto.randomUUID(),
+        version: 1,
         name: parsed.data.name,
         category: parsed.data.category,
         type: parsed.data.type,
-        status: "active",
+        status: entityStatuses.active,
         createdAt: new Date().toISOString(),
         steps: parsed.data.steps.map((step, index) => ({
           ...step,
@@ -96,8 +113,60 @@ export function createLocalRequestTemplateApi(
       return { ok: true, value: approvalLine }
     },
 
-    updateApprovalLine: async (id, input) => {
+    cloneApprovalLine: async (sourceApprovalLineId, name, requesterId = "") => {
       await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.approvalLines.detail.actions.cloneRequestTemplate,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
+      const source = state.approvalLines.find(
+        (line) => line.id === sourceApprovalLineId,
+      )
+      if (!source) return { ok: false, error: "approval-line-not-found" }
+      const parsed = approvalLineInputSchema.safeParse({ ...source, name })
+      if (!parsed.success) return { ok: false, error: "invalid-input" }
+      const approvalLine: ApprovalLine = {
+        id: crypto.randomUUID(),
+        version: 1,
+        name: parsed.data.name,
+        category: parsed.data.category,
+        type: parsed.data.type,
+        status: entityStatuses.active,
+        createdAt: new Date().toISOString(),
+        steps: parsed.data.steps.map((step, index) => ({
+          ...step,
+          id: crypto.randomUUID(),
+          order: index + 1,
+        })),
+        fields: parsed.data.fields.map((field, index) => ({
+          ...field,
+          id: crypto.randomUUID(),
+          order: index + 1,
+        })),
+      }
+      updateState((current) => ({
+        ...current,
+        approvalLines: [...current.approvalLines, approvalLine],
+      }))
+      return { ok: true, value: approvalLine }
+    },
+
+    updateApprovalLine: async (id, input, requesterId = "") => {
+      await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.approvalLines.detail.actions.updateRequestTemplate,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       const parsed = approvalLineInputSchema.safeParse(input)
       if (!parsed.success) return { ok: false, error: "invalid-input" }
       const existing = state.approvalLines.find((item) => item.id === id)
@@ -110,6 +179,7 @@ export function createLocalRequestTemplateApi(
       }
       const updated: ApprovalLine = {
         ...existing,
+        version: existing.version + 1,
         name: parsed.data.name,
         category: parsed.data.category,
         type: parsed.data.type,
@@ -126,17 +196,34 @@ export function createLocalRequestTemplateApi(
           order: index + 1,
         })),
       }
+      const revision: ApprovalLineRevision = {
+        id: crypto.randomUUID(),
+        approvalLineId: existing.id,
+        version: existing.version,
+        snapshot: structuredClone(existing),
+        createdAt: new Date().toISOString(),
+      }
       updateState((current) => ({
         ...current,
         approvalLines: current.approvalLines.map((item) =>
           item.id === id ? updated : item,
         ),
+        approvalLineRevisions: [...current.approvalLineRevisions, revision],
       }))
       return { ok: true, value: updated }
     },
 
-    setApprovalLineStatus: async (id, status) => {
+    setApprovalLineStatus: async (id, status, requesterId = "") => {
       await Promise.resolve()
+      if (
+        !hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.approvalLines.list.actions.changeRequestTemplateStatus,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       if (!entityStatusSchema.safeParse(status).success) {
         return { ok: false, error: "invalid-input" }
       }

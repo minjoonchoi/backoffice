@@ -25,6 +25,7 @@ export type RequestTargetSelectorProps = {
   options: RequestTargetOption[]
   value: string | null
   onValueChange: (value: string) => void
+  disabled?: boolean
   className?: string
   listClassName?: string
 }
@@ -37,6 +38,7 @@ export function RequestTargetSelector({
   options,
   value,
   onValueChange,
+  disabled = false,
   className,
   listClassName,
 }: RequestTargetSelectorProps) {
@@ -53,11 +55,18 @@ export function RequestTargetSelector({
   }, [options, query])
 
   return (
-    <Field className={className}>
-      <span className="flex min-h-5 items-center">
-        <FieldLabel htmlFor={searchId}>{label}</FieldLabel>
+    <Field
+      disabled={disabled}
+      className={cn("grid-rows-[1.25rem_2.5rem_2rem_minmax(0,1fr)]", className)}
+    >
+      <span className="flex h-5 min-w-0 items-center overflow-hidden">
+        <FieldLabel className="truncate" htmlFor={searchId}>
+          {label}
+        </FieldLabel>
       </span>
-      <FieldDescription className="min-h-10">{description}</FieldDescription>
+      <FieldDescription className="line-clamp-2 h-10 overflow-hidden">
+        {description}
+      </FieldDescription>
       <div className="relative">
         <Search
           aria-hidden="true"
@@ -72,6 +81,7 @@ export function RequestTargetSelector({
           }}
           placeholder={searchLabel}
           className="pl-9"
+          disabled={disabled}
         />
       </div>
       {visibleOptions.length > 0 ? (
@@ -79,6 +89,7 @@ export function RequestTargetSelector({
           aria-label={label}
           value={value ?? ""}
           onValueChange={onValueChange}
+          disabled={disabled}
           className={cn(
             "max-h-56 auto-rows-max content-start overflow-y-auto rounded-lg border p-2",
             listClassName,
@@ -96,6 +107,7 @@ export function RequestTargetSelector({
                   id={optionId}
                   value={option.id}
                   className="mt-0.5"
+                  disabled={disabled}
                 />
                 <span className="min-w-0 overflow-hidden">
                   <span className="block truncate text-sm font-medium">
@@ -114,7 +126,7 @@ export function RequestTargetSelector({
       ) : (
         <p
           className={cn(
-            "rounded-lg border border-dashed px-3 py-6 text-center text-sm text-muted-foreground",
+            "grid place-items-center rounded-lg border border-dashed px-3 py-6 text-center text-sm text-muted-foreground",
             listClassName,
           )}
         >
@@ -143,6 +155,7 @@ export function RequestMultiTargetSelector({
   value,
   selectedCountLabel,
   onValueChange,
+  disabled = false,
   className,
   listClassName,
 }: RequestMultiTargetSelectorProps) {
@@ -160,12 +173,19 @@ export function RequestMultiTargetSelector({
   }, [options, query])
 
   return (
-    <Field className={className}>
-      <span className="flex min-h-5 items-center justify-between gap-3">
-        <FieldLabel htmlFor={searchId}>{label}</FieldLabel>
+    <Field
+      disabled={disabled}
+      className={cn("grid-rows-[1.25rem_2.5rem_2rem_minmax(0,1fr)]", className)}
+    >
+      <span className="flex h-5 min-w-0 items-center justify-between gap-3 overflow-hidden">
+        <FieldLabel className="truncate" htmlFor={searchId}>
+          {label}
+        </FieldLabel>
         <Badge variant="secondary">{selectedCountLabel}</Badge>
       </span>
-      <FieldDescription className="min-h-10">{description}</FieldDescription>
+      <FieldDescription className="line-clamp-2 h-10 overflow-hidden">
+        {description}
+      </FieldDescription>
       <div className="relative">
         <Search
           aria-hidden="true"
@@ -180,6 +200,7 @@ export function RequestMultiTargetSelector({
           }}
           placeholder={searchLabel}
           className="pl-9"
+          disabled={disabled}
         />
       </div>
       {visibleOptions.length > 0 ? (
@@ -201,6 +222,7 @@ export function RequestMultiTargetSelector({
                 <Checkbox
                   id={optionId}
                   checked={selectedIds.has(option.id)}
+                  disabled={disabled}
                   onCheckedChange={(checked) => {
                     const next = new Set(selectedIds)
                     if (checked) next.add(option.id)
@@ -226,7 +248,7 @@ export function RequestMultiTargetSelector({
       ) : (
         <p
           className={cn(
-            "rounded-lg border border-dashed px-3 py-6 text-center text-sm text-muted-foreground",
+            "grid place-items-center rounded-lg border border-dashed px-3 py-6 text-center text-sm text-muted-foreground",
             listClassName,
           )}
         >

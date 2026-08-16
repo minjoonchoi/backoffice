@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -17,6 +18,7 @@ import { resolveAssignedAccessPolicyIds } from "@/features/access-policies/acces
 import type { BackofficeUser, Role } from "@/features/iam/model"
 import { useBackoffice } from "@/application/state/provider"
 import { resolveOwnedCredentialIds } from "@/features/credentials/credential-ownership"
+import { useAuditActor } from "@/features/audit/audit-actor-provider"
 
 export type SessionUserOption = Readonly<{
   id: string
@@ -30,7 +32,6 @@ type SessionAccessContextValue = Readonly<{
   userOptions: readonly SessionUserOption[]
   organizationNames: readonly string[]
   effectiveRoles: readonly Role[]
-  groupNames: readonly string[]
   accessibleMenuIds: readonly MenuKey[]
   accessibleUiResourceKeys: readonly string[]
   assignedAccessPolicyIds: readonly string[]
@@ -47,7 +48,6 @@ const unavailableSessionAccess: SessionAccessContextValue = {
   userOptions: [],
   organizationNames: [],
   effectiveRoles: [],
-  groupNames: [],
   accessibleMenuIds: [],
   accessibleUiResourceKeys: [],
   assignedAccessPolicyIds: [],
@@ -71,6 +71,7 @@ export function SessionAccessProvider({
   initialUserId?: string
 }) {
   const backoffice = useBackoffice()
+  const { setActorUserId } = useAuditActor()
   const [localLoginUserIds] = useState(
     () => new Set(backoffice.users.map((user) => user.id)),
   )
@@ -78,6 +79,9 @@ export function SessionAccessProvider({
   const currentUser = localLoginUserIds.has(currentUserId ?? "")
     ? (backoffice.users.find((user) => user.id === currentUserId) ?? null)
     : null
+  useEffect(() => {
+    setActorUserId(currentUser?.id ?? null)
+  }, [currentUser?.id, setActorUserId])
   const uiResourceAccess = useMemo(
     () =>
       currentUser
@@ -141,15 +145,6 @@ export function SessionAccessProvider({
         : [],
     [currentUser, backoffice.organizations],
   )
-  const groupNames = useMemo(
-    () =>
-      currentUser
-        ? backoffice.groups
-            .filter((group) => group.userIds.includes(currentUser.id))
-            .map((group) => group.name)
-        : [],
-    [currentUser, backoffice.groups],
-  )
   const userOptions = useMemo(
     () =>
       localSwitchingEnabled
@@ -183,10 +178,16 @@ export function SessionAccessProvider({
       ) {
         return false
       }
+      setActorUserId(parsed.data)
       setCurrentUserId(parsed.data)
       return true
     },
-    [localSwitchingEnabled, backoffice.users, localLoginUserIds],
+    [
+      localSwitchingEnabled,
+      backoffice.users,
+      localLoginUserIds,
+      setActorUserId,
+    ],
   )
   const value = useMemo<SessionAccessContextValue>(
     () => ({
@@ -195,7 +196,6 @@ export function SessionAccessProvider({
       userOptions,
       organizationNames,
       effectiveRoles,
-      groupNames,
       accessibleMenuIds,
       accessibleUiResourceKeys: uiResourceAccess.resourceKeys,
       assignedAccessPolicyIds,
@@ -211,7 +211,6 @@ export function SessionAccessProvider({
       currentUser,
       effectiveRoles,
       localSwitchingEnabled,
-      groupNames,
       organizationNames,
       ownedCredentialIds,
       ownedCredentialServiceIds,

@@ -7,11 +7,9 @@ export const backofficeSystemReferencesSchema = z.object({
     iamOperator: z.uuid(),
     generalUser: z.uuid(),
     uiResourceManager: z.uuid(),
+    serviceOperator: z.uuid(),
   }),
-  groupIds: z.object({
-    organizationLeader: z.uuid(),
-  }),
-  uiNamespaceIds: z.object({
+  namespaceIds: z.object({
     backoffice: z.uuid(),
   }),
   serviceEndpointIds: z.object({
@@ -27,7 +25,10 @@ export function isSystemManagedRole(
   references: BackofficeSystemReferences,
   roleId: string,
 ): boolean {
-  return roleId === references.roleIds.generalUser
+  return (
+    roleId === references.roleIds.generalUser ||
+    roleId === references.roleIds.serviceOperator
+  )
 }
 
 export function isSystemRole(
@@ -35,18 +36,4 @@ export function isSystemRole(
   roleId: string,
 ): boolean {
   return Object.values(references.roleIds).includes(roleId)
-}
-
-export function isSystemManagedGroup(
-  references: BackofficeSystemReferences,
-  groupId: string,
-): boolean {
-  return groupId === references.groupIds.organizationLeader
-}
-
-export function isSystemGroup(
-  references: BackofficeSystemReferences,
-  groupId: string,
-): boolean {
-  return Object.values(references.groupIds).includes(groupId)
 }

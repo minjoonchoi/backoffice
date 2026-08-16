@@ -6,19 +6,28 @@ import {
   accessPolicyAssignmentTargetSchema,
   accessPolicyEffectSchema,
   accessPolicyInputSchema,
+  accessPolicyManagementTypeSchema,
+  accessPolicyManagementTypes,
+  accessPolicyAssignmentTargets,
+  accessPolicyResourceTypes,
+  approvalAssigneeTypes,
+  approvalDocumentKinds,
   accessPolicyTypeSchema,
   type AccessPolicy,
   type AccessPolicyResource,
 } from "@/features/access-policies/model"
 import {
   approvalLineInputSchema,
+  approvalAssigneeModeValues,
+  approvalTypeValues,
   approvalStepInputSchema,
   approvalTypeSchema,
   requestCategorySchema,
   requestTemplateFieldInputSchema,
 } from "@/features/request-templates/model"
 import {
-  groupInputSchema,
+  applicationInputSchema,
+  employmentStatusValues,
   organizationInputSchema,
   roleInputSchema,
   userInputSchema,
@@ -32,12 +41,14 @@ import {
 import { entityStatusSchema } from "@/domain/common"
 import {
   userNotificationEventSchema,
+  userNotificationTargetTypeValues,
   userNotificationTargetTypeSchema,
   type BackofficeState,
 } from "@/application/state/model"
 import { uiResourceKeySchema } from "@/features/ui-resources/ui-resource-manifest"
 
 const entityIdSchema = z.uuid()
+const fixtureUiResourceKeyType = "ui-resource-key"
 const createdAtSchema = z.iso.datetime()
 const recordShape = {
   id: entityIdSchema,
@@ -48,12 +59,17 @@ const organizationSchema = z
   .object({ ...organizationInputSchema.shape, ...recordShape })
   .strict()
 
+const applicationSchema = z
+  .object({ ...applicationInputSchema.shape, ...recordShape })
+  .strict()
+
 const userSchema = z
   .object({ ...userInputSchema.shape, ...recordShape })
   .strict()
   .refine(
     (user) =>
-      user.employmentStatus === "resigned" || user.organizationIds.length > 0,
+      user.employmentStatus === employmentStatusValues.resigned ||
+      user.organizationIds.length > 0,
     { path: ["organizationIds"] },
   )
 
@@ -63,14 +79,6 @@ const roleSchema = z
     ...recordShape,
     userIds: z.array(entityIdSchema).max(1000),
     organizationIds: z.array(entityIdSchema).max(1000),
-  })
-  .strict()
-
-const groupSchema = z
-  .object({
-    ...groupInputSchema.shape,
-    ...recordShape,
-    userIds: z.array(entityIdSchema).max(1000),
   })
   .strict()
 
@@ -92,6 +100,7 @@ const approvalLineSchema = z
   .object({
     ...recordShape,
     name: z.string().trim().min(2).max(100),
+    version: z.number().int().min(1),
     category: requestCategorySchema,
     type: approvalTypeSchema,
     status: entityStatusSchema,
@@ -104,12 +113,21 @@ const approvalLineSchema = z
   })
 
 const localAccessPolicyResourceSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("endpoint"), id: entityIdSchema }).strict(),
-  z.object({ type: z.literal("ui-namespace"), id: entityIdSchema }).strict(),
-  z.object({ type: z.literal("ui-resource"), id: entityIdSchema }).strict(),
   z
     .object({
-      type: z.literal("ui-resource-key"),
+      type: z.literal(accessPolicyResourceTypes.endpoint),
+      id: entityIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal(accessPolicyResourceTypes.uiResource),
+      id: entityIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal(fixtureUiResourceKeyType),
       key: uiResourceKeySchema,
     })
     .strict(),
@@ -121,6 +139,9 @@ const localAccessPolicySchema = z
     name: z.string().trim().min(2).max(100),
     description: z.string().trim().min(2).max(500),
     type: accessPolicyTypeSchema,
+    managementType: accessPolicyManagementTypeSchema.default(
+      accessPolicyManagementTypes.operatorManaged,
+    ),
     effect: accessPolicyEffectSchema,
     resources: z.array(localAccessPolicyResourceSchema).min(1).max(2000),
     status: entityStatusSchema,
@@ -130,7 +151,7 @@ const localAccessPolicySchema = z
     (policy) =>
       new Set(
         policy.resources.map((resource) =>
-          resource.type === "ui-resource-key"
+          resource.type === fixtureUiResourceKeyType
             ? `${resource.type}:${resource.key}`
             : `${resource.type}:${resource.id}`,
         ),
@@ -144,6 +165,7 @@ const accessPolicyAssignmentSchema = z
     accessPolicyId: entityIdSchema,
     targetType: accessPolicyAssignmentTargetSchema,
     targetId: entityIdSchema,
+    expiresAt: z.iso.datetime().nullable(),
   })
   .strict()
 
@@ -170,10 +192,18 @@ const resolvedApprovalStepBaseShape = {
   ]),
 }
 
-const resolvedApprovalStepSchema = z.discriminatedUnion("assigneeType", [
+const approvalDocumentStepProgressShape = {
+  status: z.enum(["waiting", "pending", "completed", "rejected"]),
+  processedById: entityIdSchema.nullable(),
+  processedAt: z.iso.datetime().nullable(),
+  comment: z.string().max(1000).nullable(),
+}
+
+const approvalDocumentStepSchema = z.discriminatedUnion("assigneeType", [
   z
     .object({
       ...resolvedApprovalStepBaseShape,
+      ...approvalDocumentStepProgressShape,
       assigneeType: z.literal("user"),
       assigneeId: entityIdSchema,
     })
@@ -181,11 +211,31 @@ const resolvedApprovalStepSchema = z.discriminatedUnion("assigneeType", [
   z
     .object({
       ...resolvedApprovalStepBaseShape,
+      ...approvalDocumentStepProgressShape,
       assigneeType: z.literal("organization"),
       assigneeId: entityIdSchema,
     })
     .strict(),
 ])
+
+const approvalDocumentHistoryEventSchema = z
+  .object({
+    ...recordShape,
+    type: z.enum([
+      "draft-saved",
+      "submitted",
+      "approved",
+      "agreed",
+      "referenced",
+      "rejected",
+      "withdrawn",
+      "resubmitted",
+    ]),
+    actorUserId: entityIdSchema,
+    stepId: entityIdSchema.nullable(),
+    comment: z.string().max(1000).nullable(),
+  })
+  .strict()
 
 const approvalDocumentBaseShape = {
   ...recordShape,
@@ -195,8 +245,9 @@ const approvalDocumentBaseShape = {
   approvalLineId: entityIdSchema,
   content: z.string().trim().min(10).max(5000),
   fieldValues: z.array(fieldValueSchema).max(30),
-  status: z.enum(["draft", "submitted", "approved"]),
-  approvalSteps: z.array(resolvedApprovalStepSchema).min(1).max(12),
+  status: z.enum(["draft", "submitted", "approved", "rejected", "withdrawn"]),
+  approvalSteps: z.array(approvalDocumentStepSchema).min(1).max(12),
+  history: z.array(approvalDocumentHistoryEventSchema).min(1).max(1000),
 }
 
 const approvalDocumentSchema = z.union([
@@ -206,6 +257,7 @@ const approvalDocumentSchema = z.union([
       documentKind: z.literal("general"),
       type: z.literal("access-grant"),
       accessPolicyId: entityIdSchema,
+      expiresAt: z.iso.datetime(),
     })
     .strict(),
   z
@@ -220,6 +272,7 @@ const approvalDocumentSchema = z.union([
       ...approvalDocumentBaseShape,
       documentKind: z.literal("api-key-issuance"),
       type: z.literal("api-key"),
+      applicationId: entityIdSchema,
       serviceId: entityIdSchema,
       endpointIds: z
         .array(entityIdSchema)
@@ -276,6 +329,8 @@ const serviceEndpointSchema = z
     name: serviceEndpointInputSchema.shape.name,
     method: httpMethodSchema,
     path: serviceEndpointInputSchema.shape.path,
+    version: serviceEndpointInputSchema.shape.version,
+    lifecycle: serviceEndpointInputSchema.shape.lifecycle,
   })
   .strict()
 
@@ -291,6 +346,8 @@ const apiKeySchema = z
   .object({
     ...recordShape,
     name: z.string().trim().min(2).max(80),
+    applicationId: entityIdSchema,
+    accessPolicyId: entityIdSchema.nullable(),
     serviceId: entityIdSchema,
     endpointIds: z
       .array(entityIdSchema)
@@ -301,6 +358,11 @@ const apiKeySchema = z
     registeredByUserId: entityIdSchema.nullable(),
     awsSecretName: z.string().trim().min(1).max(512),
     awsSecretKey: z.string().trim().min(1).max(128),
+    expiresAt: z.iso.datetime().nullable(),
+    nextRotationAt: z.iso.datetime().nullable(),
+    usageSystemNames: z.array(z.string().trim().min(2).max(100)).max(50),
+    emergencyRevokedAt: z.iso.datetime().nullable(),
+    emergencyRevokeReason: z.string().trim().min(10).max(500).nullable(),
     status: entityStatusSchema,
   })
   .strict()
@@ -310,9 +372,9 @@ const fixtureSchema = z
     version: z.literal(1),
     defaultUserId: entityIdSchema,
     organizations: z.array(organizationSchema).max(1000),
+    applications: z.array(applicationSchema).max(5000),
     users: z.array(userSchema).max(5000),
     roles: z.array(roleSchema).max(1000),
-    groups: z.array(groupSchema).max(1000),
     approvalLines: z.array(approvalLineSchema).max(1000),
     accessPolicies: z.array(localAccessPolicySchema).max(5000),
     accessPolicyAssignments: z.array(accessPolicyAssignmentSchema).max(10000),
@@ -321,6 +383,17 @@ const fixtureSchema = z
     services: z.array(serviceSchema).max(1000),
     serviceEndpoints: z.array(serviceEndpointSchema).max(10000),
     serviceEndpointFields: z.array(serviceEndpointFieldSchema).max(50000),
+    credentialLifecycleSettings: z
+      .object({
+        expirationPeriodDays: z.number().int().min(1).max(3650),
+        rotationIntervalDays: z.number().int().min(1).max(365),
+        updatedAt: z.iso.datetime(),
+        updatedByUserId: entityIdSchema.nullable(),
+      })
+      .refine(
+        (value) => value.rotationIntervalDays < value.expirationPeriodDays,
+        { path: ["rotationIntervalDays"] },
+      ),
     apiKeys: z.array(apiKeySchema).max(10000),
   })
   .strict()
@@ -358,12 +431,12 @@ function resolveLocalAccessPolicies(
   return definitions.map((definition) => {
     const resources: AccessPolicyResource[] = definition.resources.map(
       (resource) => {
-        if (resource.type !== "ui-resource-key") return resource
+        if (resource.type !== fixtureUiResourceKeyType) return resource
         const uiResource = uiResourcesByKey.get(resource.key)
         if (!uiResource) {
           throw new Error(`Fixture UI resource key not found: ${resource.key}`)
         }
-        return { type: "ui-resource", id: uiResource.id }
+        return { type: accessPolicyResourceTypes.uiResource, id: uiResource.id }
       },
     )
     const policy: AccessPolicy = {
@@ -371,6 +444,7 @@ function resolveLocalAccessPolicies(
       name: definition.name,
       description: definition.description,
       type: definition.type,
+      managementType: definition.managementType,
       effect: definition.effect,
       resources,
       status: definition.status,
@@ -406,9 +480,9 @@ function validateFixtureReferences(
 ) {
   const collections = [
     ["organizations", state.organizations],
+    ["applications", state.applications],
     ["users", state.users],
     ["roles", state.roles],
-    ["groups", state.groups],
     ["request templates", state.approvalLines],
     ["access policies", state.accessPolicies],
     ["access policy assignments", state.accessPolicyAssignments],
@@ -418,7 +492,7 @@ function validateFixtureReferences(
     ["service endpoints", state.serviceEndpoints],
     ["service endpoint fields", state.serviceEndpointFields],
     ["API keys", state.apiKeys],
-    ["UI namespaces", state.uiNamespaces],
+    ["namespaces", state.namespaces],
     ["UI resources", state.uiResources],
   ] as const
   for (const [name, records] of collections) assertUniqueIds(name, records)
@@ -435,8 +509,10 @@ function validateFixtureReferences(
     state.organizations.map((organization) => organization.id),
   )
   const userIds = new Set(state.users.map((user) => user.id))
+  const applicationIds = new Set(
+    state.applications.map((application) => application.id),
+  )
   const roleIds = new Set(state.roles.map((role) => role.id))
-  const groupIds = new Set(state.groups.map((group) => group.id))
   const approvalLineIds = new Set(state.approvalLines.map((line) => line.id))
   const accessPolicyIds = new Set(
     state.accessPolicies.map((policy) => policy.id),
@@ -452,10 +528,6 @@ function validateFixtureReferences(
   const uiResourceIds = new Set(
     state.uiResources.map((resource) => resource.id),
   )
-  const uiNamespaceIds = new Set(
-    state.uiNamespaces.map((namespace) => namespace.id),
-  )
-
   assertReference(userIds, defaultUserId, "default user")
   for (const organization of state.organizations) {
     assertReference(userIds, organization.leaderUserId, "organization leader")
@@ -480,6 +552,13 @@ function validateFixtureReferences(
       assertReference(organizationIds, organizationId, "user organization")
     }
   }
+  for (const application of state.applications) {
+    assertReference(
+      organizationIds,
+      application.ownerOrganizationId,
+      "application owner organization",
+    )
+  }
   for (const role of state.roles) {
     for (const userId of role.userIds) {
       assertReference(userIds, userId, "role user")
@@ -488,41 +567,32 @@ function validateFixtureReferences(
       assertReference(organizationIds, organizationId, "role organization")
     }
   }
-  for (const group of state.groups) {
-    for (const userId of group.userIds) {
-      assertReference(userIds, userId, "group user")
-    }
-  }
-  for (const namespace of state.uiNamespaces) {
-    assertReference(
-      roleIds,
-      namespace.administratorRoleId,
-      "UI namespace administrator role",
-    )
+  for (const namespace of state.namespaces) {
+    assertReference(roleIds, namespace.managerRoleId, "namespace manager role")
     assertReference(
       accessPolicyIds,
-      namespace.administratorAccessPolicyId,
-      "UI namespace administrator policy",
+      namespace.managerAccessPolicyId,
+      "namespace manager policy",
     )
     if (
       !state.accessPolicyAssignments.some(
         (assignment) =>
-          assignment.accessPolicyId === namespace.administratorAccessPolicyId &&
-          assignment.targetType === "role" &&
-          assignment.targetId === namespace.administratorRoleId,
+          assignment.accessPolicyId === namespace.managerAccessPolicyId &&
+          assignment.targetType === accessPolicyAssignmentTargets.role &&
+          assignment.targetId === namespace.managerRoleId,
       )
     ) {
       throw new Error(
-        `Fixture UI namespace administrator assignment not found: ${namespace.id}`,
+        `Fixture namespace manager assignment not found: ${namespace.id}`,
       )
     }
   }
   for (const line of state.approvalLines) {
     for (const step of line.steps) {
-      if (step.assigneeMode === "fixed-user") {
+      if (step.assigneeMode === approvalAssigneeModeValues.fixedUser) {
         assertReference(userIds, step.userId, "request template user")
       }
-      if (step.assigneeMode === "fixed-organization") {
+      if (step.assigneeMode === approvalAssigneeModeValues.fixedOrganization) {
         assertReference(
           organizationIds,
           step.organizationId,
@@ -537,10 +607,8 @@ function validateFixtureReferences(
       throw new Error(`Fixture access policy is invalid: ${policy.id}`)
     }
     for (const resource of policy.resources) {
-      if (resource.type === "endpoint") {
+      if (resource.type === accessPolicyResourceTypes.endpoint) {
         assertReference(endpointIds, resource.id, "policy endpoint")
-      } else if (resource.type === "ui-namespace") {
-        assertReference(uiNamespaceIds, resource.id, "policy UI namespace")
       } else {
         assertReference(uiResourceIds, resource.id, "policy UI resource")
       }
@@ -553,13 +621,13 @@ function validateFixtureReferences(
       "assignment policy",
     )
     const targetIds =
-      assignment.targetType === "user"
+      assignment.targetType === accessPolicyAssignmentTargets.user
         ? userIds
-        : assignment.targetType === "organization"
+        : assignment.targetType === accessPolicyAssignmentTargets.organization
           ? organizationIds
-          : assignment.targetType === "role"
+          : assignment.targetType === accessPolicyAssignmentTargets.role
             ? roleIds
-            : groupIds
+            : applicationIds
     assertReference(targetIds, assignment.targetId, "assignment target")
   }
   for (const document of state.approvalDocuments) {
@@ -575,8 +643,8 @@ function validateFixtureReferences(
       "request template",
     )
     if (
-      document.documentKind === "general" &&
-      document.type === "access-grant"
+      document.documentKind === approvalDocumentKinds.general &&
+      document.type === approvalTypeValues.accessGrant
     ) {
       assertReference(
         accessPolicyIds,
@@ -584,7 +652,12 @@ function validateFixtureReferences(
         "request access policy",
       )
     }
-    if (document.documentKind === "api-key-issuance") {
+    if (document.documentKind === approvalDocumentKinds.apiKeyIssuance) {
+      assertReference(
+        applicationIds,
+        document.applicationId,
+        "request application",
+      )
       assertReference(serviceIds, document.serviceId, "request service")
       for (const endpointId of document.endpointIds) {
         assertReference(endpointIds, endpointId, "request endpoint")
@@ -601,23 +674,43 @@ function validateFixtureReferences(
         }
       }
     }
-    if (document.documentKind === "api-key-lifecycle") {
+    if (document.documentKind === approvalDocumentKinds.apiKeyLifecycle) {
       assertReference(apiKeyIds, document.apiKeyId, "request API key")
     }
     for (const step of document.approvalSteps) {
       assertReference(
-        step.assigneeType === "user" ? userIds : organizationIds,
+        step.assigneeType === approvalAssigneeTypes.user
+          ? userIds
+          : organizationIds,
         step.assigneeId,
         "request assignee",
       )
+      if (step.processedById) {
+        assertReference(userIds, step.processedById, "request processor")
+      }
+    }
+    const documentStepIds = new Set(
+      document.approvalSteps.map((step) => step.id),
+    )
+    for (const event of document.history) {
+      assertReference(userIds, event.actorUserId, "request history actor")
+      if (event.stepId && !documentStepIds.has(event.stepId)) {
+        throw new Error(
+          `Fixture request history step is invalid: ${document.id}`,
+        )
+      }
     }
   }
   for (const notification of state.notifications) {
     assertReference(userIds, notification.userId, "notification user")
     assertReference(
-      notification.targetType === "approval-document"
+      notification.targetType ===
+        userNotificationTargetTypeValues.approvalDocument
         ? approvalDocumentIds
-        : accessPolicyIds,
+        : notification.targetType ===
+            userNotificationTargetTypeValues.accessPolicy
+          ? accessPolicyIds
+          : serviceIds,
       notification.targetId,
       "notification target",
     )
@@ -651,6 +744,14 @@ function validateFixtureReferences(
     assertReference(endpointIds, field.endpointId, "endpoint field")
   }
   for (const apiKey of state.apiKeys) {
+    assertReference(applicationIds, apiKey.applicationId, "API key application")
+    if (apiKey.accessPolicyId !== null) {
+      assertReference(
+        accessPolicyIds,
+        apiKey.accessPolicyId,
+        "API key access policy",
+      )
+    }
     assertReference(serviceIds, apiKey.serviceId, "API key service")
     for (const endpointId of apiKey.endpointIds) {
       assertReference(endpointIds, endpointId, "API key endpoint")
@@ -678,6 +779,13 @@ function validateFixtureReferences(
       assertReference(userIds, apiKey.registeredByUserId, "API key registrar")
     }
   }
+  if (state.credentialLifecycleSettings.updatedByUserId) {
+    assertReference(
+      userIds,
+      state.credentialLifecycleSettings.updatedByUserId,
+      "credential lifecycle settings updater",
+    )
+  }
 }
 
 export function loadFixture(source: string): LoadedFixture {
@@ -685,10 +793,11 @@ export function loadFixture(source: string): LoadedFixture {
   const state: BackofficeState = {
     systemReferences: structuredClone(initialBackofficeState.systemReferences),
     organizations: definition.organizations,
+    applications: definition.applications,
     users: definition.users,
     roles: definition.roles,
-    groups: definition.groups,
     approvalLines: definition.approvalLines,
+    approvalLineRevisions: [],
     accessPolicies: [
       ...resolveLocalAccessPolicies(definition.accessPolicies),
       ...structuredClone(initialBackofficeState.accessPolicies),
@@ -702,9 +811,27 @@ export function loadFixture(source: string): LoadedFixture {
     services: definition.services,
     serviceEndpoints: definition.serviceEndpoints,
     serviceEndpointFields: definition.serviceEndpointFields,
+    serviceEndpointRevisions: [],
+    credentialLifecycleSettings: definition.credentialLifecycleSettings,
     apiKeys: definition.apiKeys,
-    uiNamespaces: structuredClone(initialBackofficeState.uiNamespaces),
+    namespaces: structuredClone(initialBackofficeState.namespaces),
     uiResources: structuredClone(initialBackofficeState.uiResources),
+    uiResourceSyncHistories: [
+      {
+        id: "91000000-0000-4000-8000-000000000001",
+        namespaceId:
+          initialBackofficeState.systemReferences.namespaceIds.backoffice,
+        synchronizedAt: "2026-08-11T00:00:00.000Z",
+        synchronizedByUserId: definition.defaultUserId,
+        grantManagerAccess: true,
+        addedCount: initialBackofficeState.uiResources.length,
+        updatedCount: 0,
+        restoredCount: 0,
+        orphanedCount: 0,
+        resources: structuredClone(initialBackofficeState.uiResources),
+      },
+    ],
+    auditEvents: [],
   }
   validateFixtureReferences(state, definition.defaultUserId)
   return { defaultUserId: definition.defaultUserId, state }

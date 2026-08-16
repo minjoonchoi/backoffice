@@ -1,3 +1,4 @@
+import { employmentStatusValues } from "@/features/iam/model"
 import type { BackofficeUser } from "@/features/iam/model"
 
 export function resolveVisibleDirectoryUsers(
@@ -5,5 +6,7 @@ export function resolveVisibleDirectoryUsers(
   canViewDirectory: boolean,
 ): BackofficeUser[] {
   if (canViewDirectory) return [...users]
-  return users.filter((user) => user.employmentStatus !== "resigned")
+  return users.filter(
+    (user) => user.employmentStatus !== employmentStatusValues.resigned,
+  )
 }

@@ -45,16 +45,42 @@ async function createUser(page: Page, nickname: string, email: string) {
   await nicknameSearch.clear()
 }
 
+async function switchSessionUser(page: Page, nickname: string) {
+  await page.getByRole("button", { name: "사용자 메뉴" }).click()
+  await page.getByRole("menuitem", { name: nickname, exact: true }).click()
+}
+
+async function processRequestStages(
+  page: Page,
+  requestRow: Locator,
+  stages: readonly { actor: string; action: "승인" | "합의" | "확인" }[],
+) {
+  await requestRow.getByRole("cell").first().click()
+  await expect(page).toHaveURL(/\/approval-documents\/requests\/[0-9a-f-]+$/)
+  for (const stage of stages) {
+    await switchSessionUser(page, stage.actor)
+    await page.getByRole("button", { name: stage.action, exact: true }).click()
+    const dialog = page.getByRole("dialog")
+    await dialog.getByRole("button", { name: "처리 완료" }).click()
+    await expect(dialog).toBeHidden()
+  }
+  await expect(
+    page.getByText("승인 완료", { exact: true }).first(),
+  ).toBeVisible()
+  await switchSessionUser(page, "David")
+  await page.getByRole("link", { name: "자격증명", exact: true }).click()
+}
+
 test("warns before discarding a changed form dialog and resets its draft", async ({
   page,
 }) => {
-  await page.goto("/groups")
+  await page.goto("/services")
   await waitForHydration(page)
 
-  await page.getByRole("button", { name: "그룹 생성" }).click()
-  let dialog = page.getByRole("dialog", { name: "그룹 생성" })
-  const groupName = dialog.getByRole("textbox", { name: "그룹 이름" })
-  await groupName.fill("임시 운영 그룹")
+  await page.getByRole("button", { name: "서비스 등록" }).click()
+  let dialog = page.getByRole("dialog", { name: "서비스 등록" })
+  const serviceName = dialog.getByRole("textbox", { name: "이름" })
+  await serviceName.fill("임시 서비스")
   await dialog.getByRole("button", { name: "취소" }).click()
 
   let confirmation = page.getByRole("alertdialog")
@@ -64,18 +90,16 @@ test("warns before discarding a changed form dialog and resets its draft", async
     }),
   ).toBeVisible()
   await confirmation.getByRole("button", { name: "계속 작성" }).click()
-  await expect(groupName).toHaveValue("임시 운영 그룹")
+  await expect(serviceName).toHaveValue("임시 서비스")
 
   await dialog.getByRole("button", { name: "취소" }).click()
   confirmation = page.getByRole("alertdialog")
   await confirmation.getByRole("button", { name: "작성 취소" }).click()
   await expect(dialog).toBeHidden()
 
-  await page.getByRole("button", { name: "그룹 생성" }).click()
-  dialog = page.getByRole("dialog", { name: "그룹 생성" })
-  await expect(dialog.getByRole("textbox", { name: "그룹 이름" })).toHaveValue(
-    "",
-  )
+  await page.getByRole("button", { name: "서비스 등록" }).click()
+  dialog = page.getByRole("dialog", { name: "서비스 등록" })
+  await expect(dialog.getByRole("textbox", { name: "이름" })).toHaveValue("")
 })
 
 test("keeps system management last and separates IAM from organization leaders", async ({
@@ -108,7 +132,7 @@ test("keeps system management last and separates IAM from organization leaders",
       .getByText("시스템 관리", { exact: true })
       .locator("..")
       .getByRole("link"),
-  ).toHaveText(["요청 템플릿"])
+  ).toHaveText(["요청 템플릿", "감사"])
 
   const header = page.locator("header")
   const organizationCount = header.getByRole("button", { name: "소속 조직: 1" })
@@ -117,38 +141,22 @@ test("keeps system management last and separates IAM from organization leaders",
     page.getByRole("tooltip", { name: /소속 조직 개발 1팀/ }),
   ).toBeVisible()
 
-  const roleCount = header.getByRole("button", { name: "유효 역할: 3" })
+  const roleCount = header.getByRole("button", { name: "유효 역할: 4" })
   await roleCount.hover()
   await expect(
     page.getByRole("tooltip", { name: /유효 역할 Backoffice 시스템 관리자/ }),
   ).toBeVisible()
 
-  const groupCount = header.getByRole("button", { name: "소속 그룹: 1" })
-  await groupCount.hover()
-  await expect(
-    page.getByRole("tooltip", { name: /소속 그룹 조직장 그룹/ }),
-  ).toBeVisible()
   await page.locator("main").hover()
 
-  await page.getByRole("button", { name: "보유 접근 권한 0개 보기" }).click()
   const permissionTable = page.getByRole("table", {
-    name: "세션 사용자 보유 접근 권한 목록",
+    name: "세션 사용자 보유 정책 목록",
   })
   await expect(permissionTable).toBeVisible()
-  await expect(
-    permissionTable.getByText("요청을 통해 부여된 접근 권한이 없습니다."),
-  ).toBeVisible()
-  await page.keyboard.press("Escape")
-  await page.getByRole("button", { name: "승인 대기 요청 0개 보기" }).click()
-  const requestTable = page
-    .getByRole("dialog", { name: "대기 중인 요청" })
-    .getByRole("table", {
-      name: "승인 대기 요청 목록",
-    })
-  await expect(
-    requestTable.getByText("승인을 기다리는 요청이 없습니다."),
-  ).toBeVisible()
-  await page.keyboard.press("Escape")
+  await expect(permissionTable.getByText("운영 모니터링 허용")).toBeVisible()
+  await expect(permissionTable.getByText("사용자 직접 부여")).toBeVisible()
+  await expect(permissionTable.getByText("조직 · 개발 1팀")).toBeVisible()
+  await expect(page.getByText("승인 대기 요청", { exact: true })).toHaveCount(0)
   await page.getByRole("button", { name: "내 업무 정보" }).click()
   await expect(
     page.getByRole("dialog", { name: "내 업무 정보" }).getByText("개발 1팀"),
@@ -157,30 +165,32 @@ test("keeps system management last and separates IAM from organization leaders",
 
   await page.getByRole("button", { name: "사용자 메뉴" }).click()
   await page.getByRole("menuitem", { name: "Emma" }).click()
-  await expect(page.getByRole("link", { name: "사용자" })).toHaveCount(0)
-  await expect(page.getByRole("link", { name: "조직" })).toHaveCount(0)
-  await expect(page.getByRole("link", { name: "역할" })).toHaveCount(0)
-  await expect(page.getByRole("link", { name: "그룹" })).toHaveCount(0)
+  await expect(
+    page.locator("header").getByRole("button", { name: "유효 역할: 2" }),
+  ).toBeVisible()
+  await expect(navigation.getByRole("link", { name: "사용자" })).toHaveCount(0)
+  await expect(navigation.getByRole("link", { name: "조직" })).toHaveCount(0)
+  await expect(navigation.getByRole("link", { name: "역할" })).toHaveCount(0)
   await expect(navigation.getByText("IAM", { exact: true })).toHaveCount(0)
   await expect(
     navigation.getByText("시스템 관리", { exact: true }),
   ).toHaveCount(0)
 
   await navigation.getByRole("link", { name: "홈", exact: true }).click()
-  await page.getByRole("button", { name: /관련 자격증명 \d+개 보기/ }).click()
   const credentialTable = page.getByRole("table", {
     name: "세션 사용자 관련 자격증명 목록",
   })
   await expect(credentialTable.getByText("local-integration-key")).toBeVisible()
   await expect(credentialTable.getByText("Developer API")).toBeVisible()
   await expect(credentialTable.getByText("개발 2팀")).toBeVisible()
-  await expect(credentialTable.getByText("소속 조직 관리")).toBeVisible()
-  await page.keyboard.press("Escape")
+  await expect(
+    credentialTable.getByText("어플리케이션 소유 조직"),
+  ).toBeVisible()
 
   await page.getByRole("button", { name: "사용자 메뉴" }).click()
   await page.getByRole("menuitem", { name: "Owen" }).click()
   await expect(navigation.getByText("IAM", { exact: true })).toBeVisible()
-  for (const menuName of ["사용자", "조직", "역할", "그룹"]) {
+  for (const menuName of ["사용자", "조직", "역할"]) {
     await expect(
       navigation.getByRole("link", { name: menuName, exact: true }),
     ).toBeVisible()
@@ -204,7 +214,7 @@ test("keeps system management last and separates IAM from organization leaders",
     ).toBeVisible()
   }
   await expect(navigation.getByText("IAM", { exact: true })).toHaveCount(0)
-  for (const menuName of ["사용자", "조직", "역할", "그룹"]) {
+  for (const menuName of ["사용자", "조직", "역할"]) {
     await expect(
       navigation.getByRole("link", { name: menuName, exact: true }),
     ).toHaveCount(0)
@@ -220,9 +230,8 @@ test("keeps system management last and separates IAM from organization leaders",
   await navigation.getByRole("link", { name: "자격증명", exact: true }).click()
   await expect(page.getByText("local-integration-key")).toHaveCount(0)
   await navigation.getByRole("link", { name: "홈", exact: true }).click()
-  await page.getByRole("button", { name: /보유 접근 권한 \d+개 보기/ }).click()
   const grantedAccessTable = page.getByRole("table", {
-    name: "세션 사용자 보유 접근 권한 목록",
+    name: "세션 사용자 보유 정책 목록",
   })
   await expect(
     grantedAccessTable.getByText("운영 모니터링 허용", {
@@ -230,21 +239,16 @@ test("keeps system management last and separates IAM from organization leaders",
     }),
   ).toBeVisible()
   await expect(
-    grantedAccessTable.getByRole("link", { name: "Developer API" }),
+    grantedAccessTable
+      .getByRole("row", { name: /운영 모니터링 허용/ })
+      .getByText("허용", { exact: true }),
   ).toBeVisible()
   await expect(
-    grantedAccessTable.getByRole("link", { name: "Audit API" }),
-  ).toBeVisible()
-  await expect(
-    grantedAccessTable.getByText("허용", { exact: true }),
-  ).toBeVisible()
-  await page.keyboard.press("Escape")
-  await expect(
-    grantedAccessTable.getByText("보안 서비스 접근 요청", { exact: true }),
+    grantedAccessTable.getByText("사용자 직접 부여", { exact: true }),
   ).toBeVisible()
 })
 
-test("marks home notifications as read and opens the related request", async ({
+test("does not expose the post-MVP notification list on home", async ({
   page,
 }) => {
   await page.goto("/")
@@ -252,25 +256,19 @@ test("marks home notifications as read and opens the related request", async ({
   await page.getByRole("button", { name: "사용자 메뉴" }).click()
   await page.getByRole("menuitem", { name: "Charlotte" }).click()
 
-  await expect(page.getByText("읽지 않음 2건", { exact: true })).toBeVisible()
-  await page.getByRole("button", { name: "읽음 처리" }).first().click()
-  await expect(page.getByText("읽지 않음 1건", { exact: true })).toBeVisible()
-
-  await page.getByRole("link", { name: "요청 보기" }).first().click()
-  await expect(page).toHaveURL(
-    /\/approval-documents\/requests\/50000000-0000-4000-8000-000000000002$/,
-  )
-  await expect(
-    page.getByRole("heading", { level: 1, name: "보안 서비스 접근 요청" }),
-  ).toBeVisible()
-  await expect(page.getByText("처리 순서", { exact: true })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "내 알림" })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "읽음 처리" })).toHaveCount(0)
+  await expect(page.getByRole("link", { name: "요청 보기" })).toHaveCount(0)
 })
 
 test("removes list row navigation when its detail view is inactive", async ({
   page,
 }) => {
-  await page.goto("/ui-resources")
+  await page.goto("/")
   await waitForHydration(page)
+  await switchSessionUser(page, "Owen")
+  await page.getByRole("link", { name: "UI 리소스", exact: true }).click()
+  await expect(page).toHaveURL(/\/ui-resources$/)
   await page
     .getByRole("searchbox", { name: "Resource key" })
     .fill("users:detail")
@@ -283,6 +281,7 @@ test("removes list row navigation when its detail view is inactive", async ({
     .click()
   await expect(resourceRow.getByText("비활성", { exact: true })).toBeVisible()
 
+  await switchSessionUser(page, "David")
   await page.getByRole("link", { name: "사용자", exact: true }).click()
   await expect(page).toHaveURL(/\/users$/)
   const userRow = page
@@ -317,20 +316,15 @@ test("isolates YAML UI Resources by a system-managed namespace", async ({
   await namespaceDialog
     .getByRole("textbox", { name: "설명" })
     .fill("통합 시스템 UI 리소스를 격리합니다.")
-  await choose(
-    page,
-    namespaceDialog,
-    "시스템 관리자 역할",
-    "Backoffice 시스템 관리자",
-  )
+  await choose(page, namespaceDialog, "관리 역할", "Backoffice 시스템 관리자")
   await namespaceDialog.getByRole("button", { name: "등록" }).click()
   await expect(namespaceDialog).toBeHidden()
 
   await page.getByRole("link", { name: "UI 리소스", exact: true }).click()
   await expect(page).toHaveURL(/\/ui-resources$/)
   await page.getByRole("button", { name: "UI 리소스 동기화" }).click()
-
-  const dialog = page.getByRole("dialog", { name: "UI 리소스 동기화" })
+  await expect(page).toHaveURL(/\/ui-resources\/sync$/)
+  const dialog = page.locator("main")
   await choose(
     page,
     dialog,
@@ -370,18 +364,22 @@ test("isolates YAML UI Resources by a system-managed namespace", async ({
     }),
   ).toBeVisible()
   await dialog.getByRole("button", { name: "완료" }).click()
-  await expect(dialog).toBeHidden()
+  await expect(page).toHaveURL(/\/ui-resources$/)
   await page.getByRole("searchbox", { name: "Resource key" }).fill("services")
+  const resourceTable = page.getByRole("table", { name: "UI 리소스 목록" })
   await expect(
-    page.getByRole("cell", { name: "services:list:catalogToolbar" }),
+    resourceTable.getByRole("cell", { name: "services:list:catalogToolbar" }),
   ).toBeVisible()
   await expect(
-    page.getByRole("cell", { name: "Integration Console", exact: true }),
+    resourceTable.getByRole("cell", {
+      name: "Integration Console",
+      exact: true,
+    }),
   ).toHaveCount(3)
   await expect(
     page.getByRole("columnheader", { name: "관리자 접근" }),
   ).toHaveCount(0)
-  const rootResourceRow = page
+  const rootResourceRow = resourceTable
     .locator("tbody tr")
     .filter({
       has: page
@@ -389,7 +387,7 @@ test("isolates YAML UI Resources by a system-managed namespace", async ({
         .filter({ hasText: /^services$/ }),
     })
     .filter({ hasText: "Integration Console" })
-  const childResourceRow = page
+  const childResourceRow = resourceTable
     .locator("tbody tr")
     .filter({
       has: page
@@ -419,9 +417,7 @@ test("isolates YAML UI Resources by a system-managed namespace", async ({
     .fill("services:list:catalogToolbar")
 
   await page.getByRole("button", { name: "UI 리소스 동기화" }).click()
-  const orphanDialog = page.getByRole("dialog", {
-    name: "UI 리소스 동기화",
-  })
+  const orphanDialog = page.locator("main")
   await choose(
     page,
     orphanDialog,
@@ -465,22 +461,12 @@ test("isolates YAML UI Resources by a system-managed namespace", async ({
   const selectionList = orphanDialog.getByRole("list", {
     name: "동기화 대상 선택",
   })
-  await expect
-    .poll(() =>
-      selectionList.evaluate(
-        (element) => element.scrollHeight > element.clientHeight,
-      ),
-    )
-    .toBe(true)
-  await expect
-    .poll(() =>
-      orphanDialog
-        .locator("#ui-resource-import-form")
-        .evaluate(
-          (element) => element.scrollHeight <= element.clientHeight + 1,
-        ),
-    )
-    .toBe(true)
+  await expect(selectionList.getByRole("checkbox")).toHaveCount(21)
+  await expect(
+    selectionList.getByRole("checkbox", {
+      name: /services:list:testResource18/,
+    }),
+  ).toBeVisible()
   await expect(orphanDialog.getByText("고아 표시 예정 0건")).toBeVisible()
   await orphanDialog
     .getByRole("checkbox", { name: /services:list:catalogToolbar/ })
@@ -496,15 +482,16 @@ test("isolates YAML UI Resources by a system-managed namespace", async ({
   })
   await completionOrphan.uncheck()
   await orphanDialog.getByRole("button", { name: "완료" }).click()
-  await expect(orphanDialog).toBeHidden()
+  await expect(page).toHaveURL(/\/ui-resources$/)
+  await page
+    .getByRole("searchbox", { name: "Resource key" })
+    .fill("services:list:catalogToolbar")
   await expect(
     page.getByRole("row", { name: /services:list:catalogToolbar.*고아/ }),
   ).toBeVisible()
 
   await page.getByRole("button", { name: "UI 리소스 동기화" }).click()
-  const restoreDialog = page.getByRole("dialog", {
-    name: "UI 리소스 동기화",
-  })
+  const restoreDialog = page.locator("main")
   await choose(
     page,
     restoreDialog,
@@ -523,7 +510,10 @@ test("isolates YAML UI Resources by a system-managed namespace", async ({
   await expect(restoreDialog.getByText("고아 표시 예정 1건")).toBeVisible()
   await restoreDialog.getByRole("button", { name: "동기화" }).click()
   await restoreDialog.getByRole("button", { name: "완료" }).click()
-  await expect(restoreDialog).toBeHidden()
+  await expect(page).toHaveURL(/\/ui-resources$/)
+  await page
+    .getByRole("searchbox", { name: "Resource key" })
+    .fill("services:list:catalogToolbar")
   await expect(
     page.getByRole("row", { name: /services:list:catalogToolbar.*노출/ }),
   ).toBeVisible()
@@ -586,12 +576,6 @@ test("opens endpoint details and keeps mutations out of endpoint tables", async 
   await expect(page.getByRole("button", { name: "삭제" })).toBeVisible()
 
   await page.getByRole("link", { name: "Developer API" }).click()
-  await page.getByRole("button", { name: "요청하기" }).click()
-  const requestDialog = page.getByRole("dialog")
-  await expect(
-    requestDialog.getByRole("radio", { name: /Developer API/ }),
-  ).toBeChecked()
-  await page.keyboard.press("Escape")
   const endpointTable = page.getByRole("table", {
     name: "서비스 엔드포인트 목록",
   })
@@ -601,6 +585,7 @@ test("opens endpoint details and keeps mutations out of endpoint tables", async 
   await expect(
     endpointTable.getByRole("columnheader", { name: "서비스" }),
   ).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "요청하기" })).toHaveCount(0)
 })
 
 test("starts access policy requests from the selected policy detail", async ({
@@ -610,7 +595,8 @@ test("starts access policy requests from the selected policy detail", async ({
   await waitForHydration(page)
 
   await page.getByRole("button", { name: "신규 정책 생성" }).click()
-  let dialog = page.getByRole("dialog")
+  await expect(page).toHaveURL(/\/approval-documents\/new$/)
+  let dialog = page.locator("main")
   await expect(dialog.getByRole("combobox", { name: "정책 유형" })).toHaveCount(
     0,
   )
@@ -620,36 +606,42 @@ test("starts access policy requests from the selected policy detail", async ({
   await dialog
     .getByRole("textbox", { name: "정책 설명" })
     .fill("감사 이벤트 조회에 필요한 엔드포인트를 허용합니다.")
-  await dialog.getByRole("button", { name: "다음" }).click()
   await expect(
     dialog.getByRole("combobox", { name: "리소스 접근 효과" }),
   ).toBeVisible()
   await expect(
     dialog.getByRole("radio", { name: /UI 기능 사용/ }),
   ).toBeChecked()
-  await dialog.getByRole("button", { name: "다음" }).click()
   await expect(dialog.getByRole("tab")).toHaveCount(2)
-  await choose(page, dialog, "기능 네임스페이스", "Backoffice (backoffice)")
+  await dialog.getByRole("radio", { name: /Backoffice.*backoffice/ }).check()
   await dialog
-    .getByRole("searchbox", { name: "UI 리소스 검색" })
+    .getByRole("searchbox", { name: "포함 UI 리소스 선택" })
     .fill("UI 리소스 동기화")
-  await dialog.getByRole("checkbox", { name: /UI 리소스 동기화/ }).check()
+  await dialog
+    .getByRole("checkbox", {
+      name: /UI 리소스 동기화 uiResources:list:importUiResources/,
+    })
+    .check()
   await dialog.getByRole("tab", { name: "엔드포인트" }).click()
   await dialog
-    .getByRole("checkbox", { name: /Audit API.*GET.*\/v1\/audit-events/ })
+    .getByRole("radio", { name: /Audit API.*audit-api\.example\.com/ })
+    .check()
+  await dialog
+    .getByRole("checkbox", { name: /GET.*\/v1\/audit-events/ })
     .check()
   const selectedResources = dialog.getByRole("complementary", {
     name: "선택한 리소스",
   })
+  await selectedResources.getByRole("tab", { name: /엔드포인트/ }).click()
   await expect(selectedResources).toContainText("Audit API")
   await expect(selectedResources).toContainText("GET /v1/audit-events")
-  const selectedResourceRow = selectedResources.locator("li").first()
+  const selectedResourceRow = selectedResources.locator("tbody tr").first()
   const selectedResourceRowBox = await selectedResourceRow.boundingBox()
   expect(selectedResourceRowBox).not.toBeNull()
   if (selectedResourceRowBox) {
     expect(selectedResourceRowBox.height).toBeLessThanOrEqual(96)
   }
-  await dialog.getByRole("button", { name: "다음" }).click()
+  await dialog.getByRole("button", { name: "다음" }).last().click()
   await expect(
     dialog.getByRole("heading", { name: "정책 구성을 검토하세요" }),
   ).toBeVisible()
@@ -658,7 +650,9 @@ test("starts access policy requests from the selected policy detail", async ({
   await expect(dialog.getByText("요청 템플릿", { exact: true })).toHaveCount(0)
   await expect(dialog.getByText("권한 부여 요청 템플릿")).toHaveCount(0)
   await dialog.getByRole("button", { name: "등록" }).click()
-  await expect(dialog).toBeHidden()
+  await expect(page).toHaveURL(/\/approval-documents\/[0-9a-f-]+$/)
+  await page.getByRole("link", { name: "정책", exact: true }).click()
+  await switchSessionUser(page, "Daniel")
   await expect(
     page.getByRole("cell", { name: "감사 이벤트 조회 허용", exact: true }),
   ).toBeVisible()
@@ -678,32 +672,45 @@ test("starts access policy requests from the selected policy detail", async ({
   await policyRow.getByRole("cell", { name: policyName, exact: true }).click()
   await expect(page).toHaveURL(/\/approval-documents\/[0-9a-f-]+$/)
   await page.getByRole("button", { name: "요청하기" }).click()
-  dialog = page.getByRole("dialog")
+  await expect(page).toHaveURL(/\/approval-documents\/[0-9a-f-]+\/request$/)
+  dialog = page.locator("main")
   await expect(dialog.getByRole("searchbox")).toHaveCount(0)
   await expect(
     dialog.getByRole("heading", { name: "요청 대상을 선택하세요" }),
   ).toBeVisible()
   await expect(dialog.getByText(policyName, { exact: true })).toBeVisible()
-  await choose(page, dialog, "요청자", "David")
+  await choose(page, dialog, "요청자", "Daniel")
   await expect(
     dialog.getByRole("combobox", { name: "요청 조직" }),
-  ).toContainText("개발 1팀")
-  await dialog.getByRole("button", { name: "다음" }).click()
+  ).toContainText("개인정보보호팀")
   await expect(
     dialog.getByRole("heading", {
-      name: "요청 사유와 처리 담당자를 입력하세요",
+      name: "요청 사유를 입력하세요",
     }),
   ).toBeVisible()
   await dialog
     .getByRole("textbox", { name: "요청 사유 및 내용" })
     .fill("운영 상태 확인을 위해 접근 권한이 필요합니다.")
+  const grantExpiration = new Date()
+  grantExpiration.setUTCFullYear(grantExpiration.getUTCFullYear() + 1)
+  await dialog
+    .getByRole("textbox", { name: "부여 만료 일시" })
+    .fill(grantExpiration.toISOString().slice(0, 16))
   await dialog.getByRole("button", { name: "다음" }).click()
   await expect(
     dialog.getByRole("heading", { name: "요청 내용을 검토하세요" }),
   ).toBeVisible()
-  await expect(dialog.getByText("David", { exact: true }).first()).toBeVisible()
   await expect(
-    dialog.getByText("개발 1팀", { exact: true }).first(),
+    dialog.getByText("Daniel", { exact: true }).first(),
+  ).toBeVisible()
+  await expect(
+    dialog.getByText("개인정보보호팀", { exact: true }).first(),
+  ).toBeVisible()
+  await expect(
+    dialog.getByRole("heading", { name: "요청 결재선" }),
+  ).toBeVisible()
+  await expect(
+    dialog.getByRole("button", { name: "처리 단계 추가" }),
   ).toBeVisible()
   await expect(dialog.getByRole("button", { name: "이전" })).toBeVisible()
   await expect(
@@ -711,7 +718,7 @@ test("starts access policy requests from the selected policy detail", async ({
   ).toBeEnabled()
 })
 
-test("policy creation dialog keeps necessary steps within 320px", async ({
+test("policy creation page keeps necessary steps within 320px", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 568 })
@@ -719,7 +726,7 @@ test("policy creation dialog keeps necessary steps within 320px", async ({
   await waitForHydration(page)
 
   await page.getByRole("button", { name: "신규 정책 생성" }).click()
-  const dialog = page.getByRole("dialog")
+  const dialog = page.locator("main")
   await expect(dialog.getByRole("combobox", { name: "정책 유형" })).toHaveCount(
     0,
   )
@@ -729,28 +736,25 @@ test("policy creation dialog keeps necessary steps within 320px", async ({
   await dialog
     .getByRole("textbox", { name: "정책 설명" })
     .fill("작은 화면의 정책 생성 흐름을 검증합니다.")
-  await dialog.getByRole("button", { name: "다음" }).click()
   await dialog.getByRole("radio", { name: /API 직접 호출/ }).check()
-  await dialog.getByRole("button", { name: "다음" }).click()
   await dialog
-    .getByRole("checkbox", { name: /Audit API.*GET.*\/v1\/audit-events/ })
+    .getByRole("radio", { name: /Audit API.*audit-api\.example\.com/ })
+    .check()
+  await dialog
+    .getByRole("checkbox", { name: /GET.*\/v1\/audit-events/ })
     .check()
   await expect(
     dialog.getByRole("complementary", { name: "선택한 리소스" }),
   ).toContainText("Audit API")
-  await dialog.getByRole("button", { name: "다음" }).click()
+  await dialog.getByRole("button", { name: "다음" }).last().click()
   await expect(
     dialog.getByRole("heading", { name: "정책 구성을 검토하세요" }),
   ).toBeVisible()
 
-  const box = await dialog.boundingBox()
-  expect(box).not.toBeNull()
-  if (box) {
-    expect(box.x).toBeGreaterThanOrEqual(0)
-    expect(box.x + box.width).toBeLessThanOrEqual(320)
-    expect(box.y).toBeGreaterThanOrEqual(0)
-    expect(box.y + box.height).toBeLessThanOrEqual(568)
-  }
+  const documentWidth = await page.evaluate(
+    () => document.documentElement.scrollWidth,
+  )
+  expect(documentWidth).toBeLessThanOrEqual(320)
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
     .analyze()
@@ -835,9 +839,10 @@ test("reviews assigned policy impact and applies an authorized change directly",
     .getByRole("row", { name: new RegExp(policyName) })
     .getByRole("cell", { name: policyName, exact: true })
     .click()
-  await expect(page.getByText(/현재 1개 .* 관계에 부여된 정책/)).toBeVisible()
+  await expect(page.getByText(/현재 \d+개 .* 관계에 부여된 정책/)).toBeVisible()
   await page.getByRole("button", { name: "정책 수정" }).click()
-  const dialog = page.getByRole("dialog", { name: "정책 수정" })
+  await expect(page).toHaveURL(/\/approval-documents\/[^/]+\/edit$/)
+  const dialog = page.locator("main")
   await dialog
     .getByRole("textbox", { name: "정책 설명" })
     .fill(updatedDescription)
@@ -848,7 +853,7 @@ test("reviews assigned policy impact and applies an authorized change directly",
   await expect(dialog.getByText("Charlotte", { exact: true })).toBeVisible()
   await expect(dialog.getByText("알림 대상 사용자")).toBeVisible()
   await dialog.getByRole("button", { name: "저장" }).click()
-  await expect(dialog).toBeHidden()
+  await expect(page).toHaveURL(/\/approval-documents\/[^/]+$/)
   await expect(page.getByText(updatedDescription)).toBeVisible()
 })
 
@@ -857,11 +862,27 @@ test("creates and approves an API key issuance request", async ({ page }) => {
   await waitForHydration(page)
   await createUser(page, "minjoon", "minjoon@example.com")
 
+  await page.getByRole("link", { name: "어플리케이션" }).click()
+  await page.getByRole("button", { name: "어플리케이션 등록" }).click()
+  let dialog = page.getByRole("dialog", { name: "어플리케이션 등록" })
+  await dialog
+    .getByRole("textbox", { name: "어플리케이션 이름" })
+    .fill("Partner Integration")
+  await dialog
+    .getByRole("textbox", { name: "Slug" })
+    .fill("partner_integration")
+  await dialog
+    .getByRole("textbox", { name: "설명" })
+    .fill("파트너 API를 호출하는 테스트 어플리케이션입니다.")
+  await choose(page, dialog, "소유 조직", "개발 1팀")
+  await dialog.getByRole("button", { name: "등록" }).click()
+  await expect(dialog).toBeHidden()
+
   await page.getByRole("link", { name: "조직" }).click()
   await page.getByRole("button", { name: "조직 등록" }).click()
-  let dialog = page.getByRole("dialog")
+  dialog = page.getByRole("dialog")
   await dialog.getByRole("textbox", { name: "조직명" }).fill("플랫폼 운영")
-  await choose(page, dialog, "조직장", "minjoon")
+  await choose(page, dialog, "조직장", "Owen")
   await dialog.getByRole("button", { name: "저장" }).click()
   await expect(
     page.getByRole("cell", { name: "플랫폼 운영", exact: true }),
@@ -871,7 +892,7 @@ test("creates and approves an API key issuance request", async ({ page }) => {
   await page.getByRole("button", { name: "서비스 등록" }).click()
   dialog = page.getByRole("dialog")
   await dialog.getByRole("textbox", { name: "이름" }).fill("파트너 API")
-  await dialog.getByRole("textbox", { name: "코드" }).fill("partner-api")
+  await dialog.getByRole("textbox", { name: "Slug" }).fill("partner-api")
   await dialog
     .getByRole("textbox", { name: "호스트" })
     .fill("https://partner.example.com")
@@ -903,7 +924,8 @@ test("creates and approves an API key issuance request", async ({ page }) => {
 
   await page.getByRole("link", { name: "요청 템플릿" }).click()
   await page.getByRole("button", { name: "요청 템플릿 추가" }).click()
-  dialog = page.getByRole("dialog")
+  await expect(page).toHaveURL(/\/approval-lines\/new$/)
+  dialog = page.locator("main")
   await dialog
     .getByRole("textbox", { name: "템플릿 이름" })
     .fill("파트너 API Key 발급")
@@ -957,15 +979,12 @@ test("creates and approves an API key issuance request", async ({ page }) => {
       .fill(field.label)
     await choose(page, dialog, "연결 값", field.binding, index)
   }
-  await dialog.getByRole("button", { name: "템플릿 저장" }).click()
-  await expect(dialog).toBeHidden()
+  await dialog.getByRole("button", { name: "다음" }).click()
   await expect(
-    page.getByRole("cell", { name: "파트너 API Key 발급", exact: true }),
+    dialog.getByRole("heading", { name: "요청 템플릿 구성을 검토하세요" }),
   ).toBeVisible()
-  await page
-    .getByRole("row", { name: "파트너 API Key 발급 상세 보기" })
-    .getByRole("cell", { name: "파트너 API Key 발급", exact: true })
-    .click()
+  await dialog.getByRole("button", { name: "템플릿 저장" }).click()
+  await expect(page).toHaveURL(/\/approval-lines\/[0-9a-f-]+$/)
   await expect(
     page.getByRole("heading", { name: "결재 라인 구성" }),
   ).toBeVisible()
@@ -973,12 +992,14 @@ test("creates and approves an API key issuance request", async ({ page }) => {
     page.getByRole("heading", { name: "입력 항목 구성" }),
   ).toBeVisible()
   await page.getByRole("button", { name: "요청 템플릿 수정" }).click()
-  dialog = page.getByRole("dialog")
+  await expect(page).toHaveURL(/\/approval-lines\/[0-9a-f-]+\/edit$/)
+  dialog = page.locator("main")
   await dialog
     .getByRole("textbox", { name: "템플릿 이름" })
     .fill("파트너 자격증명 발급")
+  await dialog.getByRole("button", { name: "다음" }).click()
   await dialog.getByRole("button", { name: "변경사항 저장" }).click()
-  await expect(dialog).toBeHidden()
+  await expect(page).toHaveURL(/\/approval-lines\/[0-9a-f-]+$/)
   await expect(
     page.getByRole("heading", { name: "파트너 자격증명 발급" }),
   ).toBeVisible()
@@ -996,7 +1017,11 @@ test("creates and approves an API key issuance request", async ({ page }) => {
 
   await page.getByRole("link", { name: "자격증명" }).click()
   await page.getByRole("button", { name: "자격증명 요청" }).click()
-  dialog = page.getByRole("dialog")
+  await expect(page).toHaveURL(/\/credentials\/request$/)
+  dialog = page.locator("main")
+  await dialog
+    .getByRole("radio", { name: /Partner Integration.*개발 1팀/ })
+    .click()
   await dialog
     .getByRole("searchbox", { name: "요청 대상 서비스" })
     .fill("파트너 API")
@@ -1004,7 +1029,6 @@ test("creates and approves an API key issuance request", async ({ page }) => {
   await dialog.getByRole("checkbox", { name: /GET \/v1\/partners/ }).check()
   await dialog.getByRole("checkbox", { name: /POST \/v1\/partners/ }).check()
   await expect(dialog.getByText("2개 선택")).toBeVisible()
-  await dialog.getByRole("button", { name: "다음" }).click()
   await dialog
     .getByRole("textbox", { name: "자격증명 이름" })
     .fill("partner-integration")
@@ -1028,16 +1052,25 @@ test("creates and approves an API key issuance request", async ({ page }) => {
   await expect(dialog.getByText("GET /v1/partners")).toBeVisible()
   await expect(dialog.getByText("POST /v1/partners/register")).toBeVisible()
   await dialog.getByRole("button", { name: "발급 요청 제출" }).click()
-  await expect(dialog).toBeHidden()
+  await expect(page).toHaveURL(/\/approval-documents\/requests\/[0-9a-f-]+$/)
+  await page.getByRole("link", { name: "자격증명", exact: true }).click()
 
   const requestRow = page
     .getByRole("row")
     .filter({ hasText: "partner-integration" })
     .filter({ hasText: "파트너 API" })
   await expect(requestRow).toContainText("승인 대기")
-  await requestRow.getByRole("button", { name: "승인", exact: true }).click()
-  await expect(requestRow).toContainText("등록 대기")
-  await requestRow.getByRole("button", { name: "Credential 등록" }).click()
+  await processRequestStages(page, requestRow, [
+    { actor: "Jhonny", action: "승인" },
+  ])
+  const approvedRequestRow = page
+    .getByRole("row")
+    .filter({ hasText: "partner-integration" })
+    .filter({ hasText: "파트너 API" })
+  await expect(approvedRequestRow).toContainText("등록 대기")
+  await approvedRequestRow
+    .getByRole("button", { name: "Credential 등록" })
+    .click()
   dialog = page.getByRole("dialog", {
     name: "내부 서비스 자격증명 자동 등록",
   })
@@ -1073,27 +1106,30 @@ test("creates and approves an API key issuance request", async ({ page }) => {
       .filter({ hasText: "자격증명 발급 요청: partner-integration" }),
   ).toBeVisible()
   await page.getByRole("button", { name: "교체 요청" }).click()
-  dialog = page.getByRole("dialog", { name: "API Key 교체 요청" })
+  await expect(page).toHaveURL(/\/credentials\/[0-9a-f-]+\/replace$/)
+  dialog = page.locator("main")
   await expect(dialog.getByText("partner-integration")).toBeVisible()
   await choose(page, dialog, "요청 조직", "개발 1팀")
   await dialog
     .getByRole("textbox", { name: "교체 사유" })
     .fill("정기 교체 주기에 따른 API Key 교체 요청입니다.")
+  await dialog.getByRole("button", { name: "다음" }).click()
   await dialog.getByRole("button", { name: "요청 제출" }).click()
-  await expect(dialog).toBeHidden()
-  await expect(
-    page.getByRole("row").filter({ hasText: "API Key 교체 요청" }),
-  ).toContainText("승인 대기")
-
-  await page.getByRole("link", { name: "자격증명" }).click()
+  await expect(page).toHaveURL(/\/approval-documents\/requests\/[0-9a-f-]+$/)
+  await page.getByRole("link", { name: "자격증명", exact: true }).click()
   const replacementRequestRow = page
     .getByRole("row")
     .filter({ hasText: "API Key 교체 요청" })
     .filter({ hasText: "partner-integration" })
-  await replacementRequestRow
-    .getByRole("button", { name: "승인", exact: true })
-    .click()
-  await replacementRequestRow
+  await processRequestStages(page, replacementRequestRow, [
+    { actor: "Jhonny", action: "승인" },
+    { actor: "Owen", action: "합의" },
+  ])
+  const approvedReplacementRequestRow = page
+    .getByRole("row")
+    .filter({ hasText: "API Key 교체 요청" })
+    .filter({ hasText: "partner-integration" })
+  await approvedReplacementRequestRow
     .getByRole("button", { name: "Credential 등록" })
     .click()
   dialog = page.getByRole("dialog", {
@@ -1113,28 +1149,40 @@ test("creates and approves an API key issuance request", async ({ page }) => {
   await activeReplacementRow
     .getByRole("cell", { name: "partner-integration", exact: true })
     .click()
-  await expect(page).toHaveURL(/\/api-keys\/[0-9a-f-]+$/)
+  await expect(page).toHaveURL(/\/credentials\/[0-9a-f-]+$/)
   const replacementDetailUrl = page.url()
   await page.getByRole("button", { name: "폐기 요청" }).click()
-  dialog = page.getByRole("dialog", { name: "API Key 폐기 요청" })
+  await expect(page).toHaveURL(/\/credentials\/[0-9a-f-]+\/dispose$/)
+  dialog = page.locator("main")
   await choose(page, dialog, "요청 조직", "개발 1팀")
   await dialog
     .getByRole("textbox", { name: "폐기 사유" })
     .fill("사용이 종료된 연동용 API Key 폐기 요청입니다.")
+  await dialog.getByRole("button", { name: "다음" }).click()
   await dialog.getByRole("button", { name: "요청 제출" }).click()
-  await expect(dialog).toBeHidden()
-
-  await page.getByRole("link", { name: "자격증명" }).click()
+  await expect(page).toHaveURL(/\/approval-documents\/requests\/[0-9a-f-]+$/)
+  await page.getByRole("link", { name: "자격증명", exact: true }).click()
   const disposalRequestRow = page
     .getByRole("row")
     .filter({ hasText: "API Key 폐기 요청" })
     .filter({ hasText: "partner-integration" })
-  await disposalRequestRow
-    .getByRole("button", { name: "승인", exact: true })
-    .click()
-  await expect(disposalRequestRow).toContainText("폐기 완료")
+  await processRequestStages(page, disposalRequestRow, [
+    { actor: "Jhonny", action: "승인" },
+    { actor: "Owen", action: "합의" },
+  ])
+  const approvedDisposalRequestRow = page
+    .getByRole("row")
+    .filter({ hasText: "API Key 폐기 요청" })
+    .filter({ hasText: "partner-integration" })
+  await expect(approvedDisposalRequestRow).toContainText("폐기 완료")
 
-  await page.goBack()
+  await page
+    .getByRole("table", { name: "자격증명 목록" })
+    .getByRole("row")
+    .filter({ hasText: "partner-integration" })
+    .first()
+    .getByRole("cell", { name: "partner-integration", exact: true })
+    .click()
   await expect(page).toHaveURL(replacementDetailUrl)
   await expect(
     page.getByText("API Key 교체 요청: partner-integration"),
@@ -1148,10 +1196,14 @@ test("creates and approves an API key issuance request", async ({ page }) => {
 test("registers an EXTERNAL API key through the manual owner flow", async ({
   page,
 }) => {
-  await page.goto("/api-keys")
+  await page.goto("/credentials")
   await waitForHydration(page)
+  await switchSessionUser(page, "Amelia")
   await page.getByRole("button", { name: "자격증명 요청" }).click()
-  let dialog = page.getByRole("dialog")
+  let dialog = page.locator("main")
+  await dialog
+    .getByRole("radio", { name: /Developer Console.*개발 2팀/ })
+    .click()
   await dialog
     .getByRole("searchbox", { name: "요청 대상 서비스" })
     .fill("협업 SaaS")
@@ -1159,7 +1211,6 @@ test("registers an EXTERNAL API key through the manual owner flow", async ({
   await expect(
     dialog.getByText(/외부 서비스는 엔드포인트 단위로 관리하지 않으며/),
   ).toBeVisible()
-  await dialog.getByRole("button", { name: "다음" }).click()
   await dialog
     .getByRole("textbox", { name: "자격증명 이름" })
     .fill("collaboration-e2e-key")
@@ -1171,7 +1222,7 @@ test("registers an EXTERNAL API key through the manual owner flow", async ({
     .fill("collaboration-e2e-key")
   await expect(
     dialog.getByRole("combobox", { name: "요청 조직" }),
-  ).toContainText("개발 1팀")
+  ).toContainText("개발 2팀")
   await dialog
     .getByRole("textbox", { name: "발급 사유" })
     .fill("외부 협업 서비스 연동을 위한 API Key를 등록합니다.")
@@ -1180,13 +1231,27 @@ test("registers an EXTERNAL API key through the manual owner flow", async ({
     dialog.getByRole("heading", { name: "자격증명 요청 내용을 검토하세요" }),
   ).toBeVisible()
   await dialog.getByRole("button", { name: "발급 요청 제출" }).click()
+  await expect(page).toHaveURL(/\/approval-documents\/requests\/[0-9a-f-]+$/)
+  await page.getByRole("link", { name: "자격증명", exact: true }).click()
 
   const requestRow = page
     .getByRole("row")
     .filter({ hasText: "collaboration-e2e-key" })
     .filter({ hasText: "협업 SaaS" })
-  await requestRow.getByRole("button", { name: "승인", exact: true }).click()
-  await requestRow.getByRole("button", { name: "Credential 등록" }).click()
+  await processRequestStages(page, requestRow, [
+    { actor: "Emma", action: "승인" },
+    { actor: "James", action: "합의" },
+    { actor: "Ethan", action: "합의" },
+    { actor: "Benjamin", action: "합의" },
+    { actor: "Amelia", action: "확인" },
+  ])
+  const approvedRequestRow = page
+    .getByRole("row")
+    .filter({ hasText: "collaboration-e2e-key" })
+    .filter({ hasText: "협업 SaaS" })
+  await approvedRequestRow
+    .getByRole("button", { name: "Credential 등록" })
+    .click()
 
   dialog = page.getByRole("dialog", {
     name: "외부 서비스 자격증명 수동 등록",
@@ -1273,7 +1338,7 @@ test("manages organization hierarchy and multiple memberships", async ({
 
   await page.getByRole("link", { name: "요청 템플릿" }).click()
   await page.getByRole("button", { name: "요청 템플릿 추가" }).click()
-  dialog = page.getByRole("dialog")
+  dialog = page.locator("main")
   await dialog
     .getByRole("textbox", { name: "템플릿 이름" })
     .fill("플랫폼 변경 요청")
@@ -1285,9 +1350,15 @@ test("manages organization hierarchy and multiple memberships", async ({
   await dialog.getByRole("button", { name: "단계 추가" }).click()
   await choose(page, dialog, "담당자 결정 방식", "고정 사용자", 1)
   await choose(page, dialog, "담당 대상", "member", 1)
+  await dialog.getByRole("button", { name: "다음" }).click()
+  await expect(
+    dialog.getByRole("heading", {
+      name: "요청 템플릿 구성을 검토하세요",
+    }),
+  ).toBeVisible()
   await dialog.getByRole("button", { name: "템플릿 저장" }).click()
   await expect(
-    page.getByRole("cell", { name: "플랫폼 변경 요청", exact: true }),
+    page.getByRole("heading", { name: "플랫폼 변경 요청", exact: true }),
   ).toBeVisible()
 
   await page.getByRole("link", { name: "조직" }).click()
@@ -1297,10 +1368,7 @@ test("manages organization hierarchy and multiple memberships", async ({
     .click()
   await expect(
     page.getByRole("heading", { name: "포함된 요청 템플릿" }),
-  ).toBeVisible()
-  await expect(
-    page.getByText("플랫폼 변경 요청", { exact: true }),
-  ).toBeVisible()
+  ).toHaveCount(0)
 
   await page
     .getByRole("table", { name: "소속 사용자" })
@@ -1318,10 +1386,7 @@ test("manages organization hierarchy and multiple memberships", async ({
   ).toBeVisible()
   await expect(
     page.getByRole("heading", { name: "요청 템플릿 참여" }),
-  ).toBeVisible()
-  await expect(
-    page.getByText("플랫폼 변경 요청", { exact: true }),
-  ).toBeVisible()
+  ).toHaveCount(0)
 })
 
 test("adds multiple unassigned users from paginated nickname results", async ({
@@ -1380,7 +1445,7 @@ test("adds multiple unassigned users from paginated nickname results", async ({
   await expect(dialog.getByText("조건에 맞는 항목이 없습니다.")).toBeVisible()
 })
 
-test("assigns users, organizations, roles, and groups from each detail page", async ({
+test("assigns users, organizations, and roles from each detail page", async ({
   page,
 }) => {
   await page.goto("/users")
@@ -1394,18 +1459,6 @@ test("assigns users, organizations, roles, and groups from each detail page", as
   await dialog.getByRole("textbox", { name: "조직명" }).fill("접근 제어팀")
   await choose(page, dialog, "조직장", "access-leader")
   await dialog.getByRole("button", { name: "저장" }).click()
-
-  await page.getByRole("link", { name: "그룹" }).click()
-  await page.getByRole("button", { name: "그룹 생성" }).click()
-  dialog = page.getByRole("dialog")
-  await dialog
-    .getByRole("textbox", { name: "그룹 이름" })
-    .fill("접근 검토 그룹")
-  await dialog
-    .getByRole("textbox", { name: "설명" })
-    .fill("접근 검토 업무를 담당합니다.")
-  await dialog.getByRole("button", { name: "등록" }).click()
-  await expect(dialog).toBeHidden()
 
   await page.getByRole("link", { name: "역할" }).click()
   const rolesToCreate: { name: string; description: string }[] = [
@@ -1473,17 +1526,6 @@ test("assigns users, organizations, roles, and groups from each detail page", as
     page.getByRole("link", { name: "접근 검토자", exact: true }),
   ).toBeVisible()
 
-  await page.getByRole("button", { name: "그룹 추가" }).click()
-  dialog = page.getByRole("dialog")
-  await dialog
-    .getByRole("searchbox", { name: "그룹 이름 또는 설명 검색" })
-    .fill("접근 검토")
-  await dialog.getByRole("checkbox", { name: "접근 검토 그룹" }).click()
-  await dialog.getByRole("button", { name: "그룹 추가" }).click()
-  await expect(
-    page.getByRole("link", { name: "접근 검토 그룹", exact: true }),
-  ).toBeVisible()
-
   await page.getByRole("link", { name: "접근 제어팀", exact: true }).click()
   await expect(
     page.getByRole("link", { name: "access-member", exact: true }),
@@ -1503,7 +1545,7 @@ test("assigns users, organizations, roles, and groups from each detail page", as
   ).toBeVisible()
 })
 
-test("removes the legacy menu management route and navigation", async ({
+test("removes the unused menu management route from navigation", async ({
   page,
 }) => {
   await page.goto("/")
@@ -1518,14 +1560,14 @@ test("removes the legacy menu management route and navigation", async ({
   ).toBeVisible()
 })
 
-test("credential request dialog passes accessibility checks at 320px", async ({
+test("credential request page passes accessibility checks at 320px", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 568 })
-  await page.goto("/api-keys")
+  await page.goto("/credentials")
   await waitForHydration(page)
   await page.getByRole("button", { name: "자격증명 요청" }).click()
-  const dialog = page.getByRole("dialog")
+  const dialog = page.locator("main")
   await expect(dialog).toBeVisible()
   await dialog.evaluate(async (element) => {
     await new Promise<void>((resolve) => {
@@ -1539,14 +1581,10 @@ test("credential request dialog passes accessibility checks at 320px", async ({
         .map((animation) => animation.finished),
     )
   })
-  const box = await dialog.boundingBox()
-  expect(box).not.toBeNull()
-  if (box) {
-    expect(box.x).toBeGreaterThanOrEqual(0)
-    expect(box.x + box.width).toBeLessThanOrEqual(320)
-    expect(box.y).toBeGreaterThanOrEqual(0)
-    expect(box.y + box.height).toBeLessThanOrEqual(568)
-  }
+  const documentWidth = await page.evaluate(
+    () => document.documentElement.scrollWidth,
+  )
+  expect(documentWidth).toBeLessThanOrEqual(320)
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
     .analyze()

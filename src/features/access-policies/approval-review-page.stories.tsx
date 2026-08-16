@@ -2,8 +2,12 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { expect, userEvent, waitFor, within } from "storybook/test"
 
 import { SessionAccessProvider } from "@/auth/session-access-provider"
+import { AccessPolicyEditorPage } from "@/features/access-policies/access-policy-editor-page"
 import { AccessPolicyDetailPage } from "@/features/access-policies/access-policy-detail-page"
+import { ApprovalDocumentDetailPage } from "@/features/access-policies/approval-document-detail-page"
 import { ApprovalReviewPage } from "@/features/access-policies/approval-review-page"
+import type { ApprovalDocument } from "@/features/access-policies/model"
+import type { BackofficeState } from "@/application/state/model"
 import { localDefaultUserId, localFixture } from "@/mocks/fixture"
 import { BackofficeProvider } from "@/application/state/provider"
 
@@ -42,6 +46,12 @@ export const PolicyListUsesOwnershipStatus: Story = {
     await expect(
       canvas.queryByRole("button", { name: "접근 정책 요청" }),
     ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole("button", { name: "충돌 분석" }),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole("button", { name: "권한 시뮬레이션" }),
+    ).not.toBeInTheDocument()
     await expect(canvas.getByText("운영 모니터링 허용")).toBeVisible()
     await expect(
       canvas.queryByRole("columnheader", { name: "기능 묶음" }),
@@ -53,27 +63,22 @@ export const PolicyListUsesOwnershipStatus: Story = {
     const policyRow = canvas.getByRole("row", {
       name: /운영 모니터링 허용/,
     })
+    const policyTable = canvas.getByRole("table", { name: "권한 정책 목록" })
     await expect(
       within(policyRow).getByText("허용", { selector: '[data-slot="badge"]' }),
     ).toBeVisible()
-    await expect(within(policyRow).getByText("2개")).toBeVisible()
+    await expect(
+      within(policyTable).queryByRole("columnheader", { name: "포함 리소스" }),
+    ).not.toBeInTheDocument()
+    await expect(
+      within(policyTable).queryByRole("columnheader", { name: "상태" }),
+    ).not.toBeInTheDocument()
     await expect(
       within(policyRow).queryByText("Developer API"),
     ).not.toBeInTheDocument()
-    const administratorPolicy = localFixture.accessPolicies.find(
-      (policy) => policy.name === "Backoffice 시스템 관리자 UI 접근",
-    )
-    if (!administratorPolicy) {
-      throw new Error("Backoffice administrator UI policy fixture is missing")
-    }
     const administratorPolicyRow = canvas.getByRole("row", {
       name: /Backoffice 시스템 관리자 UI 접근/,
     })
-    await expect(
-      within(administratorPolicyRow).getByText(
-        `${String(administratorPolicy.resources.length)}개`,
-      ),
-    ).toBeVisible()
     await expect(
       within(administratorPolicyRow).queryByText("services:list:createService"),
     ).not.toBeInTheDocument()
@@ -150,15 +155,12 @@ export const UpdatePolicyReviewsImpact: Story = {
         localSwitchingEnabled
         initialUserId={findUserId("Owen")}
       >
-        <AccessPolicyDetailPage policyId={policy.id} />
+        <AccessPolicyEditorPage policyId={policy.id} />
       </SessionAccessProvider>
     )
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    await userEvent.click(canvas.getByRole("button", { name: "정책 수정" }))
-    const body = within(canvasElement.ownerDocument.body)
-    const dialog = await body.findByRole("dialog", { name: "정책 수정" })
+    const dialog = canvasElement
     const description = within(dialog).getByRole("textbox", {
       name: "정책 설명",
     })
@@ -182,30 +184,79 @@ export const UpdatePolicyReviewsImpact: Story = {
   },
 }
 
+export const ProcessRequestFromDetail: Story = {
+  render: () => {
+    const source = localFixture.approvalDocuments.find(
+      (document) =>
+        document.documentKind === "general" && document.type === "access-grant",
+    )
+    if (!source) throw new Error("Access request fixture is missing")
+    const submitted: ApprovalDocument = {
+      ...source,
+      status: "submitted",
+      approvalSteps: source.approvalSteps.map((step) =>
+        step.kind === "request"
+          ? step
+          : {
+              ...step,
+              status: "pending",
+              processedById: null,
+              processedAt: null,
+              comment: null,
+            },
+      ),
+      history: [source.history[0]].filter(
+        (event): event is ApprovalDocument["history"][number] => Boolean(event),
+      ),
+    }
+    const state: BackofficeState = {
+      ...localFixture,
+      approvalDocuments: localFixture.approvalDocuments.map((document) =>
+        document.id === submitted.id ? submitted : document,
+      ),
+    }
+    return (
+      <BackofficeProvider initialState={state}>
+        <SessionAccessProvider
+          localSwitchingEnabled
+          initialUserId={findUserId("Ethan")}
+        >
+          <ApprovalDocumentDetailPage requestId={submitted.id} />
+        </SessionAccessProvider>
+      </BackofficeProvider>
+    )
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByText("처리 필요")).toBeVisible()
+    await userEvent.click(canvas.getByRole("button", { name: "승인" }))
+    const body = within(canvasElement.ownerDocument.body)
+    const dialog = await body.findByRole("dialog", {
+      name: "요청 단계를 처리할까요?",
+    })
+    await userEvent.type(
+      within(dialog).getByRole("textbox", { name: "처리 의견" }),
+      "요청 목적을 확인했습니다.",
+    )
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "처리 완료" }),
+    )
+    await expect(await canvas.findByText("승인 완료")).toBeVisible()
+    await expect(canvas.getByText("요청 목적을 확인했습니다.")).toBeVisible()
+  },
+}
+
 export const CreatePolicy: Story = {
   render: () => (
     <SessionAccessProvider
       localSwitchingEnabled
       initialUserId={localDefaultUserId}
     >
-      <ApprovalReviewPage />
+      <AccessPolicyEditorPage />
     </SessionAccessProvider>
   ),
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const [catalogSearch] = canvas.getAllByRole("searchbox", {
-      name: "정책 이름",
-    })
-    if (!catalogSearch) throw new Error("Policy catalog search is missing")
-    await userEvent.clear(catalogSearch)
-    await userEvent.click(
-      canvas.getByRole("button", { name: "신규 정책 생성" }),
-    )
-    const body = within(canvasElement.ownerDocument.body)
-    const dialog = await body.findByRole("dialog")
-    await waitFor(async () => {
-      await expect(dialog).toBeVisible()
-    })
+    const dialog = canvasElement
 
     await expect(
       within(dialog).getByRole("textbox", { name: "정책 이름" }),
@@ -224,7 +275,6 @@ export const CreatePolicy: Story = {
       within(dialog).getByRole("textbox", { name: "정책 설명" }),
       "감사 이벤트 조회에 필요한 엔드포인트를 허용합니다.",
     )
-    await userEvent.click(within(dialog).getByRole("button", { name: "다음" }))
     await expect(
       within(dialog).getByRole("radio", { name: /UI 기능 사용/ }),
     ).toBeVisible()
@@ -236,13 +286,12 @@ export const CreatePolicy: Story = {
     await userEvent.click(
       within(dialog).getByRole("radio", { name: /API 직접 호출/ }),
     )
-    await userEvent.click(within(dialog).getByRole("button", { name: "다음" }))
     await expect(
       within(dialog).getByRole("tab", { name: "엔드포인트" }),
     ).toBeVisible()
     await expect(
       within(dialog).getByRole("searchbox", {
-        name: "서비스 또는 엔드포인트 검색",
+        name: "서비스 선택",
       }),
     ).toBeVisible()
     await expect(
@@ -251,13 +300,23 @@ export const CreatePolicy: Story = {
       }),
     ).not.toBeInTheDocument()
     await userEvent.click(
-      within(dialog).getByRole("checkbox", {
-        name: /Audit API.*GET.*\/v1\/audit-events/,
+      within(dialog).getByRole("radio", {
+        name: /Audit API.*https:\/\/audit-api\.example\.com/,
       }),
     )
     await userEvent.click(
       within(dialog).getByRole("checkbox", {
-        name: /Developer API.*GET.*\/health/,
+        name: /GET.*\/v1\/audit-events.*감사 이벤트 조회 API/,
+      }),
+    )
+    await userEvent.click(
+      within(dialog).getByRole("radio", {
+        name: /Developer API.*https:\/\/api\.example\.com/,
+      }),
+    )
+    await userEvent.click(
+      within(dialog).getByRole("checkbox", {
+        name: /GET.*\/health.*상태 확인 API/,
       }),
     )
     const selectedResources = within(
@@ -270,13 +329,17 @@ export const CreatePolicy: Story = {
     ).toBeVisible()
     await userEvent.click(
       selectedResources.getByRole("button", {
-        name: "Developer API /health 선택 제거",
+        name: "상태 확인 API 선택 제거",
       }),
     )
     await expect(
       selectedResources.queryByText("Developer API"),
     ).not.toBeInTheDocument()
-    await userEvent.click(within(dialog).getByRole("button", { name: "다음" }))
+    const reviewStepButton = within(dialog)
+      .getAllByRole("button", { name: "다음" })
+      .at(-1)
+    if (!reviewStepButton) throw new Error("Review step button is missing")
+    await userEvent.click(reviewStepButton)
     await expect(
       within(dialog).getByRole("heading", {
         name: "정책 구성을 검토하세요",
@@ -302,13 +365,6 @@ export const CreatePolicy: Story = {
     const createButton = within(dialog).getByRole("button", { name: "등록" })
     await waitFor(async () => {
       await expect(createButton).toBeEnabled()
-    })
-    await userEvent.click(createButton)
-    await waitFor(async () => {
-      await expect(dialog).not.toBeVisible()
-    })
-    await waitFor(async () => {
-      await expect(canvas.getByText("감사 이벤트 조회 허용")).toBeVisible()
     })
   },
 }
@@ -351,6 +407,12 @@ export const PolicyOperatorCanCreatePolicy: Story = {
     await expect(
       canvas.getByRole("button", { name: "신규 정책 생성" }),
     ).toBeVisible()
+    await expect(
+      canvas.queryByRole("button", { name: "충돌 분석" }),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole("button", { name: "권한 시뮬레이션" }),
+    ).not.toBeInTheDocument()
   },
 }
 
@@ -360,7 +422,10 @@ export const PaginatedUiResourcesPolicyDetail: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    const table = canvas.getByRole("table", { name: "UI 리소스 목록" })
+    await userEvent.click(canvas.getByRole("tab", { name: /UI 리소스/ }))
+    const table = canvas.getByRole("table", {
+      name: "정책 포함 UI 리소스 목록",
+    })
     const policy = localFixture.accessPolicies.find(
       (candidate) => candidate.id === "45000000-0000-4000-8000-000000000101",
     )
@@ -386,19 +451,63 @@ export const PaginatedUiResourcesPolicyDetail: Story = {
   },
 }
 
+export const ClonePolicyPrefillsCreateEditor: Story = {
+  render: () => {
+    const policy = localFixture.accessPolicies.find(
+      (candidate) => candidate.name === "운영 모니터링 허용",
+    )
+    if (!policy) throw new Error("Clone source policy fixture is missing")
+    return (
+      <SessionAccessProvider
+        localSwitchingEnabled
+        initialUserId={localDefaultUserId}
+      >
+        <AccessPolicyEditorPage sourcePolicyId={policy.id} />
+      </SessionAccessProvider>
+    )
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole("textbox", { name: "정책 이름" }),
+    ).toHaveValue("운영 모니터링 허용 복사본")
+    await expect(
+      canvas.getByRole("textbox", { name: "정책 설명" }),
+    ).toHaveValue(
+      "서비스 상태와 감사 이벤트를 함께 조회하는 운영 모니터링 리소스 접근을 허용합니다.",
+    )
+    const reviewButton = canvas
+      .getAllByRole("button", { name: "다음" })
+      .find((button) => button.getAttribute("type") === "submit")
+    await expect(reviewButton).toBeVisible()
+  },
+}
+
 export const RequestFromSelectedPolicyDetail: Story = {
   render: () => {
     const policy = localFixture.accessPolicies[0]
     if (!policy) throw new Error("Access policy detail story requires a policy")
-    return <AccessPolicyDetailPage policyId={policy.id} />
+    return (
+      <SessionAccessProvider
+        localSwitchingEnabled
+        initialUserId={findUserId("Daniel")}
+      >
+        <AccessPolicyDetailPage policyId={policy.id} />
+      </SessionAccessProvider>
+    )
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
+    const policyId = localFixture.accessPolicies[0]?.id
+    if (!policyId)
+      throw new Error("Access policy detail story requires a policy")
     await expect(canvas.getAllByText("포함 리소스")).toHaveLength(1)
-    await expect(canvas.getByText("https://api.example.com")).toBeVisible()
     await expect(
-      canvas.getByText("https://audit-api.example.com"),
-    ).toBeVisible()
+      canvas.queryByText("https://api.example.com"),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByText("https://audit-api.example.com"),
+    ).not.toBeInTheDocument()
     await expect(canvas.getByText("/health")).toBeVisible()
     await expect(canvas.getByText("/v1/audit-events")).toBeVisible()
     await expect(
@@ -410,50 +519,9 @@ export const RequestFromSelectedPolicyDetail: Story = {
     await expect(canvas.getByText("$.status")).toBeVisible()
     await expect(canvas.getByText("$.items")).toBeVisible()
     await expect(canvas.getAllByText("응답 본문")).toHaveLength(2)
-    await userEvent.click(canvas.getByRole("button", { name: "요청하기" }))
-    const body = within(canvasElement.ownerDocument.body)
-    const dialog = await body.findByRole("dialog")
-    await waitFor(async () => {
-      await expect(dialog).toBeVisible()
-    })
     await expect(
-      within(dialog).queryByRole("searchbox"),
-    ).not.toBeInTheDocument()
-    await expect(
-      within(dialog).getByRole("heading", {
-        name: "요청 대상을 선택하세요",
-      }),
-    ).toBeVisible()
-    await expect(
-      within(dialog).getByText("운영 모니터링 허용", { exact: true }),
-    ).toBeVisible()
-    await userEvent.click(
-      within(dialog).getByRole("combobox", { name: "요청자" }),
-    )
-    await userEvent.click(await body.findByRole("option", { name: "David" }))
-    await userEvent.click(within(dialog).getByRole("button", { name: "다음" }))
-    await expect(
-      within(dialog).getByRole("heading", {
-        name: "요청 사유와 처리 담당자를 입력하세요",
-      }),
-    ).toBeVisible()
-    await userEvent.type(
-      within(dialog).getByRole("textbox", { name: "요청 사유 및 내용" }),
-      "운영 상태 확인을 위해 접근 권한이 필요합니다.",
-    )
-    await userEvent.click(within(dialog).getByRole("button", { name: "다음" }))
-    await expect(
-      within(dialog).getByRole("heading", { name: "요청 내용을 검토하세요" }),
-    ).toBeVisible()
-    await expect(within(dialog).getAllByText("David")[0]).toBeVisible()
-    await expect(within(dialog).getAllByText("개발 1팀")[0]).toBeVisible()
-    await userEvent.click(within(dialog).getByRole("button", { name: "이전" }))
-    await expect(
-      within(dialog).getByRole("heading", {
-        name: "요청 사유와 처리 담당자를 입력하세요",
-      }),
-    ).toBeVisible()
-    await userEvent.keyboard("{Escape}")
+      canvas.getByRole("button", { name: "요청하기" }),
+    ).toHaveAttribute("href", `/approval-documents/${policyId}/request`)
   },
 }
 

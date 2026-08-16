@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { localFixture } from "@/mocks/fixture"
-import { defaultUiNamespace } from "@/mocks/system-fixture"
+import { defaultNamespace } from "@/mocks/system-fixture"
 import { previewUiResourceSync } from "@/features/ui-resources/ui-resource-sync"
 
 describe("UI resource synchronization preview", () => {
@@ -16,7 +16,7 @@ describe("UI resource synchronization preview", () => {
 
     const fullPreview = previewUiResourceSync(localFixture, {
       version: 1,
-      namespaceKey: defaultUiNamespace.key,
+      namespaceKey: defaultNamespace.key,
       resources: [
         {
           key: root.key,
@@ -43,7 +43,7 @@ describe("UI resource synchronization preview", () => {
 
     const selectedPreview = previewUiResourceSync(localFixture, {
       version: 1,
-      namespaceKey: defaultUiNamespace.key,
+      namespaceKey: defaultNamespace.key,
       resources: [fullPreview.value.manifest.resources[0]],
     })
     expect(selectedPreview.ok).toBe(true)
@@ -66,7 +66,7 @@ describe("UI resource synchronization preview", () => {
 
     const preview = previewUiResourceSync(state, {
       version: 1,
-      namespaceKey: defaultUiNamespace.key,
+      namespaceKey: defaultNamespace.key,
       resources: [
         {
           key: root.key,

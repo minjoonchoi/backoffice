@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest"
 import {
   accessPolicyResourceNames,
   resolveAccessPolicyResourceGroups,
-  resolveAccessPolicyUiNamespaces,
   resolveAccessPolicyUiResources,
 } from "@/features/access-policies/access-policy-resources"
 import { uiResourceKeys } from "@/config/menu-registry"
@@ -89,20 +88,18 @@ describe("resolveAccessPolicyResourceGroups", () => {
       ),
     ).toEqual(["Backoffice API"])
     expect(
-      resolveAccessPolicyUiNamespaces(localFixture, resourcePolicy).map(
-        (namespace) => namespace.name,
-      ),
-    ).toEqual(["Backoffice"])
-    expect(
       resolveAccessPolicyUiResources(localFixture, resourcePolicy).map(
         ({ resource }) => resource.key,
       ),
     ).toEqual([
       uiResourceKeys.uiResources.key,
       uiResourceKeys.uiResources.list.key,
+      uiResourceKeys.uiResources.sync.key,
       uiResourceKeys.uiResources.list.actions.importUiResources,
       uiResourceKeys.uiResources.list.actions.changeUiResourceStatus,
       uiResourceKeys.uiResources.list.actions.deleteUiResources,
+      uiResourceKeys.uiResources.list.actions.compareUiResourceSyncs,
+      uiResourceKeys.uiResources.list.actions.restoreUiResourceSync,
     ])
     expect(accessPolicyResourceNames(localFixture, resourcePolicy)).toContain(
       "Backoffice / UI 리소스 동기화",

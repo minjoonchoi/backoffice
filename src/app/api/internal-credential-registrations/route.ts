@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { apiResponseErrorCodes } from "@/domain/common"
 import { internalCredentialRegistrationRequestSchema } from "@/features/credentials/internal-credential-registration"
 
 export async function POST(request: Request) {
@@ -8,7 +9,7 @@ export async function POST(request: Request) {
     body = await request.json()
   } catch {
     return NextResponse.json(
-      { error: "invalid-json" },
+      { error: apiResponseErrorCodes.invalidJson },
       { status: 400, headers: { "Cache-Control": "no-store" } },
     )
   }
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
   const parsed = internalCredentialRegistrationRequestSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "invalid-input" },
+      { error: apiResponseErrorCodes.invalidInput },
       { status: 400, headers: { "Cache-Control": "no-store" } },
     )
   }

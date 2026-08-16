@@ -8,7 +8,7 @@ import {
   uiResourceKeys,
   uiResourceManifest,
 } from "@/config/menu-registry"
-import { localFixture } from "@/mocks/fixture"
+import { localDefaultUserId, localFixture } from "@/mocks/fixture"
 import type {
   ExternalCredentialRegistrar,
   InternalCredentialRegistrar,
@@ -19,15 +19,21 @@ import {
   defaultGeneralUserRole,
   defaultIamOperatorRole,
   defaultPolicyOperatorRole,
-  defaultUiNamespace,
+  defaultServiceOperatorRole,
+  defaultNamespace,
   initialBackofficeState,
-  organizationLeaderGroup,
 } from "@/mocks/system-fixture"
 import { uiResourceManagerUiResourceKeys } from "@/config/system-ui-access"
 import type { BackofficeState } from "@/application/state/model"
 import type { BackofficeApiClientFactory } from "@/application/api/api-client"
 import { createMockBackofficeApiClient } from "@/application/api/mock-api-client"
 import { BackofficeProvider, useBackoffice } from "@/application/state/provider"
+import { AuditActorProvider } from "@/features/audit/audit-actor-provider"
+import type { ApprovalLine } from "@/features/request-templates/model"
+import {
+  createRequestApprovalLineDraft,
+  toRequestApprovalStepInputs,
+} from "@/features/request-templates/request-approval-line"
 
 const testInternalCredentialRegistrar: InternalCredentialRegistrar = {
   register(input) {
@@ -64,6 +70,27 @@ function createTestApiClientFactory(
 
 const testApiClientFactory = createTestApiClientFactory()
 
+function approvalStepsFromTemplate(
+  state: Pick<BackofficeState, "organizations" | "users">,
+  template: ApprovalLine,
+  requesterId: string,
+  requestOrganizationId: string,
+  options?: {
+    serviceOwnerOrganizationId?: string
+    userAssignments?: Readonly<Record<string, string>>
+  },
+) {
+  const draft = createRequestApprovalLineDraft(state, template, {
+    requesterId,
+    requestOrganizationId,
+    serviceOwnerOrganizationId: options?.serviceOwnerOrganizationId,
+  }).map((step) => ({
+    ...step,
+    assigneeId: options?.userAssignments?.[step.id] ?? step.assigneeId,
+  }))
+  return toRequestApprovalStepInputs(draft)
+}
+
 function Wrapper({ children }: { children: ReactNode }) {
   return (
     <BackofficeProvider
@@ -77,19 +104,63 @@ function Wrapper({ children }: { children: ReactNode }) {
 
 function FixtureWrapper({ children }: { children: ReactNode }) {
   return (
-    <BackofficeProvider
-      initialState={localFixture}
-      apiClientFactory={testApiClientFactory}
-    >
-      {children}
-    </BackofficeProvider>
+    <AuditActorProvider initialActorUserId={localDefaultUserId}>
+      <BackofficeProvider
+        initialState={localFixture}
+        apiClientFactory={testApiClientFactory}
+      >
+        {children}
+      </BackofficeProvider>
+    </AuditActorProvider>
   )
+}
+
+async function completeApprovalDocument(
+  backoffice: ReturnType<typeof useBackoffice>,
+  documentId: string,
+) {
+  let document = backoffice.approvalDocuments.find(
+    (candidate) => candidate.id === documentId,
+  )
+  if (!document) throw new Error(`Approval document not found: ${documentId}`)
+  while (document.status === "submitted") {
+    const step = document.approvalSteps.find(
+      (candidate) => candidate.status === "pending",
+    )
+    if (!step) throw new Error(`Pending approval step not found: ${documentId}`)
+    const actorUserId =
+      step.assigneeType === "user"
+        ? step.assigneeId
+        : backoffice.users.find(
+            (user) =>
+              user.employmentStatus === "employed" &&
+              user.organizationIds.includes(step.assigneeId),
+          )?.id
+    if (!actorUserId) {
+      throw new Error(`Approval step assignee not found: ${step.id}`)
+    }
+    const result = await backoffice.processApprovalDocument({
+      documentId,
+      actorUserId,
+      stepId: step.id,
+      decision: step.kind === "reference" ? "acknowledge" : "approve",
+      comment: "테스트 처리",
+    })
+    if (!result.ok) return result
+    document = result.value.document
+  }
+  return { ok: true, value: { document } }
 }
 
 const seededOrganizationId = "91000000-0000-4000-8000-000000000001"
 const seededUserId = "91000000-0000-4000-8000-000000000002"
 const seededBackofficeState = {
   ...initialBackofficeState,
+  roles: initialBackofficeState.roles.map((role) =>
+    role.id === initialBackofficeState.systemReferences.roleIds.administrator
+      ? { ...role, userIds: [seededUserId] }
+      : role,
+  ),
   organizations: [
     {
       id: seededOrganizationId,
@@ -112,12 +183,14 @@ const seededBackofficeState = {
 
 function SeededWrapper({ children }: { children: ReactNode }) {
   return (
-    <BackofficeProvider
-      initialState={seededBackofficeState}
-      apiClientFactory={testApiClientFactory}
-    >
-      {children}
-    </BackofficeProvider>
+    <AuditActorProvider initialActorUserId={seededUserId}>
+      <BackofficeProvider
+        initialState={seededBackofficeState}
+        apiClientFactory={testApiClientFactory}
+      >
+        {children}
+      </BackofficeProvider>
+    </AuditActorProvider>
   )
 }
 
@@ -142,21 +215,23 @@ describe("BackofficeProvider", () => {
         ...client,
         iam: {
           ...client.iam,
-          createGroup: (request) => {
+          createRole: (request) => {
             receivedRequest = request
-            return client.iam.createGroup(request)
+            return client.iam.createRole(request)
           },
         },
       }
     }
     function ApiClientWrapper({ children }: { children: ReactNode }) {
       return (
-        <BackofficeProvider
-          initialState={initialBackofficeState}
-          apiClientFactory={apiClientFactory}
-        >
-          {children}
-        </BackofficeProvider>
+        <AuditActorProvider initialActorUserId={seededUserId}>
+          <BackofficeProvider
+            initialState={seededBackofficeState}
+            apiClientFactory={apiClientFactory}
+          >
+            {children}
+          </BackofficeProvider>
+        </AuditActorProvider>
       )
     }
     const { result } = renderHook(() => useBackoffice(), {
@@ -167,16 +242,16 @@ describe("BackofficeProvider", () => {
       description: "감사 업무 담당자를 연결합니다.",
     }
 
-    const response = await act(() => result.current.createGroup(input))
+    const response = await act(() => result.current.createRole(input))
 
     expect(response.ok).toBe(true)
-    expect(receivedRequest).toEqual({ body: input })
-    expect(
-      result.current.groups.some((group) => group.name === input.name),
-    ).toBe(true)
+    expect(receivedRequest).toEqual({ body: input, requesterId: seededUserId })
+    expect(result.current.roles.some((role) => role.name === input.name)).toBe(
+      true,
+    )
   })
 
-  it("starts with system roles, the general user role, and default groups", () => {
+  it("starts with system roles", () => {
     const { result } = renderHook(() => useBackoffice(), {
       wrapper: Wrapper,
     })
@@ -192,9 +267,7 @@ describe("BackofficeProvider", () => {
       "Backoffice IAM 운영자",
       "Backoffice 일반 사용자",
       "Backoffice UI 리소스 관리자",
-    ])
-    expect(result.current.groups.map((group) => group.name)).toEqual([
-      "조직장 그룹",
+      "Backoffice 서비스 운영자",
     ])
     expect(result.current.uiResources).toHaveLength(
       uiResourceManifest.resources.length,
@@ -232,15 +305,17 @@ describe("BackofficeProvider", () => {
           ).roleIds.includes(defaultIamOperatorRole.id),
         )
         .map((menu) => menu.id),
-    ).toEqual(["users", "organizations", "roles", "groups"])
+    ).toEqual(["users", "organizations", "roles", "applications"])
     expect(
       uiResourceManifest.resources
         .filter(
           (resource) =>
             resource.type === "action" &&
-            ["users", "organizations", "roles", "groups"].some((menuId) =>
+            ["users", "organizations", "roles", "applications"].some((menuId) =>
               resource.key.startsWith(`${menuId}:`),
-            ),
+            ) &&
+            resource.key !==
+              uiResourceKeys.users.detail.actions.changeEmploymentStatus,
         )
         .every((resource) =>
           resolveUiResourceAssignmentTargets(
@@ -273,9 +348,14 @@ describe("BackofficeProvider", () => {
       uiResourceKeys.approvalDocuments.list.key,
       uiResourceKeys.approvalDocuments.requestDetail.key,
       uiResourceKeys.approvalDocuments.detail.key,
+      uiResourceKeys.approvalDocuments.create.key,
+      uiResourceKeys.approvalDocuments.update.key,
+      uiResourceKeys.approvalDocuments.request.key,
       uiResourceKeys.approvalDocuments.list.actions.createPolicy,
+      uiResourceKeys.approvalDocuments.list.actions.simulatePolicyAccess,
       uiResourceKeys.approvalDocuments.detail.actions.updatePolicy,
       uiResourceKeys.approvalDocuments.detail.actions.deletePolicy,
+      uiResourceKeys.approvalDocuments.detail.actions.clonePolicy,
     ])
   })
 
@@ -436,13 +516,13 @@ describe("BackofficeProvider", () => {
       throw new Error("Policy namespace fixtures are missing")
     }
     const namespaceId = "99000000-0000-4000-8000-000000000030"
-    state.uiNamespaces.push({
+    state.namespaces.push({
       id: namespaceId,
       key: "customer-console",
       name: "Customer Console",
       description: "UI resource policy namespace validation fixture.",
-      administratorRoleId: state.systemReferences.roleIds.administrator,
-      administratorAccessPolicyId: "99000000-0000-4000-8000-000000000031",
+      managerRoleId: state.systemReferences.roleIds.administrator,
+      managerAccessPolicyId: "99000000-0000-4000-8000-000000000031",
       status: "active",
       lastSyncedAt: null,
       createdAt: "2026-08-12T00:00:00.000Z",
@@ -600,8 +680,8 @@ describe("BackofficeProvider", () => {
     const { result } = renderHook(() => useBackoffice(), {
       wrapper: FixtureWrapper,
     })
-    const administrator = result.current.users.find(
-      (user) => user.nickname === "David",
+    const manager = result.current.users.find(
+      (user) => user.nickname === "Owen",
     )
     const generalUser = result.current.users.find(
       (user) => user.nickname === "Emma",
@@ -609,16 +689,12 @@ describe("BackofficeProvider", () => {
     const resource = result.current.uiResources.find(
       (candidate) => candidate.key === uiResourceKeys.approvalLines.key,
     )
-    if (!administrator || !generalUser || !resource) {
+    if (!manager || !generalUser || !resource) {
       throw new Error("UI resource status fixtures are missing")
     }
 
     const updated = await act(() =>
-      result.current.setUiResourceStatus(
-        resource.id,
-        "inactive",
-        administrator.id,
-      ),
+      result.current.setUiResourceStatus(resource.id, "inactive", manager.id),
     )
     expect(updated.ok && updated.value.status).toBe("inactive")
     expect(
@@ -659,7 +735,6 @@ describe("BackofficeProvider", () => {
     )
     expect(organization.ok).toBe(true)
     if (!organization.ok) return
-
     const approver = await act(() =>
       result.current.createUser({
         nickname: "approver",
@@ -702,9 +777,13 @@ describe("BackofficeProvider", () => {
         approvalLineId: line.value.id,
         content: "운영 권한 변경을 요청합니다.",
         fieldValues: [],
-        stepAssignments: [
-          { stepId: approvalStep.id, userId: approver.value.id },
-        ],
+        approvalSteps: approvalStepsFromTemplate(
+          result.current,
+          line.value,
+          requester.value.id,
+          organization.value.id,
+          { userAssignments: { [approvalStep.id]: approver.value.id } },
+        ),
         submission: "submitted",
       }),
     )
@@ -745,7 +824,9 @@ describe("BackofficeProvider", () => {
   })
 
   it("does not activate a user without an organization", async () => {
-    const { result } = renderHook(() => useBackoffice(), { wrapper: Wrapper })
+    const { result } = renderHook(() => useBackoffice(), {
+      wrapper: FixtureWrapper,
+    })
     const resigned = await act(() =>
       result.current.createUser({
         nickname: "resigned-user",
@@ -759,10 +840,18 @@ describe("BackofficeProvider", () => {
 
     expect(
       await act(() =>
-        result.current.setUserEmploymentStatus(resigned.value.id, "employed"),
+        result.current.setUserEmploymentStatus(
+          resigned.value.id,
+          "employed",
+          localFixture.users.find((user) => user.nickname === "David")?.id ??
+            "",
+        ),
       ),
     ).toEqual({ ok: false, error: "invalid-input" })
-    expect(result.current.users[0]?.employmentStatus).toBe("resigned")
+    expect(
+      result.current.users.find((user) => user.id === resigned.value.id)
+        ?.employmentStatus,
+    ).toBe("resigned")
   })
 
   it("creates roles with empty assignments and rejects duplicate names", async () => {
@@ -787,61 +876,6 @@ describe("BackofficeProvider", () => {
       }),
     )
     expect(duplicate).toEqual({ ok: false, error: "role-name-exists" })
-  })
-
-  it("creates groups and manages ordinary group members", async () => {
-    const { result } = renderHook(() => useBackoffice(), {
-      wrapper: SeededWrapper,
-    })
-    const user = await act(() =>
-      result.current.createUser({
-        nickname: "group-member",
-        email: "group-member@example.com",
-        employmentStatus: "employed",
-        organizationIds: [seededOrganizationId],
-      }),
-    )
-    const group = await act(() =>
-      result.current.createGroup({
-        name: "보안 검토 그룹",
-        description: "보안 검토 담당자를 관리합니다.",
-      }),
-    )
-    if (!user.ok || !group.ok) return
-    expect(group.value.userIds).toEqual([])
-    expect(
-      result.current.roles.find((item) => item.id === defaultGeneralUserRole.id)
-        ?.userIds,
-    ).toContain(user.value.id)
-    expect(
-      await act(() =>
-        result.current.unassignUsersFromRoles(
-          [user.value.id],
-          [defaultGeneralUserRole.id],
-        ),
-      ),
-    ).toEqual({ ok: false, error: "protected-relationship" })
-
-    const assigned = await act(() =>
-      result.current.assignUsersToGroups([user.value.id], [group.value.id]),
-    )
-    expect(assigned.ok && assigned.value[0]?.userIds).toEqual([user.value.id])
-    const duplicate = await act(() =>
-      result.current.assignUsersToGroups([user.value.id], [group.value.id]),
-    )
-    expect(duplicate.ok && duplicate.value[0]?.userIds).toEqual([user.value.id])
-    const removed = await act(() =>
-      result.current.unassignUsersFromGroups([user.value.id], [group.value.id]),
-    )
-    expect(removed.ok && removed.value[0]?.userIds).toEqual([])
-    expect(
-      await act(() =>
-        result.current.createGroup({
-          name: "보안 검토 그룹",
-          description: "중복 그룹입니다.",
-        }),
-      ),
-    ).toEqual({ ok: false, error: "group-name-exists" })
   })
 
   it("adds organization and role assignments from either detail direction", async () => {
@@ -1007,6 +1041,53 @@ describe("BackofficeProvider", () => {
     expect(cycle).toEqual({ ok: false, error: "invalid-input" })
   })
 
+  it("validates an application slug and keeps it immutable", async () => {
+    const { result } = renderHook(() => useBackoffice(), {
+      wrapper: SeededWrapper,
+    })
+    expect(
+      await act(() =>
+        result.current.createApplication(
+          {
+            name: "Invalid Slug Application",
+            slug: "invalid-slug",
+            description: "snake_case가 아닌 slug 입력을 거부합니다.",
+            ownerOrganizationId: seededOrganizationId,
+          },
+          seededUserId,
+        ),
+      ),
+    ).toEqual({ ok: false, error: "invalid-input" })
+
+    const application = await act(() =>
+      result.current.createApplication(
+        {
+          name: "Automation Worker",
+          slug: "automation_worker",
+          description: "권한 주체로 사용하는 자동화 어플리케이션입니다.",
+          ownerOrganizationId: seededOrganizationId,
+        },
+        seededUserId,
+      ),
+    )
+    expect(application.ok).toBe(true)
+    if (!application.ok) return
+    expect(
+      await act(() =>
+        result.current.updateApplication(
+          application.value.id,
+          { ...application.value, slug: "renamed_worker" },
+          seededUserId,
+        ),
+      ),
+    ).toEqual({ ok: false, error: "protected-relationship" })
+    expect(
+      await act(() =>
+        result.current.deleteApplication(application.value.id, seededUserId),
+      ),
+    ).toMatchObject({ ok: true })
+  })
+
   it("registers a system-generated API key only after its request is approved", async () => {
     const { result } = renderHook(() => useBackoffice(), {
       wrapper: SeededWrapper,
@@ -1027,6 +1108,19 @@ describe("BackofficeProvider", () => {
       }),
     )
     if (!organization.ok) return
+    const application = await act(() =>
+      result.current.createApplication(
+        {
+          name: "Partner Console",
+          slug: "partner_console",
+          description:
+            "파트너 API 자격증명을 소유하는 테스트 어플리케이션입니다.",
+          ownerOrganizationId: organization.value.id,
+        },
+        seededUserId,
+      ),
+    )
+    if (!application.ok) return
     const line = await act(() =>
       result.current.createApprovalLine({
         name: "API Key 발급 요청 템플릿",
@@ -1106,7 +1200,19 @@ describe("BackofficeProvider", () => {
         name: "API Key 교체 요청 템플릿",
         category: "credential",
         type: "api-key-replace",
-        steps: [{ kind: "request", assigneeMode: "requester", stage: 1 }],
+        steps: [
+          { kind: "request", assigneeMode: "requester", stage: 1 },
+          {
+            kind: "approval",
+            assigneeMode: "request-organization-leader",
+            stage: 2,
+          },
+          {
+            kind: "agreement",
+            assigneeMode: "service-owner-organization",
+            stage: 3,
+          },
+        ],
         fields: [
           {
             key: "request-organization",
@@ -1145,7 +1251,19 @@ describe("BackofficeProvider", () => {
         name: "API Key 폐기 요청 템플릿",
         category: "credential",
         type: "api-key-dispose",
-        steps: [{ kind: "request", assigneeMode: "requester", stage: 1 }],
+        steps: [
+          { kind: "request", assigneeMode: "requester", stage: 1 },
+          {
+            kind: "approval",
+            assigneeMode: "request-organization-leader",
+            stage: 2,
+          },
+          {
+            kind: "agreement",
+            assigneeMode: "service-owner-organization",
+            stage: 3,
+          },
+        ],
         fields: [
           {
             key: "request-organization",
@@ -1168,7 +1286,7 @@ describe("BackofficeProvider", () => {
     const service = await act(() =>
       result.current.createService({
         name: "파트너 API",
-        code: "partner-api",
+        slug: "partner-api",
         host: "https://partner.example.com",
         type: "internal",
         ownerOrganizationId: organization.value.id,
@@ -1212,8 +1330,15 @@ describe("BackofficeProvider", () => {
       approvalLineId: line.value.id,
       content: "파트너 시스템 연동을 위한 발급 요청입니다.",
       fieldValues: [],
-      stepAssignments: [],
+      approvalSteps: approvalStepsFromTemplate(
+        result.current,
+        line.value,
+        requester.value.id,
+        organization.value.id,
+        { serviceOwnerOrganizationId: service.value.ownerOrganizationId },
+      ),
       submission: "submitted" as const,
+      applicationId: application.value.id,
       serviceId: service.value.id,
       endpointIds: credentialEndpointIds,
       keyName: "partner-integration",
@@ -1238,7 +1363,7 @@ describe("BackofficeProvider", () => {
       endpointIds: credentialEndpointIds,
     })
     const completion = await act(() =>
-      result.current.approveApprovalDocument(document.value.id),
+      completeApprovalDocument(result.current, document.value.id),
     )
     expect(completion.ok).toBe(true)
     if (!completion.ok) return
@@ -1273,7 +1398,58 @@ describe("BackofficeProvider", () => {
       awsSecretName: "backoffice/partner-api",
       awsSecretKey: "partner-integration",
       endpointIds: credentialEndpointIds,
+      applicationId: application.value.id,
     })
+    const generatedPolicy = result.current.accessPolicies.find(
+      (policy) => policy.id === registration.value.apiKey.accessPolicyId,
+    )
+    expect(generatedPolicy).toMatchObject({
+      managementType: "system-managed",
+      effect: "allow",
+      status: "active",
+      resources: credentialEndpointIds.map((id) => ({
+        type: "endpoint",
+        id,
+      })),
+    })
+    expect(
+      result.current.accessPolicyAssignments.some(
+        (assignment) =>
+          assignment.accessPolicyId === generatedPolicy?.id &&
+          assignment.targetType === "application" &&
+          assignment.targetId === application.value.id,
+      ),
+    ).toBe(true)
+    if (!generatedPolicy) return
+    expect(
+      await act(() =>
+        result.current.updateAccessPolicy(
+          generatedPolicy.id,
+          { ...generatedPolicy, name: "변경할 수 없는 시스템 정책" },
+          seededUserId,
+        ),
+      ),
+    ).toEqual({ ok: false, error: "policy-operation-forbidden" })
+    expect(
+      await act(() =>
+        result.current.deleteAccessPolicy(generatedPolicy.id, seededUserId),
+      ),
+    ).toEqual({ ok: false, error: "policy-operation-forbidden" })
+    expect(
+      await act(() =>
+        result.current.assignAccessPoliciesToTarget(
+          [generatedPolicy.id],
+          "role",
+          result.current.systemReferences.roleIds.administrator,
+          seededUserId,
+        ),
+      ),
+    ).toEqual({ ok: false, error: "policy-assignment-forbidden" })
+    expect(
+      await act(() =>
+        result.current.deleteApplication(application.value.id, seededUserId),
+      ),
+    ).toEqual({ ok: false, error: "protected-relationship" })
     expect(result.current.apiKeys).toHaveLength(1)
     expect(result.current.notifications.at(-1)).toMatchObject({
       userId: requester.value.id,
@@ -1291,8 +1467,16 @@ describe("BackofficeProvider", () => {
         }),
       ),
     ).toEqual({ ok: false, error: "api-key-already-registered" })
+    const firstApprovalStep = document.value.approvalSteps[0]
+    if (!firstApprovalStep) return
     const duplicateApproval = await act(() =>
-      result.current.approveApprovalDocument(document.value.id),
+      result.current.processApprovalDocument({
+        documentId: document.value.id,
+        actorUserId: requester.value.id,
+        stepId: firstApprovalStep.id,
+        decision: "approve",
+        comment: "중복 승인",
+      }),
     )
     expect(duplicateApproval).toEqual({
       ok: false,
@@ -1309,8 +1493,15 @@ describe("BackofficeProvider", () => {
         approvalLineId: line.value.id,
         content: "서비스 소유 조직의 자격증명 등록 흐름을 검증합니다.",
         fieldValues: [],
-        stepAssignments: [],
+        approvalSteps: approvalStepsFromTemplate(
+          result.current,
+          line.value,
+          requester.value.id,
+          organization.value.id,
+          { serviceOwnerOrganizationId: service.value.ownerOrganizationId },
+        ),
         submission: "submitted",
+        applicationId: application.value.id,
         serviceId: service.value.id,
         endpointIds: credentialEndpointIds,
         keyName: "secondary-integration",
@@ -1331,6 +1522,18 @@ describe("BackofficeProvider", () => {
       }),
     )
     if (!secondRequester.ok) return
+    const secondApplication = await act(() =>
+      result.current.createApplication(
+        {
+          name: "Secondary Console",
+          slug: "secondary_console",
+          description: "두 번째 자격증명 흐름을 검증하는 어플리케이션입니다.",
+          ownerOrganizationId: organization.value.id,
+        },
+        seededUserId,
+      ),
+    )
+    if (!secondApplication.ok) return
     const secondDocument = await act(() =>
       result.current.createApprovalDocument({
         documentKind: "api-key-issuance",
@@ -1341,8 +1544,15 @@ describe("BackofficeProvider", () => {
         approvalLineId: line.value.id,
         content: "다른 사용자의 서비스 자격증명 등록 흐름을 검증합니다.",
         fieldValues: [],
-        stepAssignments: [],
+        approvalSteps: approvalStepsFromTemplate(
+          result.current,
+          line.value,
+          secondRequester.value.id,
+          organization.value.id,
+          { serviceOwnerOrganizationId: service.value.ownerOrganizationId },
+        ),
         submission: "submitted",
+        applicationId: secondApplication.value.id,
         serviceId: service.value.id,
         endpointIds: credentialEndpointIds,
         keyName: "secondary-integration",
@@ -1352,7 +1562,7 @@ describe("BackofficeProvider", () => {
     )
     if (!secondDocument.ok) return
     await act(() =>
-      result.current.approveApprovalDocument(secondDocument.value.id),
+      completeApprovalDocument(result.current, secondDocument.value.id),
     )
     const outsider = await act(() =>
       result.current.createUser({
@@ -1432,7 +1642,13 @@ describe("BackofficeProvider", () => {
         awsSecretKey: "local-integration-key-next",
         content: "정기 교체 주기에 따라 API Key 교체를 요청합니다.",
         fieldValues: [],
-        stepAssignments: [],
+        approvalSteps: approvalStepsFromTemplate(
+          result.current,
+          replacementTemplate,
+          issuanceDocument.requesterId,
+          issuanceDocument.organizationId,
+          { serviceOwnerOrganizationId: service.ownerOrganizationId },
+        ),
         submission: "submitted",
       }),
     )
@@ -1440,7 +1656,7 @@ describe("BackofficeProvider", () => {
     if (!replacement.ok) return
     expect(
       await act(() =>
-        result.current.approveApprovalDocument(replacement.value.id),
+        completeApprovalDocument(result.current, replacement.value.id),
       ),
     ).toMatchObject({ ok: true })
 
@@ -1475,7 +1691,13 @@ describe("BackofficeProvider", () => {
         apiKeyId: registration.value.apiKey.id,
         content: "더 이상 사용하지 않는 API Key의 폐기를 요청합니다.",
         fieldValues: [],
-        stepAssignments: [],
+        approvalSteps: approvalStepsFromTemplate(
+          result.current,
+          disposalTemplate,
+          issuanceDocument.requesterId,
+          issuanceDocument.organizationId,
+          { serviceOwnerOrganizationId: service.ownerOrganizationId },
+        ),
         submission: "submitted",
       }),
     )
@@ -1483,12 +1705,17 @@ describe("BackofficeProvider", () => {
     if (!disposal.ok) return
     expect(
       await act(() =>
-        result.current.approveApprovalDocument(disposal.value.id),
+        completeApprovalDocument(result.current, disposal.value.id),
       ),
     ).toMatchObject({ ok: true })
     expect(
       result.current.apiKeys.find(
         (item) => item.id === registration.value.apiKey.id,
+      )?.status,
+    ).toBe("inactive")
+    expect(
+      result.current.accessPolicies.find(
+        (policy) => policy.id === registration.value.apiKey.accessPolicyId,
       )?.status,
     ).toBe("inactive")
   })
@@ -1516,6 +1743,7 @@ describe("BackofficeProvider", () => {
           id: approvalDocumentId,
           title: "협업 SaaS API Key 발급 요청",
           serviceId: externalService.id,
+          endpointIds: [],
           keyName: "collaboration-key",
           awsSecretName: "backoffice/collaboration-saas",
           awsSecretKey: "api-key",
@@ -1560,6 +1788,7 @@ describe("BackofficeProvider", () => {
     expect(registration.value.apiKey).toMatchObject({
       awsSecretName: "backoffice/collaboration-saas",
       awsSecretKey: "api-key",
+      accessPolicyId: null,
     })
     expect(JSON.stringify(result.current)).not.toContain(manualSecret)
   })
@@ -1636,7 +1865,7 @@ describe("BackofficeProvider", () => {
     )
     if (!line) throw new Error("Access policy approval line is missing")
     const requester = localFixture.users.find(
-      (item) => item.employmentStatus === "employed",
+      (item) => item.nickname === "Amelia",
     )
     if (!requester) throw new Error("Access policy requester is missing")
     const requestOrganizationId = requester.organizationIds[0]
@@ -1652,9 +1881,15 @@ describe("BackofficeProvider", () => {
         requesterId: requester.id,
         approvalLineId: line.id,
         accessPolicyId: crypto.randomUUID(),
+        expiresAt: "2027-08-15T00:00:00.000Z",
         content: "운영 모니터링 기능 묶음의 접근 정책 적용을 요청합니다.",
         fieldValues: [],
-        stepAssignments: [],
+        approvalSteps: approvalStepsFromTemplate(
+          result.current,
+          line,
+          requester.id,
+          requestOrganizationId,
+        ),
         submission: "submitted",
       }),
     )
@@ -1672,9 +1907,15 @@ describe("BackofficeProvider", () => {
         requesterId: requester.id,
         approvalLineId: line.id,
         accessPolicyId: policy.id,
+        expiresAt: "2027-08-15T00:00:00.000Z",
         content: "운영 모니터링 기능 묶음의 접근 정책 적용을 요청합니다.",
         fieldValues: [],
-        stepAssignments: [],
+        approvalSteps: approvalStepsFromTemplate(
+          result.current,
+          line,
+          requester.id,
+          requestOrganizationId,
+        ),
         submission: "submitted",
       }),
     )
@@ -1687,7 +1928,7 @@ describe("BackofficeProvider", () => {
     })
     expect(
       await act(() =>
-        result.current.approveApprovalDocument(document.value.id),
+        completeApprovalDocument(result.current, document.value.id),
       ),
     ).toMatchObject({ ok: true })
     expect(
@@ -1700,13 +1941,103 @@ describe("BackofficeProvider", () => {
           requesterId: requester.id,
           approvalLineId: line.id,
           accessPolicyId: policy.id,
+          expiresAt: "2027-08-15T00:00:00.000Z",
           content: "이미 보유한 운영 모니터링 정책을 다시 요청합니다.",
           fieldValues: [],
-          stepAssignments: [],
+          approvalSteps: approvalStepsFromTemplate(
+            result.current,
+            line,
+            requester.id,
+            requestOrganizationId,
+          ),
           submission: "submitted",
         }),
       ),
     ).toEqual({ ok: false, error: "access-policy-already-assigned" })
+  })
+
+  it("allows a request-time approver to replace an unresolved template assignee", async () => {
+    const { result } = renderHook(() => useBackoffice(), {
+      wrapper: FixtureWrapper,
+    })
+    const requester = localFixture.users.find(
+      (user) => user.nickname === "Jhonny",
+    )
+    const requestOrganization = localFixture.organizations.find(
+      (organization) => organization.name === "개발실",
+    )
+    const service = localFixture.services.find(
+      (candidate) => candidate.name === "Developer API",
+    )
+    const template = localFixture.approvalLines.find(
+      (candidate) => candidate.id === service?.credentialTemplateIds.issuance,
+    )
+    const fallbackApprover = localFixture.users.find(
+      (user) => user.nickname === "David",
+    )
+    const unresolvedStep = template?.steps.find(
+      (step) => step.assigneeMode === "request-organization-leader",
+    )
+    const application = localFixture.applications.find(
+      (candidate) => candidate.ownerOrganizationId === requestOrganization?.id,
+    )
+    if (
+      !requester ||
+      !requestOrganization ||
+      !service ||
+      !template ||
+      !application ||
+      !fallbackApprover ||
+      !unresolvedStep
+    ) {
+      throw new Error("Credential approver fixture is incomplete")
+    }
+
+    const response = await act(() =>
+      result.current.createApprovalDocument({
+        documentKind: "api-key-issuance",
+        title: "상위 승인자 없는 자격증명 발급 요청",
+        type: "api-key",
+        organizationId: requestOrganization.id,
+        requesterId: requester.id,
+        approvalLineId: template.id,
+        content: "상위 조직장이 없는 요청은 제출될 수 없습니다.",
+        fieldValues: [],
+        approvalSteps: approvalStepsFromTemplate(
+          result.current,
+          template,
+          requester.id,
+          requestOrganization.id,
+          {
+            serviceOwnerOrganizationId: service.ownerOrganizationId,
+            userAssignments: {
+              [unresolvedStep.id]: fallbackApprover.id,
+            },
+          },
+        ),
+        submission: "submitted",
+        applicationId: application.id,
+        serviceId: service.id,
+        endpointIds: localFixture.serviceEndpoints
+          .filter((endpoint) => endpoint.serviceId === service.id)
+          .map((endpoint) => endpoint.id),
+        keyName: "missing-upper-approver",
+        awsSecretName: "backoffice/missing-upper-approver",
+        awsSecretKey: "api-key",
+      }),
+    )
+
+    expect(response.ok).toBe(true)
+    if (!response.ok) return
+    expect(
+      response.value.approvalSteps.find((step) => step.id === unresolvedStep.id)
+        ?.assigneeId,
+    ).toBe(fallbackApprover.id)
+    expect(
+      localFixture.approvalLines
+        .find((line) => line.id === template.id)
+        ?.steps.find((step) => step.id === unresolvedStep.id)?.assigneeMode,
+    ).toBe("request-organization-leader")
   })
 
   it("stores valid endpoints without status and rejects duplicate paths", async () => {
@@ -1799,7 +2130,7 @@ describe("BackofficeProvider", () => {
     })
   })
 
-  it("synchronizes the system leader group from organization changes", async () => {
+  it("synchronizes the service operator role from organization changes", async () => {
     const { result } = renderHook(() => useBackoffice(), {
       wrapper: SeededWrapper,
     })
@@ -1822,15 +2153,15 @@ describe("BackofficeProvider", () => {
     if (!firstLeader.ok || !secondLeader.ok) return
     const organization = await act(() =>
       result.current.createOrganization({
-        name: "그룹 동기화 조직",
+        name: "조직장 역할 동기화 조직",
         leaderUserId: firstLeader.value.id,
       }),
     )
     if (!organization.ok) return
 
     expect(
-      result.current.groups.find(
-        (group) => group.id === organizationLeaderGroup.id,
+      result.current.roles.find(
+        (role) => role.id === defaultServiceOperatorRole.id,
       )?.userIds,
     ).toEqual([seededUserId, firstLeader.value.id])
 
@@ -1841,15 +2172,15 @@ describe("BackofficeProvider", () => {
       }),
     )
     expect(
-      result.current.groups.find(
-        (group) => group.id === organizationLeaderGroup.id,
+      result.current.roles.find(
+        (role) => role.id === defaultServiceOperatorRole.id,
       )?.userIds,
     ).toEqual([seededUserId, secondLeader.value.id])
     expect(
       await act(() =>
-        result.current.assignUsersToGroups(
+        result.current.assignUsersToRoles(
           [firstLeader.value.id],
-          [organizationLeaderGroup.id],
+          [defaultServiceOperatorRole.id],
         ),
       ),
     ).toEqual({ ok: false, error: "protected-relationship" })
@@ -1872,7 +2203,7 @@ describe("BackofficeProvider", () => {
     const updated = await act(() =>
       result.current.updateService(service.id, {
         name: "협업 도구 SaaS",
-        code: service.code,
+        slug: service.slug,
         host: service.host,
         type: service.type,
         ownerOrganizationId: service.ownerOrganizationId,
@@ -1887,7 +2218,7 @@ describe("BackofficeProvider", () => {
       await act(() =>
         result.current.updateService(protectedService.id, {
           name: protectedService.name,
-          code: protectedService.code,
+          slug: protectedService.slug,
           host: protectedService.host,
           type: "external",
           ownerOrganizationId: protectedService.ownerOrganizationId,
@@ -2037,8 +2368,8 @@ describe("BackofficeProvider", () => {
 
     const imported = await act(() =>
       result.current.importUiResources(
-        { manifest, grantAdministratorAccess: false },
-        administrator.id,
+        { manifest, grantManagerAccess: false },
+        policyOperator.id,
       ),
     )
     expect(imported.ok).toBe(true)
@@ -2052,15 +2383,15 @@ describe("BackofficeProvider", () => {
       (resource) => resource.key === "services:list:catalogTable",
     )
     expect(created?.namespaceId).toBeDefined()
-    const administratorPolicy = result.current.accessPolicies.find(
+    const managerPolicy = result.current.accessPolicies.find(
       (policy) =>
         policy.id ===
-        result.current.uiNamespaces.find(
+        result.current.namespaces.find(
           (namespace) => namespace.key === manifest.namespaceKey,
-        )?.administratorAccessPolicyId,
+        )?.managerAccessPolicyId,
     )
     expect(
-      administratorPolicy?.resources.some(
+      managerPolicy?.resources.some(
         (resource) =>
           resource.type === "ui-resource" && resource.id === created?.id,
       ),
@@ -2071,7 +2402,7 @@ describe("BackofficeProvider", () => {
         result.current.setUiResourceStatus(
           created.id,
           "inactive",
-          administrator.id,
+          policyOperator.id,
         ),
       ),
     ).toMatchObject({ ok: true, value: { status: "inactive" } })
@@ -2087,9 +2418,9 @@ describe("BackofficeProvider", () => {
                 : resource,
             ),
           },
-          grantAdministratorAccess: true,
+          grantManagerAccess: true,
         },
-        administrator.id,
+        policyOperator.id,
       ),
     )
     expect(updated.ok && updated.value).toMatchObject({
@@ -2109,7 +2440,7 @@ describe("BackofficeProvider", () => {
     expect(
       await act(() =>
         result.current.importUiResources(
-          { manifest, grantAdministratorAccess: true },
+          { manifest, grantManagerAccess: true },
           generalUser.id,
         ),
       ),
@@ -2117,7 +2448,7 @@ describe("BackofficeProvider", () => {
     expect(
       await act(() =>
         result.current.importUiResources(
-          { manifest, grantAdministratorAccess: true },
+          { manifest, grantManagerAccess: true },
           policyOperator.id,
         ),
       ),
@@ -2139,34 +2470,33 @@ describe("BackofficeProvider", () => {
                 },
               ],
             },
-            grantAdministratorAccess: true,
+            grantManagerAccess: true,
           },
-          administrator.id,
+          policyOperator.id,
         ),
       ),
     ).toEqual({ ok: false, error: "ui-resource-parent-not-found" })
     const namespace = await act(() =>
-      result.current.createUiNamespace(
+      result.current.createNamespace(
         {
           key: "customer-console",
           name: "Customer Console",
           description: "고객 시스템의 UI Resource를 격리합니다.",
-          administratorRoleId: defaultBackofficeAdminRole.id,
+          managerRoleId: defaultBackofficeAdminRole.id,
         },
         administrator.id,
       ),
     )
     expect(namespace.ok).toBe(true)
     if (!namespace.ok) return
-    const newNamespaceAdministratorPolicy = result.current.accessPolicies.find(
-      (policy) => policy.id === namespace.value.administratorAccessPolicyId,
+    const newNamespaceManagerPolicy = result.current.accessPolicies.find(
+      (policy) => policy.id === namespace.value.managerAccessPolicyId,
     )
-    expect(newNamespaceAdministratorPolicy?.resources).toHaveLength(
-      uiResourceManagerUiResourceKeys.length + 2,
+    expect(newNamespaceManagerPolicy?.resources).toHaveLength(
+      uiResourceManagerUiResourceKeys.length + 1,
     )
-    expect(newNamespaceAdministratorPolicy?.resources).toEqual(
+    expect(newNamespaceManagerPolicy?.resources).toEqual(
       expect.arrayContaining([
-        { type: "ui-namespace", id: namespace.value.id },
         {
           type: "endpoint",
           id: result.current.systemReferences.serviceEndpointIds
@@ -2178,13 +2508,13 @@ describe("BackofficeProvider", () => {
       result.current.uiResources
         .filter(
           (resource) =>
-            resource.namespaceId === defaultUiNamespace.id &&
+            resource.namespaceId === defaultNamespace.id &&
             uiResourceManagerUiResourceKeys.includes(resource.key),
         )
         .map((resource) => resource.id),
     )
     expect(
-      newNamespaceAdministratorPolicy?.resources.filter(
+      newNamespaceManagerPolicy?.resources.filter(
         (resource) =>
           resource.type === "ui-resource" &&
           managementResourceIds.has(resource.id),
@@ -2193,7 +2523,7 @@ describe("BackofficeProvider", () => {
     expect(
       result.current.accessPolicyAssignments.some(
         (assignment) =>
-          assignment.accessPolicyId === newNamespaceAdministratorPolicy?.id &&
+          assignment.accessPolicyId === newNamespaceManagerPolicy?.id &&
           assignment.targetType === "role" &&
           assignment.targetId === defaultBackofficeAdminRole.id,
       ),
@@ -2215,7 +2545,7 @@ describe("BackofficeProvider", () => {
                 },
               ],
             },
-            grantAdministratorAccess: true,
+            grantManagerAccess: true,
           },
           generalUser.id,
         ),
@@ -2251,7 +2581,7 @@ describe("BackofficeProvider", () => {
               },
             ],
           },
-          grantAdministratorAccess: true,
+          grantManagerAccess: true,
         },
         administrator.id,
       ),
@@ -2285,7 +2615,7 @@ describe("BackofficeProvider", () => {
               },
             ],
           },
-          grantAdministratorAccess: true,
+          grantManagerAccess: true,
         },
         administrator.id,
       ),
@@ -2298,7 +2628,7 @@ describe("BackofficeProvider", () => {
     )
     expect(orphanedResource?.orphanedAt).not.toBeNull()
     expect(
-      result.current.uiNamespaces.find((item) => item.id === namespace.value.id)
+      result.current.namespaces.find((item) => item.id === namespace.value.id)
         ?.lastSyncedAt,
     ).toBe(orphanedResource?.orphanedAt)
     if (!orphanedResource) throw new Error("Orphaned UI Resource is missing")
@@ -2324,47 +2654,44 @@ describe("BackofficeProvider", () => {
     ).toBe(false)
     expect(
       await act(() =>
-        result.current.createUiNamespace(
+        result.current.createNamespace(
           {
             key: "customer-console",
             name: "Another Console",
             description: "중복 key 검증용 namespace입니다.",
-            administratorRoleId: defaultBackofficeAdminRole.id,
+            managerRoleId: defaultBackofficeAdminRole.id,
           },
           administrator.id,
         ),
       ),
-    ).toEqual({ ok: false, error: "ui-namespace-key-exists" })
+    ).toEqual({ ok: false, error: "namespace-key-exists" })
     expect(
       await act(() =>
-        result.current.createUiNamespace(
+        result.current.createNamespace(
           {
             key: "forbidden-console",
             name: "Forbidden Console",
             description: "권한 검증용 namespace입니다.",
-            administratorRoleId: defaultBackofficeAdminRole.id,
+            managerRoleId: defaultBackofficeAdminRole.id,
           },
           generalUser.id,
         ),
       ),
-    ).toEqual({ ok: false, error: "ui-namespace-operation-forbidden" })
+    ).toEqual({ ok: false, error: "namespace-operation-forbidden" })
   })
 
-  it("requires namespace, synchronization UI action, and API endpoint access", async () => {
-    const administrator = localFixture.users.find(
-      (user) => user.nickname === "David",
-    )
+  it("requires the management role, synchronization UI action, and API endpoint access", async () => {
+    const manager = localFixture.users.find((user) => user.nickname === "Owen")
     const importAction = localFixture.uiResources.find(
       (resource) =>
-        resource.namespaceId === defaultUiNamespace.id &&
+        resource.namespaceId === defaultNamespace.id &&
         resource.key ===
           uiResourceKeys.uiResources.list.actions.importUiResources,
     )
-    if (!administrator || !importAction) {
+    if (!manager || !importAction) {
       throw new Error("UI resource synchronization fixtures are missing")
     }
     const requiredResources = [
-      { type: "ui-namespace", id: defaultUiNamespace.id },
       { type: "ui-resource", id: importAction.id },
       {
         type: "endpoint",
@@ -2400,13 +2727,175 @@ describe("BackofficeProvider", () => {
           result.current.importUiResources(
             {
               manifest: uiResourceManifest,
-              grantAdministratorAccess: false,
+              grantManagerAccess: false,
             },
-            administrator.id,
+            manager.id,
           ),
         ),
       ).toEqual({ ok: false, error: "ui-resource-import-forbidden" })
       unmount()
     }
+
+    const stateWithoutManagementRole = structuredClone(localFixture)
+    stateWithoutManagementRole.roles = stateWithoutManagementRole.roles.map(
+      (role) =>
+        role.id === defaultNamespace.managerRoleId
+          ? {
+              ...role,
+              userIds: role.userIds.filter((userId) => userId !== manager.id),
+              organizationIds: [],
+            }
+          : role,
+    )
+    function MissingManagementRoleWrapper({
+      children,
+    }: {
+      children: ReactNode
+    }) {
+      return (
+        <BackofficeProvider
+          initialState={stateWithoutManagementRole}
+          apiClientFactory={testApiClientFactory}
+        >
+          {children}
+        </BackofficeProvider>
+      )
+    }
+    const { result } = renderHook(() => useBackoffice(), {
+      wrapper: MissingManagementRoleWrapper,
+    })
+    expect(
+      await act(() =>
+        result.current.importUiResources(
+          { manifest: uiResourceManifest, grantManagerAccess: false },
+          manager.id,
+        ),
+      ),
+    ).toEqual({ ok: false, error: "ui-resource-import-forbidden" })
+  })
+
+  it("submits a draft, withdraws, rejects, and resubmits an access request", async () => {
+    const { result } = renderHook(() => useBackoffice(), {
+      wrapper: FixtureWrapper,
+    })
+    const requester = result.current.users.find(
+      (user) => user.nickname === "Amelia",
+    )
+    const approver = result.current.users.find(
+      (user) => user.nickname === "Ethan",
+    )
+    const template = result.current.approvalLines.find(
+      (line) => line.category === "permission" && line.status === "active",
+    )
+    const policy = result.current.accessPolicies.find(
+      (candidate) => candidate.id === "43000000-0000-4000-8000-000000000001",
+    )
+    const organizationId = requester?.organizationIds[0]
+    if (!requester || !approver || !template || !policy || !organizationId) {
+      throw new Error("Access request fixtures are incomplete")
+    }
+
+    const created = await act(() =>
+      result.current.createApprovalDocument({
+        documentKind: "general",
+        type: "access-grant",
+        title: "운영 모니터링 접근 요청",
+        organizationId,
+        requesterId: requester.id,
+        approvalLineId: template.id,
+        accessPolicyId: policy.id,
+        expiresAt: "2027-08-15T00:00:00.000Z",
+        content: "운영 모니터링 업무를 수행하기 위해 접근을 요청합니다.",
+        fieldValues: [],
+        approvalSteps: approvalStepsFromTemplate(
+          result.current,
+          template,
+          requester.id,
+          organizationId,
+        ),
+        submission: "draft",
+      }),
+    )
+    if (!created.ok) throw new Error(created.error)
+    expect(created.value.status).toBe("draft")
+    expect(
+      created.value.approvalSteps.every((step) => step.status === "waiting"),
+    ).toBe(true)
+
+    const initialSubmission = await act(() =>
+      result.current.resubmitApprovalDocument({
+        documentId: created.value.id,
+        actorUserId: requester.id,
+      }),
+    )
+    if (!initialSubmission.ok) throw new Error(initialSubmission.error)
+    expect(initialSubmission.value.document.approvalSteps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "request", status: "completed" }),
+        expect.objectContaining({ kind: "approval", status: "pending" }),
+      ]),
+    )
+
+    const withdrawn = await act(() =>
+      result.current.withdrawApprovalDocument({
+        documentId: created.value.id,
+        actorUserId: requester.id,
+      }),
+    )
+    expect(withdrawn).toMatchObject({
+      ok: true,
+      value: { status: "withdrawn" },
+    })
+
+    const resubmitted = await act(() =>
+      result.current.resubmitApprovalDocument({
+        documentId: created.value.id,
+        actorUserId: requester.id,
+      }),
+    )
+    if (!resubmitted.ok) throw new Error(resubmitted.error)
+    const pendingStep = resubmitted.value.document.approvalSteps.find(
+      (step) => step.status === "pending",
+    )
+    if (!pendingStep) throw new Error("Pending request step is missing")
+
+    const rejected = await act(() =>
+      result.current.processApprovalDocument({
+        documentId: created.value.id,
+        actorUserId: approver.id,
+        stepId: pendingStep.id,
+        decision: "reject",
+        comment: "요청 사유를 보완해 주세요.",
+      }),
+    )
+    expect(rejected).toMatchObject({
+      ok: true,
+      value: { document: { status: "rejected" } },
+    })
+
+    const finalSubmission = await act(() =>
+      result.current.resubmitApprovalDocument({
+        documentId: created.value.id,
+        actorUserId: requester.id,
+      }),
+    )
+    if (!finalSubmission.ok) throw new Error(finalSubmission.error)
+    const finalStep = finalSubmission.value.document.approvalSteps.find(
+      (step) => step.status === "pending",
+    )
+    if (!finalStep) throw new Error("Resubmitted request step is missing")
+    const approved = await act(() =>
+      result.current.processApprovalDocument({
+        documentId: created.value.id,
+        actorUserId: approver.id,
+        stepId: finalStep.id,
+        decision: "approve",
+        comment: "보완 내용을 확인했습니다.",
+      }),
+    )
+    expect(approved).toMatchObject({
+      ok: true,
+      value: { document: { status: "approved" } },
+    })
   })
 })

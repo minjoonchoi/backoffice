@@ -4,45 +4,54 @@ import { expect, fireEvent, userEvent, waitFor, within } from "storybook/test"
 import { SessionAccessProvider } from "@/auth/session-access-provider"
 import { defaultBackofficeAdminRole } from "@/mocks/system-fixture"
 import { localDefaultUserId, localFixture } from "@/mocks/fixture"
-import { UiResourcesPage } from "@/features/ui-resources/ui-resource-page"
+import {
+  UiResourceSyncPage,
+  UiResourcesPage,
+} from "@/features/ui-resources/ui-resource-page"
 import { BackofficeProvider } from "@/application/state/provider"
 
 const storyBackoffice = structuredClone(localFixture)
 const storyNamespaceId = "99000000-0000-4000-8000-000000000001"
-const storyAdministratorPolicyId = "99000000-0000-4000-8000-000000000002"
+const storyManagerPolicyId = "99000000-0000-4000-8000-000000000002"
+const backofficeNamespace = storyBackoffice.namespaces.find(
+  (namespace) => namespace.key === "backoffice",
+)
+if (!backofficeNamespace) {
+  throw new Error("Story Backoffice namespace fixture is missing")
+}
+backofficeNamespace.managerRoleId = defaultBackofficeAdminRole.id
 const storyManagementResource = storyBackoffice.uiResources[0]
 if (!storyManagementResource) {
   throw new Error("Story UI resource fixture is missing")
 }
-storyBackoffice.uiNamespaces.push({
+storyBackoffice.namespaces.push({
   id: storyNamespaceId,
   key: "story-console",
   name: "Story Console",
   description: "Storybook UI Resource 격리 검증용 namespace입니다.",
-  administratorRoleId: defaultBackofficeAdminRole.id,
-  administratorAccessPolicyId: storyAdministratorPolicyId,
+  managerRoleId: defaultBackofficeAdminRole.id,
+  managerAccessPolicyId: storyManagerPolicyId,
   status: "active",
   lastSyncedAt: null,
   createdAt: "2026-08-11T00:00:00.000Z",
 })
 storyBackoffice.accessPolicies.push({
-  id: storyAdministratorPolicyId,
+  id: storyManagerPolicyId,
   name: "Story Console 시스템 관리자 UI 리소스 허용",
   description: "Story Console 시스템 관리자 권한을 검증합니다.",
   type: "access-grant",
+  managementType: "system-managed",
   effect: "allow",
-  resources: [
-    { type: "ui-namespace", id: storyNamespaceId },
-    { type: "ui-resource", id: storyManagementResource.id },
-  ],
+  resources: [{ type: "ui-resource", id: storyManagementResource.id }],
   status: "active",
   createdAt: "2026-08-11T00:00:00.000Z",
 })
 storyBackoffice.accessPolicyAssignments.push({
   id: "99000000-0000-4000-8000-000000000003",
-  accessPolicyId: storyAdministratorPolicyId,
+  accessPolicyId: storyManagerPolicyId,
   targetType: "role",
   targetId: defaultBackofficeAdminRole.id,
+  expiresAt: null,
   createdAt: "2026-08-11T00:00:00.000Z",
 })
 
@@ -67,27 +76,25 @@ export default meta
 type Story = StoryObj
 
 export const ImportYamlManifest: Story = {
+  render: () => (
+    <BackofficeProvider initialState={storyBackoffice}>
+      <SessionAccessProvider
+        localSwitchingEnabled
+        initialUserId={localDefaultUserId}
+      >
+        <div className="p-6">
+          <UiResourceSyncPage />
+        </div>
+      </SessionAccessProvider>
+    </BackofficeProvider>
+  ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(
-      canvas.getByRole("heading", { level: 1, name: "UI 리소스" }),
+      canvas.getByRole("heading", { level: 1, name: "UI 리소스 동기화" }),
     ).toBeVisible()
-    await expect(
-      canvas.queryByRole("heading", { name: "코드 리소스 추출" }),
-    ).not.toBeInTheDocument()
-    const trigger = canvas.getByRole("button", { name: "UI 리소스 동기화" })
-    await expect(trigger).toHaveAttribute(
-      "data-ui-resource",
-      "uiResources:list:importUiResources",
-    )
-    await userEvent.click(trigger)
-
     const body = within(canvasElement.ownerDocument.body)
-    const dialog = await body.findByRole("dialog", {
-      name: "UI 리소스 동기화",
-    })
-    const modal = within(dialog)
-    const namespaceSelect = modal.getByRole("combobox", {
+    const namespaceSelect = canvas.getByRole("combobox", {
       name: "네임스페이스",
     })
     await waitFor(() =>
@@ -100,7 +107,7 @@ export const ImportYamlManifest: Story = {
       }),
     )
     await fireEvent.change(
-      modal.getByRole("textbox", { name: "Manifest 데이터" }),
+      canvas.getByRole("textbox", { name: "Manifest 데이터" }),
       {
         target: {
           value: [
@@ -126,14 +133,14 @@ export const ImportYamlManifest: Story = {
         },
       },
     )
-    await userEvent.click(modal.getByRole("button", { name: "검토하기" }))
-    await expect(modal.getByText("추가 예정 3건")).toBeVisible()
+    await userEvent.click(canvas.getByRole("button", { name: "검토하기" }))
+    await expect(canvas.getByText("추가 예정 3건")).toBeVisible()
     await expect(
-      modal.getByRole("checkbox", {
+      canvas.getByRole("checkbox", {
         name: /Backoffice 시스템 관리자에 동기화 대상 전체 접근 권한 부여/,
       }),
     ).toBeChecked()
-    const selectionList = modal
+    const selectionList = canvas
       .getByText("동기화 대상 선택")
       .closest("section")
       ?.querySelector("ul")
@@ -144,31 +151,20 @@ export const ImportYamlManifest: Story = {
     await expect(sortedOptions[2]).toHaveAccessibleName(
       /services:list:catalogTable/,
     )
-    const componentTarget = modal.getByRole("checkbox", {
+    const componentTarget = canvas.getByRole("checkbox", {
       name: /services:list:catalogTable/,
     })
     await userEvent.click(componentTarget)
-    await expect(modal.getByText("추가 예정 2건")).toBeVisible()
+    await expect(canvas.getByText("추가 예정 2건")).toBeVisible()
     await userEvent.click(componentTarget)
-    await expect(modal.getByText("추가 예정 3건")).toBeVisible()
-    await userEvent.click(modal.getByRole("button", { name: "동기화" }))
+    await expect(canvas.getByText("추가 예정 3건")).toBeVisible()
+    await userEvent.click(canvas.getByRole("button", { name: "동기화" }))
     await expect(
-      modal.getByRole("heading", {
+      canvas.getByRole("heading", {
         name: "UI 리소스 동기화를 완료했습니다.",
       }),
     ).toBeVisible()
-    await userEvent.click(modal.getByRole("button", { name: "완료" }))
-    await waitFor(() => expect(dialog).not.toBeVisible())
-    await userEvent.type(
-      canvas.getByRole("searchbox", { name: "Resource key" }),
-      "services:list:catalogTable",
-    )
-    await expect(
-      canvas.getByRole("cell", { name: "services:list:catalogTable" }),
-    ).toBeVisible()
-    await expect(
-      canvas.queryByRole("columnheader", { name: "관리자 접근" }),
-    ).not.toBeInTheDocument()
+    await expect(canvas.getByRole("button", { name: "완료" })).toBeVisible()
   },
 }
 

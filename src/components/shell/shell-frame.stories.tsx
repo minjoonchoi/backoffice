@@ -29,7 +29,7 @@ const meta = {
       users: "Users",
       organizations: "Organizations",
       roles: "Roles",
-      groups: "Groups",
+      applications: "Applications",
       namespaces: "Namespaces",
       approvalLines: "Request templates",
       approvalDocuments: "Policies",
@@ -37,17 +37,17 @@ const meta = {
       serviceEndpoints: "Endpoints",
       apiKeys: "Credentials",
       uiResources: "UI Resources",
+      auditLogs: "Audit",
       sessionAccess: "Local login user",
       localCurrentUser: "Current login user",
       localAuthStatus: "Local mock login",
       organizationCount: "Organizations",
       roleCount: "Effective roles",
-      groupCount: "Groups",
       emptyMemberships: "None",
       accessibleMenuCount: "Accessible menus",
       accessDeniedTitle: "Access denied",
       accessDeniedDescription:
-        "The current user's organizations, roles, and groups do not grant access to this menu.",
+        "The current user's organizations and roles do not grant access to this menu.",
       goToAccessibleMenu: "Go to an accessible menu",
     },
     children: (
@@ -114,7 +114,7 @@ export const LocalAccess: Story = {
     await userEvent.unhover(organizationCount)
 
     const roleCount = canvas.getByRole("button", {
-      name: "Effective roles: 3",
+      name: "Effective roles: 4",
     })
     await userEvent.hover(roleCount)
     await expect(
@@ -123,13 +123,6 @@ export const LocalAccess: Story = {
       }),
     ).toHaveTextContent("Backoffice 시스템 관리자")
     await userEvent.unhover(roleCount)
-
-    const groupCount = canvas.getByRole("button", { name: "Groups: 1" })
-    await userEvent.hover(groupCount)
-    await expect(
-      await body.findByRole("tooltip", { name: /Groups 조직장 그룹/ }),
-    ).toHaveTextContent("조직장 그룹")
-    await userEvent.unhover(groupCount)
 
     await userEvent.click(canvas.getByRole("button", { name: "User menu" }))
     await userEvent.click(await body.findByRole("menuitem", { name: "Amelia" }))
@@ -157,9 +150,6 @@ export const LocalAccess: Story = {
       ).not.toBeInTheDocument()
       await expect(
         canvas.queryByRole("link", { name: "Roles" }),
-      ).not.toBeInTheDocument()
-      await expect(
-        canvas.queryByRole("link", { name: "Groups" }),
       ).not.toBeInTheDocument()
     })
   },
@@ -195,9 +185,6 @@ export const OrganizationLeaderAccess: Story = {
     ).not.toBeInTheDocument()
     await expect(
       canvas.queryByRole("link", { name: "Roles" }),
-    ).not.toBeInTheDocument()
-    await expect(
-      canvas.queryByRole("link", { name: "Groups" }),
     ).not.toBeInTheDocument()
     await expect(
       canvas.queryByText("IAM", { exact: true }),

@@ -1,16 +1,13 @@
+import { employmentStatusValues } from "@/features/iam/model"
 import type { BackofficeState } from "@/application/state/model"
 import type { BackofficeUser } from "@/features/iam/model"
 
-type AuthorizationSubjectState = Pick<
-  BackofficeState,
-  "groups" | "roles" | "users"
->
+type AuthorizationSubjectState = Pick<BackofficeState, "roles" | "users">
 
 export type AuthorizationSubject = Readonly<{
   user: BackofficeUser
   organizationIds: ReadonlySet<string>
   roleIds: ReadonlySet<string>
-  groupIds: ReadonlySet<string>
 }>
 
 export function resolveAuthorizationSubject(
@@ -19,7 +16,7 @@ export function resolveAuthorizationSubject(
 ): AuthorizationSubject | null {
   if (!userId) return null
   const user = state.users.find((candidate) => candidate.id === userId)
-  if (user?.employmentStatus !== "employed") return null
+  if (user?.employmentStatus !== employmentStatusValues.employed) return null
 
   const organizationIds = new Set(user.organizationIds)
   const roleIds = new Set(
@@ -31,11 +28,5 @@ export function resolveAuthorizationSubject(
       )
       .map((role) => role.id),
   )
-  const groupIds = new Set(
-    state.groups
-      .filter((group) => group.userIds.includes(user.id))
-      .map((group) => group.id),
-  )
-
-  return { user, organizationIds, roleIds, groupIds }
+  return { user, organizationIds, roleIds }
 }

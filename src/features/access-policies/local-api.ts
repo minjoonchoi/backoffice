@@ -1,11 +1,17 @@
+import { accessPolicyAssignmentTargets } from "@/features/access-policies/model"
+import { accessPolicyResourceTypes } from "@/features/access-policies/model"
+import { serviceTypeValues } from "@/features/service-catalog/model"
+import { entityStatuses } from "@/domain/common"
 import { hasUiResourcePolicyAccess } from "@/auth/ui-resource-policy-access"
 import { uiResourceKeys } from "@/config/menu-registry"
 import { accessPolicyApprovalLines } from "@/features/access-policies/access-policy-template"
 import {
   accessPolicyInputSchema,
   accessPolicyAssignmentTargetSchema,
+  accessPolicyManagementTypes,
   type AccessPolicy,
   type AccessPolicyInput,
+  type AccessPolicyValue,
 } from "@/features/access-policies/model"
 import type { AccessPolicyApi } from "@/features/access-policies/api"
 import {
@@ -14,8 +20,16 @@ import {
   type BackofficeStateUpdater,
 } from "@/application/api/local-state"
 import type { BackofficeState } from "@/application/state/model"
-import { entityIdListSchema, entityIdSchema } from "@/domain/common"
-import { resolveAccessPolicyUpdateImpact } from "@/features/access-policies/access-policy-assignment"
+import {
+  entityIdListSchema,
+  entityIdSchema,
+  type BackofficeErrorCode,
+} from "@/domain/common"
+import {
+  resolveAccessPolicyUpdateImpact,
+  type AccessPolicyUpdateImpact,
+} from "@/features/access-policies/access-policy-assignment"
+import { isAccessPolicyEffective } from "@/features/access-policies/access-policy-status"
 
 function accessPolicyReferenceError(
   input: AccessPolicyInput,
@@ -24,14 +38,13 @@ function accessPolicyReferenceError(
     | "approvalLines"
     | "serviceEndpoints"
     | "services"
-    | "uiNamespaces"
+    | "namespaces"
     | "uiResources"
   >,
 ):
   | "approval-line-not-found"
   | "approval-line-ambiguous"
   | "endpoint-not-found"
-  | "ui-namespace-not-found"
   | "ui-resource-namespace-mismatch"
   | "ui-resource-not-found"
   | null {
@@ -41,7 +54,7 @@ function accessPolicyReferenceError(
 
   const uiResourceNamespaceIds = new Set<string>()
   for (const resource of input.resources) {
-    if (resource.type === "endpoint") {
+    if (resource.type === accessPolicyResourceTypes.endpoint) {
       const endpoint = state.serviceEndpoints.find(
         (item) => item.id === resource.id,
       )
@@ -50,22 +63,11 @@ function accessPolicyReferenceError(
         !state.services.some(
           (service) =>
             service.id === endpoint.serviceId &&
-            service.status === "active" &&
-            service.type === "internal",
+            service.status === entityStatuses.active &&
+            service.type === serviceTypeValues.internal,
         )
       ) {
         return "endpoint-not-found"
-      }
-      continue
-    }
-    if (resource.type === "ui-namespace") {
-      if (
-        !state.uiNamespaces.some(
-          (namespace) =>
-            namespace.id === resource.id && namespace.status === "active",
-        )
-      ) {
-        return "ui-namespace-not-found"
       }
       continue
     }
@@ -74,10 +76,10 @@ function accessPolicyReferenceError(
     )
     if (
       !uiResource ||
-      !state.uiNamespaces.some(
+      !state.namespaces.some(
         (namespace) =>
           namespace.id === uiResource.namespaceId &&
-          namespace.status === "active",
+          namespace.status === entityStatuses.active,
       )
     ) {
       return "ui-resource-not-found"
@@ -88,6 +90,58 @@ function accessPolicyReferenceError(
     return "ui-resource-namespace-mismatch"
   }
   return null
+}
+
+type AccessPolicyUpdateValidation =
+  | Readonly<{
+      ok: true
+      existing: AccessPolicy
+      input: AccessPolicyValue
+    }>
+  | Readonly<{ ok: false; error: BackofficeErrorCode }>
+
+function validateAccessPolicyUpdate(
+  state: BackofficeState,
+  id: string,
+  input: AccessPolicyInput,
+  requesterId: string,
+): AccessPolicyUpdateValidation {
+  if (
+    !hasUiResourcePolicyAccess(
+      state,
+      requesterId,
+      uiResourceKeys.approvalDocuments.detail.actions.updatePolicy,
+    )
+  ) {
+    return { ok: false, error: "policy-operation-forbidden" }
+  }
+  const existing = state.accessPolicies.find((policy) => policy.id === id)
+  if (!existing) return { ok: false, error: "policy-not-found" }
+  const parsed = accessPolicyInputSchema.safeParse(input)
+  if (!parsed.success) return { ok: false, error: "invalid-input" }
+  const normalizedName = parsed.data.name.toLocaleLowerCase()
+  if (
+    state.accessPolicies.some(
+      (policy) =>
+        policy.id !== id && policy.name.toLocaleLowerCase() === normalizedName,
+    )
+  ) {
+    return { ok: false, error: "policy-name-exists" }
+  }
+  const referenceError = accessPolicyReferenceError(parsed.data, state)
+  return referenceError
+    ? { ok: false, error: referenceError }
+    : { ok: true, existing, input: parsed.data }
+}
+
+function hasPolicyChanges(impact: AccessPolicyUpdateImpact) {
+  return (
+    impact.nameChanged ||
+    impact.descriptionChanged ||
+    impact.effectChanged ||
+    impact.addedResources.length > 0 ||
+    impact.removedResources.length > 0
+  )
 }
 
 export function createLocalAccessPolicyApi(
@@ -111,11 +165,9 @@ export function createLocalAccessPolicyApi(
         return { ok: false, error: "invalid-input" }
       }
       const permissionKey =
-        targetType === "role"
+        targetType === accessPolicyAssignmentTargets.role
           ? uiResourceKeys.roles.detail.actions.assignRolePolicy
-          : targetType === "group"
-            ? uiResourceKeys.groups.detail.actions.assignGroupPolicy
-            : null
+          : null
       if (
         !permissionKey ||
         !hasUiResourcePolicyAccess(state, requesterId, permissionKey)
@@ -123,19 +175,31 @@ export function createLocalAccessPolicyApi(
         return { ok: false, error: "policy-assignment-forbidden" }
       }
       const targetExists =
-        targetType === "role"
-          ? state.roles.some((role) => role.id === targetId)
-          : state.groups.some((group) => group.id === targetId)
+        targetType === accessPolicyAssignmentTargets.role &&
+        state.roles.some((role) => role.id === targetId)
       if (!targetExists) {
-        return {
-          ok: false,
-          error: targetType === "role" ? "role-not-found" : "group-not-found",
-        }
+        return { ok: false, error: "role-not-found" }
+      }
+      if (
+        parsedPolicyIds.data.some((id) =>
+          state.accessPolicies.some(
+            (policy) =>
+              policy.id === id &&
+              policy.managementType ===
+                accessPolicyManagementTypes.systemManaged,
+          ),
+        )
+      ) {
+        return { ok: false, error: "policy-assignment-forbidden" }
       }
       if (
         !parsedPolicyIds.data.every((id) =>
           state.accessPolicies.some(
-            (policy) => policy.id === id && policy.status === "active",
+            (policy) =>
+              policy.id === id &&
+              policy.managementType ===
+                accessPolicyManagementTypes.operatorManaged &&
+              isAccessPolicyEffective(policy),
           ),
         )
       ) {
@@ -155,6 +219,7 @@ export function createLocalAccessPolicyApi(
                 accessPolicyId,
                 targetType,
                 targetId,
+                expiresAt: null,
               },
             ],
       )
@@ -180,21 +245,19 @@ export function createLocalAccessPolicyApi(
         return { ok: false, error: "policy-assignment-not-found" }
       }
       const permissionKey =
-        assignment.targetType === "role"
+        assignment.targetType === accessPolicyAssignmentTargets.role
           ? uiResourceKeys.roles.detail.actions.assignRolePolicy
-          : assignment.targetType === "group"
-            ? uiResourceKeys.groups.detail.actions.assignGroupPolicy
-            : null
+          : null
       if (
         !permissionKey ||
         !hasUiResourcePolicyAccess(state, requesterId, permissionKey)
       ) {
         return { ok: false, error: "policy-assignment-forbidden" }
       }
-      const protectedAssignment = state.uiNamespaces.some(
+      const protectedAssignment = state.namespaces.some(
         (namespace) =>
-          namespace.administratorRoleId === assignment.targetId &&
-          namespace.administratorAccessPolicyId === assignment.accessPolicyId,
+          namespace.managerRoleId === assignment.targetId &&
+          namespace.managerAccessPolicyId === assignment.accessPolicyId,
       )
       if (protectedAssignment) {
         return { ok: false, error: "protected-relationship" }
@@ -233,6 +296,7 @@ export function createLocalAccessPolicyApi(
       if (referenceError) return { ok: false, error: referenceError }
       const policy: AccessPolicy = {
         ...parsed.data,
+        managementType: accessPolicyManagementTypes.operatorManaged,
         ...createEntityBase(),
       }
       updateState((current) => ({
@@ -242,47 +306,45 @@ export function createLocalAccessPolicyApi(
       return { ok: true, value: policy }
     },
 
+    analyzeAccessPolicyUpdate: async (id, input, requesterId) => {
+      await Promise.resolve()
+      const validation = validateAccessPolicyUpdate(
+        state,
+        id,
+        input,
+        requesterId,
+      )
+      if (!validation.ok) return validation
+      return {
+        ok: true,
+        value: resolveAccessPolicyUpdateImpact(
+          state,
+          validation.existing,
+          validation.input,
+        ),
+      }
+    },
+
     updateAccessPolicy: async (id, input, requesterId) => {
       await Promise.resolve()
-      if (
-        !hasUiResourcePolicyAccess(
-          state,
-          requesterId,
-          uiResourceKeys.approvalDocuments.detail.actions.updatePolicy,
-        )
-      ) {
-        return { ok: false, error: "policy-operation-forbidden" }
-      }
-      const existing = state.accessPolicies.find((policy) => policy.id === id)
-      if (!existing) return { ok: false, error: "policy-not-found" }
-      const parsed = accessPolicyInputSchema.safeParse(input)
-      if (!parsed.success) return { ok: false, error: "invalid-input" }
-      const normalizedName = parsed.data.name.toLocaleLowerCase()
-      if (
-        state.accessPolicies.some(
-          (policy) =>
-            policy.id !== id &&
-            policy.name.toLocaleLowerCase() === normalizedName,
-        )
-      ) {
-        return { ok: false, error: "policy-name-exists" }
-      }
-      const referenceError = accessPolicyReferenceError(parsed.data, state)
-      if (referenceError) return { ok: false, error: referenceError }
+      const validation = validateAccessPolicyUpdate(
+        state,
+        id,
+        input,
+        requesterId,
+      )
+      if (!validation.ok) return validation
       const impact = resolveAccessPolicyUpdateImpact(
         state,
-        existing,
-        parsed.data,
+        validation.existing,
+        validation.input,
       )
-      const policyChanged =
-        impact.nameChanged ||
-        impact.descriptionChanged ||
-        impact.effectChanged ||
-        impact.addedResources.length > 0 ||
-        impact.removedResources.length > 0
-      const policy: AccessPolicy = { ...existing, ...parsed.data }
-      const notifications = policyChanged
-        ? impact.affectedUserIds.map((userId) => ({
+      const policy: AccessPolicy = {
+        ...validation.existing,
+        ...validation.input,
+      }
+      const notifications = hasPolicyChanges(impact)
+        ? impact.notificationRecipientUserIds.map((userId) => ({
             userId,
             event: "access-policy-updated" as const,
             targetType: "access-policy" as const,
@@ -321,7 +383,15 @@ export function createLocalAccessPolicyApi(
       }
       const existing = state.accessPolicies.find((policy) => policy.id === id)
       if (!existing) return { ok: false, error: "policy-not-found" }
-      const policy: AccessPolicy = { ...existing, status: "inactive" }
+      if (
+        existing.managementType === accessPolicyManagementTypes.systemManaged
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
+      const policy: AccessPolicy = {
+        ...existing,
+        status: entityStatuses.inactive,
+      }
       updateState((current) => ({
         ...current,
         accessPolicies: current.accessPolicies.map((item) =>

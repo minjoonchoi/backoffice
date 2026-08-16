@@ -4,20 +4,7 @@ import { expect, userEvent, waitFor, within } from "storybook/test"
 import { SessionAccessProvider } from "@/auth/session-access-provider"
 import { localDefaultUserId, localFixture } from "@/mocks/fixture"
 import { HomeDashboard } from "@/features/home/home-dashboard"
-import type { BackofficeState } from "@/application/state/model"
 import { BackofficeProvider } from "@/application/state/provider"
-
-function createDashboardState(): BackofficeState {
-  const state = structuredClone(localFixture)
-  const approvalDocument = state.approvalDocuments.find(
-    (document) => document.documentKind === "general",
-  )
-  if (!approvalDocument) {
-    throw new Error("Dashboard story requires a permission request")
-  }
-  approvalDocument.status = "submitted"
-  return state
-}
 
 function findUserId(nickname: string) {
   const user = localFixture.users.find((item) => item.nickname === nickname)
@@ -38,7 +25,7 @@ type Story = StoryObj<typeof meta>
 
 export const Default: Story = {
   render: () => (
-    <BackofficeProvider initialState={createDashboardState()}>
+    <BackofficeProvider initialState={localFixture}>
       <SessionAccessProvider
         localSwitchingEnabled
         initialUserId={localDefaultUserId}
@@ -56,52 +43,21 @@ export const Default: Story = {
     ).toBeVisible()
     await expect(canvas.getByText(/David님/)).toBeVisible()
     await expect(
-      canvas.getByRole("heading", { name: "내 업무 현황" }),
+      canvas.getByRole("heading", { name: "보유 정책" }),
     ).toBeVisible()
-    await userEvent.click(
-      canvas.getByRole("button", { name: "보유 접근 권한 0개 보기" }),
-    )
-    const permissionDialog = await screen.findByRole("dialog", {
-      name: "요청으로 부여된 접근 권한",
-    })
-    await waitFor(async () => {
-      await expect(permissionDialog).toBeVisible()
-    })
-    const permissionTable = within(permissionDialog).getByRole("table", {
-      name: "세션 사용자 보유 접근 권한 목록",
-    })
-    await expect(permissionTable).toBeVisible()
-    await expect(
-      within(permissionDialog).getByText(
-        "요청을 통해 부여된 접근 권한이 없습니다.",
-      ),
-    ).toBeVisible()
-    await userEvent.keyboard("{Escape}")
-    await waitFor(async () => {
-      await expect(permissionDialog).not.toBeVisible()
-    })
-    await userEvent.click(
-      canvas.getByRole("button", { name: /승인 대기 요청 \d+개 보기/ }),
-    )
-    const requestDialog = screen.getByRole("dialog", {
-      name: "대기 중인 요청",
-    })
-    await waitFor(async () => {
-      await expect(requestDialog).toBeVisible()
+    const policyTable = canvas.getByRole("table", {
+      name: "세션 사용자 보유 정책 목록",
     })
     await expect(
-      within(requestDialog).getByRole("table", { name: "승인 대기 요청 목록" }),
+      within(policyTable).getByText("운영 모니터링 허용"),
     ).toBeVisible()
     await expect(
-      within(requestDialog).getByText("보안 서비스 접근 요청"),
+      within(policyTable).getByText("사용자 직접 부여"),
     ).toBeVisible()
+    await expect(within(policyTable).getByText("조직 · 개발 1팀")).toBeVisible()
     await expect(
-      within(requestDialog).queryByText("로컬 API Key 발급 요청"),
+      canvas.queryByText("승인 대기 요청", { exact: true }),
     ).not.toBeInTheDocument()
-    await userEvent.keyboard("{Escape}")
-    await waitFor(async () => {
-      await expect(requestDialog).not.toBeVisible()
-    })
     await userEvent.click(canvas.getByRole("button", { name: "내 업무 정보" }))
     const workDialog = screen.getByRole("dialog", { name: "내 업무 정보" })
     await waitFor(async () => {
@@ -120,7 +76,7 @@ export const Default: Story = {
 
 export const DefaultMenuAccessWithoutLocalSession: Story = {
   render: () => (
-    <BackofficeProvider initialState={createDashboardState()}>
+    <BackofficeProvider initialState={localFixture}>
       <HomeDashboard />
     </BackofficeProvider>
   ),
@@ -131,44 +87,11 @@ export const DefaultMenuAccessWithoutLocalSession: Story = {
     await expect(canvas.queryByText("활성 자격증명")).not.toBeInTheDocument()
     await expect(canvas.queryByText("재직 사용자")).not.toBeInTheDocument()
     await expect(
-      canvas.queryByRole("button", { name: /승인 대기 요청 \d+개 보기/ }),
-    ).not.toBeInTheDocument()
-    await expect(
-      canvas.queryByRole("heading", { name: "요청으로 부여된 접근 권한" }),
+      canvas.queryByRole("heading", { name: "보유 정책" }),
     ).not.toBeInTheDocument()
     await expect(
       canvas.queryByRole("button", { name: "접근 정책 부여 요청 작성" }),
     ).not.toBeInTheDocument()
-  },
-}
-
-export const EmptyApprovalQueue: Story = {
-  render: () => (
-    <BackofficeProvider initialState={localFixture}>
-      <SessionAccessProvider
-        localSwitchingEnabled
-        initialUserId={localDefaultUserId}
-      >
-        <HomeDashboard />
-      </SessionAccessProvider>
-    </BackofficeProvider>
-  ),
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const screen = within(canvasElement.ownerDocument.body)
-
-    await userEvent.click(
-      canvas.getByRole("button", { name: "승인 대기 요청 0개 보기" }),
-    )
-    const requestDialog = screen.getByRole("dialog", {
-      name: "대기 중인 요청",
-    })
-    await waitFor(async () => {
-      await expect(requestDialog).toBeVisible()
-    })
-    await expect(
-      within(requestDialog).getByText("승인을 기다리는 요청이 없습니다."),
-    ).toBeVisible()
   },
 }
 
@@ -185,34 +108,18 @@ export const OrganizationLeader: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    const screen = within(canvasElement.ownerDocument.body)
-
     await expect(canvas.getByText(/Emma님/)).toBeVisible()
-    await expect(canvas.getByText("관련 자격증명")).toBeVisible()
-    await userEvent.click(
-      canvas.getByRole("button", { name: /관련 자격증명 \d+개 보기/ }),
-    )
-    const credentialDialog = screen.getByRole("dialog", {
-      name: "요청 및 소속 조직 자격증명",
-    })
-    await waitFor(async () => {
-      await expect(credentialDialog).toBeVisible()
-    })
-    const credentialTable = within(credentialDialog).getByRole("table", {
+    await expect(
+      canvas.getByRole("heading", { name: "요청 및 소속 조직 자격증명" }),
+    ).toBeVisible()
+    const credentialTable = canvas.getByRole("table", {
       name: "세션 사용자 관련 자격증명 목록",
     })
     await expect(
       within(credentialTable).getByText("local-integration-key"),
     ).toBeVisible()
     await expect(
-      within(credentialTable).getByText("소속 조직 관리"),
-    ).toBeVisible()
-    await userEvent.keyboard("{Escape}")
-    await waitFor(async () => {
-      await expect(credentialDialog).not.toBeVisible()
-    })
-    await expect(
-      canvas.getByRole("button", { name: /승인 대기 요청 \d+개 보기/ }),
+      within(credentialTable).getByText("어플리케이션 소유 조직"),
     ).toBeVisible()
     await expect(
       canvas.queryByRole("button", { name: "접근 정책 부여 요청 작성" }),
@@ -233,17 +140,7 @@ export const CredentialRequester: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    const screen = within(canvasElement.ownerDocument.body)
-    await userEvent.click(
-      canvas.getByRole("button", { name: /관련 자격증명 \d+개 보기/ }),
-    )
-    const credentialDialog = screen.getByRole("dialog", {
-      name: "요청 및 소속 조직 자격증명",
-    })
-    await waitFor(async () => {
-      await expect(credentialDialog).toBeVisible()
-    })
-    const credentialTable = within(credentialDialog).getByRole("table", {
+    const credentialTable = canvas.getByRole("table", {
       name: "세션 사용자 관련 자격증명 목록",
     })
 
@@ -255,7 +152,7 @@ export const CredentialRequester: Story = {
       within(credentialTable).getByText("내 발급 요청"),
     ).toBeVisible()
     await expect(
-      within(credentialTable).getByText("소속 조직 관리"),
+      within(credentialTable).getByText("어플리케이션 소유 조직"),
     ).toBeVisible()
   },
 }
@@ -273,38 +170,21 @@ export const AccessRecipient: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    const screen = within(canvasElement.ownerDocument.body)
-    await userEvent.click(
-      canvas.getByRole("button", { name: /보유 접근 권한 \d+개 보기/ }),
-    )
-    const permissionDialog = screen.getByRole("dialog", {
-      name: "요청으로 부여된 접근 권한",
-    })
-    await waitFor(async () => {
-      await expect(permissionDialog).toBeVisible()
-    })
-    const permissionTable = within(permissionDialog).getByRole("table", {
-      name: "세션 사용자 보유 접근 권한 목록",
+    const permissionTable = canvas.getByRole("table", {
+      name: "세션 사용자 보유 정책 목록",
     })
 
     await expect(canvas.getByText(/Charlotte님/)).toBeVisible()
     await expect(
-      within(permissionDialog).getByRole("heading", {
-        name: "요청으로 부여된 접근 권한",
+      canvas.getByRole("heading", {
+        name: "보유 정책",
       }),
     ).toBeVisible()
     await expect(
       within(permissionTable).getByText("운영 모니터링 허용"),
     ).toBeVisible()
     await expect(
-      within(permissionTable).getByRole("link", { name: "Developer API" }),
-    ).toBeVisible()
-    await expect(
-      within(permissionTable).getByRole("link", { name: "Audit API" }),
-    ).toBeVisible()
-    await expect(within(permissionTable).getByText("허용")).toBeVisible()
-    await expect(
-      within(permissionTable).getByText("보안 서비스 접근 요청"),
+      within(permissionTable).getByText("사용자 직접 부여"),
     ).toBeVisible()
   },
 }
@@ -339,12 +219,10 @@ export const InactiveUser: Story = {
       await expect(workDialog).not.toBeVisible()
     })
     await expect(
-      canvas.getByRole("heading", { name: "내 업무 현황" }),
+      canvas.getByRole("heading", { name: "보유 정책" }),
     ).toBeVisible()
     await expect(
-      canvas.queryByRole("table", {
-        name: "세션 사용자 보유 접근 권한 목록",
-      }),
-    ).not.toBeInTheDocument()
+      canvas.getByRole("table", { name: "세션 사용자 보유 정책 목록" }),
+    ).toBeVisible()
   },
 }

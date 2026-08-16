@@ -5,4 +5,6 @@ export const uiResourceManagerUiResourceKeys = [
   uiResourceKeys.uiResources.list.actions.importUiResources,
   uiResourceKeys.uiResources.list.actions.changeUiResourceStatus,
   uiResourceKeys.uiResources.list.actions.deleteUiResources,
+  uiResourceKeys.uiResources.list.actions.compareUiResourceSyncs,
+  uiResourceKeys.uiResources.list.actions.restoreUiResourceSync,
 ]

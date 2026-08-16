@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { expect, userEvent, waitFor, within } from "storybook/test"
 
 import { SessionAccessProvider } from "@/auth/session-access-provider"
-import { ApiKeyIssuanceDialog } from "@/features/credentials/api-key-issuance-dialog"
-import { ApprovalDocumentDialog } from "@/features/access-policies/approval-document-dialog"
+import { CredentialIssuancePage } from "@/features/credentials/credential-issuance-page"
+import { ApprovalDocumentRequestPage } from "@/features/access-policies/approval-document-request-page"
 import { localDefaultUserId, localFixture } from "@/mocks/fixture"
 import { BackofficeProvider } from "@/application/state/provider"
 
@@ -13,13 +13,19 @@ function findApprovalLine(type: "access-grant" | "api-key") {
   return line
 }
 
+function findUserId(nickname: string) {
+  const user = localFixture.users.find((item) => item.nickname === nickname)
+  if (!user) throw new Error(`Story user not found: ${nickname}`)
+  return user.id
+}
+
 const accessPolicy = localFixture.accessPolicies[0]
 if (!accessPolicy) throw new Error("Story access policy not found")
 const accessApprovalLine = findApprovalLine("access-grant")
 const apiKeyPolicy = findApprovalLine("api-key")
 
 const meta = {
-  title: "Patterns/Request dialogs",
+  title: "Patterns/Request pages",
   decorators: [
     (Story) => (
       <BackofficeProvider initialState={localFixture}>
@@ -39,83 +45,93 @@ type Story = StoryObj
 
 export const PermissionPolicyRequest: Story = {
   render: () => (
-    <ApprovalDocumentDialog
+    <ApprovalDocumentRequestPage
       policy={accessPolicy}
       approvalLine={accessApprovalLine}
-      triggerLabel="접근 정책 요청"
     />
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await userEvent.click(
-      canvas.getByRole("button", { name: "접근 정책 요청" }),
-    )
-    const body = within(canvasElement.ownerDocument.body)
-    await waitFor(async () => {
-      await expect(body.getByRole("dialog")).toBeVisible()
-    })
     await expect(
-      body.queryByRole("combobox", { name: "요청 유형" }),
+      canvas.queryByRole("combobox", { name: "요청 유형" }),
     ).not.toBeInTheDocument()
-    const dialog = body.getByRole("dialog")
+    await expect(canvas.queryByRole("searchbox")).not.toBeInTheDocument()
     await expect(
-      within(dialog).queryByRole("searchbox"),
-    ).not.toBeInTheDocument()
-    await expect(
-      within(dialog).getByRole("heading", {
+      canvas.getByRole("heading", {
         name: "요청 대상을 선택하세요",
       }),
     ).toBeVisible()
     await expect(
-      within(dialog).getByText("운영 모니터링 허용", { exact: true }),
+      canvas.getByText("운영 모니터링 허용", { exact: true }),
     ).toBeVisible()
-    await userEvent.keyboard("{Escape}")
   },
 }
 
 export const ApiKeyCredentialRequest: Story = {
-  render: () => <ApiKeyIssuanceDialog templates={[apiKeyPolicy]} />,
+  render: () => (
+    <SessionAccessProvider
+      localSwitchingEnabled
+      initialUserId={findUserId("Amelia")}
+    >
+      <CredentialIssuancePage templates={[apiKeyPolicy]} />
+    </SessionAccessProvider>
+  ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await userEvent.click(canvas.getByRole("button", { name: "자격증명 요청" }))
-    const body = within(canvasElement.ownerDocument.body)
-    const dialog = await body.findByRole("dialog")
-
     await waitFor(async () => {
       await expect(
-        within(dialog).getByRole("searchbox", { name: "요청 대상 서비스" }),
+        canvas.getByRole("searchbox", { name: "요청 대상 서비스" }),
       ).toBeVisible()
     })
     await userEvent.click(
-      within(dialog).getByRole("radio", { name: /Developer API/ }),
+      canvas.getByRole("radio", { name: /Developer Console/ }),
     )
+    await userEvent.click(canvas.getByRole("radio", { name: /Audit API/ }))
     await expect(
-      within(dialog).queryByText("API Key 발급 요청 템플릿", {
+      canvas.queryByText("API Key 발급 요청 템플릿", {
         exact: true,
       }),
     ).not.toBeInTheDocument()
     await expect(
-      within(dialog).queryByRole("combobox", { name: "요청 템플릿" }),
+      canvas.queryByRole("combobox", { name: "요청 템플릿" }),
     ).not.toBeInTheDocument()
     await userEvent.click(
-      within(dialog).getByRole("checkbox", { name: /GET \/health/ }),
+      canvas.getByRole("checkbox", { name: /GET \/v1\/audit-events/ }),
     )
-    await userEvent.click(within(dialog).getByRole("button", { name: "다음" }))
     await expect(
-      within(dialog).getByRole("textbox", { name: "자격증명 이름" }),
+      canvas.getByRole("textbox", { name: "자격증명 이름" }),
     ).toBeVisible()
     await expect(
-      within(dialog).getByRole("textbox", { name: "AWS ASM Secret name" }),
+      canvas.getByRole("textbox", { name: "AWS ASM Secret name" }),
     ).toBeVisible()
     await expect(
-      within(dialog).getByRole("textbox", { name: "Secret value key" }),
+      canvas.getByRole("textbox", { name: "Secret value key" }),
     ).toBeVisible()
     await expect(
-      within(dialog).queryByRole("combobox", { name: "요청 유형" }),
+      canvas.queryByRole("combobox", { name: "요청 유형" }),
     ).not.toBeInTheDocument()
     await expect(
-      within(dialog).queryByRole("combobox", { name: "환경" }),
+      canvas.queryByRole("combobox", { name: "환경" }),
     ).not.toBeInTheDocument()
-    await userEvent.keyboard("{Escape}")
+    await userEvent.type(
+      canvas.getByRole("textbox", { name: "자격증명 이름" }),
+      "Developer API key",
+    )
+    await userEvent.type(
+      canvas.getByRole("textbox", { name: "AWS ASM Secret name" }),
+      "backoffice/developer-api",
+    )
+    await userEvent.type(
+      canvas.getByRole("textbox", { name: "Secret value key" }),
+      "apiKey",
+    )
+    await userEvent.type(
+      canvas.getByRole("textbox", { name: "발급 사유" }),
+      "개발 환경 연동에 사용합니다.",
+    )
+    await userEvent.click(canvas.getByRole("button", { name: "다음" }))
+    await expect(
+      canvas.getByRole("heading", { name: "자격증명 요청 내용을 검토하세요" }),
+    ).toBeVisible()
   },
 }

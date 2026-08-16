@@ -17,10 +17,7 @@ function Field({
       data-slot="field"
       data-invalid={invalid || undefined}
       data-disabled={disabled || undefined}
-      className={cn(
-        "group/field grid w-full gap-1.5 data-disabled:opacity-60",
-        className,
-      )}
+      className={cn("group/field grid w-full gap-1.5", className)}
       {...props}
     />
   )

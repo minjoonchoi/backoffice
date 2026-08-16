@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Database } from "lucide-react"
-import { useState } from "react"
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
 
 import {
@@ -15,7 +14,8 @@ import { DetailGrid, DetailItem } from "@/components/patterns/detail-grid"
 import { FilterBar } from "@/components/patterns/filter-bar"
 import { PageHeader } from "@/components/patterns/page-header"
 import { MetricCard } from "@/components/patterns/metric-card"
-import { RequestDialog } from "@/components/patterns/request-dialog"
+import { RequestWorkflow } from "@/components/patterns/request-workflow"
+import { ReviewWorkflowProgress } from "@/components/patterns/review-workflow-progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -98,74 +98,55 @@ export const ListAndDetail: Story = {
   ),
 }
 
-function RequestDialogFixture() {
-  const [open, setOpen] = useState(false)
+function RequestWorkflowFixture() {
   return (
-    <RequestDialog
-      open={open}
-      onOpenChange={setOpen}
-      triggerLabel="Create request"
+    <RequestWorkflow
       title="Create approval request"
       description="Each business page supplies its request fields in one form."
       cancelLabel="Cancel"
+      cancelHref="/requests"
       submitLabel="Submit"
       onSubmit={fn()}
     >
       <Input aria-label="Request name" />
       <Input aria-label="Request reason" />
-    </RequestDialog>
+    </RequestWorkflow>
   )
 }
 
-export const RequestModal: Story = {
-  render: () => <RequestDialogFixture />,
+export const RequestPage: Story = {
+  render: () => <RequestWorkflowFixture />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Create request" }),
-    )
-    const body = within(canvasElement.ownerDocument.body)
-    await waitFor(async () => {
-      await expect(
-        body.getByRole("textbox", { name: "Request name" }),
-      ).toBeVisible()
-      await expect(
-        body.getByRole("textbox", { name: "Request reason" }),
-      ).toBeVisible()
-    })
-    const requestName = body.getByRole("textbox", { name: "Request name" })
-    await userEvent.type(requestName, "Access request")
-    await userEvent.click(body.getByRole("button", { name: "Cancel" }))
-    const confirmation = body.getByRole("alertdialog")
-    await waitFor(async () => {
-      await expect(confirmation).toBeVisible()
-    })
     await expect(
-      within(confirmation).getByRole("heading", {
-        name: /작성 중인 내용을 취소할까요\?|Discard your changes\?/,
-      }),
+      canvas.getByRole("textbox", { name: "Request name" }),
     ).toBeVisible()
-    await userEvent.click(
-      within(confirmation).getByRole("button", {
-        name: /계속 작성|Continue editing/,
-      }),
-    )
-    await expect(requestName).toHaveValue("Access request")
-    await userEvent.click(body.getByRole("button", { name: "Cancel" }))
-    await userEvent.click(
-      within(body.getByRole("alertdialog")).getByRole("button", {
-        name: /작성 취소|Discard changes/,
-      }),
-    )
-    await waitFor(async () => {
-      await expect(body.queryByRole("dialog")).not.toBeInTheDocument()
-    })
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Create request" }),
-    )
     await expect(
-      body.getByRole("textbox", { name: "Request name" }),
-    ).toHaveValue("")
+      canvas.getByRole("textbox", { name: "Request reason" }),
+    ).toBeVisible()
+    await expect(
+      canvas.getByRole("button", { name: "Cancel" }),
+    ).toHaveAttribute("href", "/requests")
+  },
+}
+
+export const ReviewWorkflowSteps: Story = {
+  render: () => (
+    <div className="grid max-w-2xl gap-6">
+      <ReviewWorkflowProgress step={1} label="Policy workflow" />
+      <ReviewWorkflowProgress step={2} label="Policy workflow review" />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const progressBars = canvas.getAllByRole("list")
+    await expect(progressBars).toHaveLength(2)
+    for (const progressBar of progressBars) {
+      await expect(within(progressBar).getAllByRole("listitem")).toHaveLength(2)
+      await expect(
+        progressBar.querySelectorAll('[aria-current="step"]'),
+      ).toHaveLength(1)
+    }
   },
 }
 

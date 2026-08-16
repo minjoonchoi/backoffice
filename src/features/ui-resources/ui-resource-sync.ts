@@ -1,17 +1,19 @@
+import { entityStatuses } from "@/domain/common"
 import type { BackofficeState } from "@/application/state/model"
 import type { CommandResult } from "@/domain/common"
-import type { UiNamespace, UiResource } from "@/features/ui-resources/model"
+import type { Namespace, UiResource } from "@/features/ui-resources/model"
 import {
   getUiResourceParentKey,
+  uiResourceTypeValues,
   uiResourceManifestSchema,
   type UiResourceManifest,
   type UiResourceManifestResource,
 } from "@/features/ui-resources/ui-resource-manifest"
 
-type UiResourceSyncState = Pick<BackofficeState, "uiNamespaces" | "uiResources">
+type UiResourceSyncState = Pick<BackofficeState, "namespaces" | "uiResources">
 
 export type UiResourceSyncPreview = {
-  namespace: UiNamespace
+  namespace: Namespace
   manifest: UiResourceManifest
   added: UiResourceManifestResource[]
   updated: {
@@ -32,10 +34,12 @@ export function previewUiResourceSync(
   const parsed = uiResourceManifestSchema.safeParse(input)
   if (!parsed.success) return { ok: false, error: "invalid-input" }
 
-  const namespace = state.uiNamespaces.find(
-    (item) => item.key === parsed.data.namespaceKey && item.status === "active",
+  const namespace = state.namespaces.find(
+    (item) =>
+      item.key === parsed.data.namespaceKey &&
+      item.status === entityStatuses.active,
   )
-  if (!namespace) return { ok: false, error: "ui-namespace-not-found" }
+  if (!namespace) return { ok: false, error: "namespace-not-found" }
 
   const availableKeys = new Set(
     parsed.data.resources.map((resource) => resource.key),
@@ -44,8 +48,10 @@ export function previewUiResourceSync(
     const expectedParentKey = getUiResourceParentKey(resource.key)
     if (
       resource.parentKey !== expectedParentKey ||
-      (expectedParentKey === null && resource.type !== "menu") ||
-      (expectedParentKey !== null && resource.type === "menu")
+      (expectedParentKey === null &&
+        resource.type !== uiResourceTypeValues.menu) ||
+      (expectedParentKey !== null &&
+        resource.type === uiResourceTypeValues.menu)
     ) {
       return { ok: false, error: "invalid-input" }
     }

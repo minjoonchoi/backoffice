@@ -1,18 +1,28 @@
 import type { CommandResult } from "@/domain/common"
 import type {
-  UiNamespaceInput,
-  UiNamespace,
+  NamespaceInput,
+  Namespace,
   UiResource,
   UiResourceImportInput,
   UiResourceImportResult,
+  UiResourceRestoreResult,
 } from "@/features/ui-resources/model"
 import type { EntityStatus } from "@/domain/common"
 
 export interface UiResourceApi {
-  createUiNamespace: (
-    input: UiNamespaceInput,
+  createNamespace: (
+    input: NamespaceInput,
     requesterId: string,
-  ) => Promise<CommandResult<UiNamespace>>
+  ) => Promise<CommandResult<Namespace>>
+  updateNamespaceManager: (
+    namespaceId: string,
+    managerRoleId: string,
+    requesterId: string,
+  ) => Promise<CommandResult<Namespace>>
+  retireNamespace: (
+    namespaceId: string,
+    requesterId: string,
+  ) => Promise<CommandResult<Namespace>>
   importUiResources: (
     input: UiResourceImportInput,
     requesterId: string,
@@ -26,13 +36,26 @@ export interface UiResourceApi {
     status: EntityStatus,
     requesterId: string,
   ) => Promise<CommandResult<UiResource>>
+  restoreUiResourceSync: (
+    historyId: string,
+    requesterId: string,
+  ) => Promise<CommandResult<UiResourceRestoreResult>>
 }
 
 export interface UiResourceApiClient {
-  createUiNamespace: (request: {
-    body: UiNamespaceInput
+  createNamespace: (request: {
+    body: NamespaceInput
     requesterId: string
-  }) => Promise<CommandResult<UiNamespace>>
+  }) => Promise<CommandResult<Namespace>>
+  updateNamespaceManager: (request: {
+    namespaceId: string
+    managerRoleId: string
+    requesterId: string
+  }) => Promise<CommandResult<Namespace>>
+  retireNamespace: (request: {
+    namespaceId: string
+    requesterId: string
+  }) => Promise<CommandResult<Namespace>>
   importUiResources: (request: {
     body: UiResourceImportInput
     requesterId: string
@@ -46,4 +69,8 @@ export interface UiResourceApiClient {
     status: EntityStatus
     requesterId: string
   }) => Promise<CommandResult<UiResource>>
+  restoreUiResourceSync: (request: {
+    historyId: string
+    requesterId: string
+  }) => Promise<CommandResult<UiResourceRestoreResult>>
 }

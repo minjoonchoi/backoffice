@@ -1,7 +1,12 @@
 "use client"
 
+import { approvalDocumentStatuses } from "@/features/access-policies/model"
+import { approvalDocumentKinds } from "@/features/access-policies/model"
+import { accessPolicyResourceTypes } from "@/features/access-policies/model"
 import { uiResourceKeys } from "@/config/menu-registry"
 import type { ColumnDef } from "@tanstack/react-table"
+import { Plus } from "lucide-react"
+import Link from "next/link"
 import { useTranslations } from "next-intl"
 
 import { useSessionAccess } from "@/auth/session-access-provider"
@@ -17,14 +22,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { snackbar } from "@/components/ui/snackbar"
 import { resolveMissingAccessPolicyResources } from "@/features/access-policies/access-policy-assignment"
-import { AccessPolicyCreationDialog } from "@/features/access-policies/access-policy-creation-dialog"
 import { accessPolicyApprovalLines } from "@/features/access-policies/access-policy-template"
 import type {
   AccessPolicy,
   ApprovalDocument,
 } from "@/features/access-policies/model"
+import { accessPolicyManagementTypes } from "@/features/access-policies/model"
 import { useBackoffice } from "@/application/state/provider"
 import {
   AccessPolicyEffectBadge,
@@ -35,27 +39,36 @@ import {
 export function ApprovalReviewPage() {
   const backoffice = useBackoffice()
   const sessionAccess = useSessionAccess()
-  const canCreatePolicy = sessionAccess.canAccessUiResource(
-    uiResourceKeys.approvalDocuments.list.actions.createPolicy,
-  )
-  const canApproveAccessRequest = sessionAccess.canAccessUiResource(
-    uiResourceKeys.approvalDocuments.list.actions.approveAccessRequest,
-  )
+  const canCreatePolicy =
+    sessionAccess.canAccessUiResource(
+      uiResourceKeys.approvalDocuments.list.actions.createPolicy,
+    ) &&
+    sessionAccess.canAccessUiResource(
+      uiResourceKeys.approvalDocuments.create.key,
+    )
   const canViewPolicyDetail = sessionAccess.canAccessUiResource(
     uiResourceKeys.approvalDocuments.detail.key,
+  )
+  const canViewRequestDetail = sessionAccess.canAccessUiResource(
+    uiResourceKeys.approvalDocuments.requestDetail.key,
   )
   const t = useTranslations("backoffice.approvalDocuments")
   const linesT = useTranslations("backoffice.approvalLines")
   const common = useTranslations("backoffice.common")
-  const errorsT = useTranslations("backoffice.errors")
   const labels = useBackofficeLabels()
-  async function approve(document: ApprovalDocument) {
-    const result = await backoffice.approveApprovalDocument(document.id)
-    if (!result.ok) {
-      snackbar.error(errorsT(result.error))
-      return
+  function requestStatusLabel(document: ApprovalDocument) {
+    switch (document.status) {
+      case approvalDocumentStatuses.draft:
+        return t("draft")
+      case approvalDocumentStatuses.submitted:
+        return t("submittedStatus")
+      case approvalDocumentStatuses.approved:
+        return t("approvedStatus")
+      case approvalDocumentStatuses.rejected:
+        return t("rejectedStatus")
+      case approvalDocumentStatuses.withdrawn:
+        return t("withdrawnStatus")
     }
-    snackbar.success(t("approved"))
   }
   const columns: ColumnDef<ApprovalDocument>[] = [
     { accessorKey: "title", header: t("documentTitle") },
@@ -92,29 +105,15 @@ export function ApprovalReviewPage() {
       header: common("status"),
       cell: ({ row }) => <ApprovalStatusBadge status={row.original.status} />,
     },
-    {
-      id: "action",
-      header: "",
-      cell: ({ row }) =>
-        row.original.status === "submitted" && canApproveAccessRequest ? (
-          <Button
-            size="sm"
-            onClick={() => {
-              void approve(row.original)
-            }}
-          >
-            {t("approve")}
-          </Button>
-        ) : null,
-    },
   ]
   function isUiRenderingPolicy(policy: AccessPolicy) {
-    return policy.resources.every((resource) => resource.type === "ui-resource")
+    return policy.resources.every(
+      (resource) => resource.type === accessPolicyResourceTypes.uiResource,
+    )
   }
   const policies = backoffice.accessPolicies
     .filter(
       (policy) =>
-        policy.status === "active" &&
         accessPolicyApprovalLines(backoffice, policy.type).length === 1,
     )
     .toSorted((left, right) => {
@@ -123,7 +122,7 @@ export function ApprovalReviewPage() {
       return scopeOrder || right.createdAt.localeCompare(left.createdAt)
     })
   const permissionRequests = backoffice.approvalDocuments.filter(
-    (document) => document.documentKind === "general",
+    (document) => document.documentKind === approvalDocumentKinds.general,
   )
   const policyColumns: ColumnDef<AccessPolicy>[] = [
     {
@@ -139,10 +138,20 @@ export function ApprovalReviewPage() {
       ),
     },
     {
-      id: "resources",
-      header: t("resources"),
-      cell: ({ row }) =>
-        t("resourceCount", { count: row.original.resources.length }),
+      accessorKey: "managementType",
+      header: t("managementType"),
+      cell: ({ row }) => (
+        <Badge
+          variant={
+            row.original.managementType ===
+            accessPolicyManagementTypes.systemManaged
+              ? "info"
+              : "outline"
+          }
+        >
+          {t(`managementTypes.${row.original.managementType}`)}
+        </Badge>
+      ),
     },
     {
       id: "ownership",
@@ -182,7 +191,17 @@ export function ApprovalReviewPage() {
         eyebrow={t("eyebrow")}
         title={t("title")}
         description={t("description")}
-        actions={canCreatePolicy ? <AccessPolicyCreationDialog /> : undefined}
+        actions={
+          canCreatePolicy ? (
+            <Button
+              nativeButton={false}
+              render={<Link href="/approval-documents/new" />}
+            >
+              <Plus />
+              {t("createPolicy")}
+            </Button>
+          ) : undefined
+        }
       />
       <Card>
         <CardHeader>
@@ -213,6 +232,11 @@ export function ApprovalReviewPage() {
                 label: t("effect"),
                 getValue: (row) => t(row.effect),
               },
+              {
+                id: "management-type",
+                label: t("managementType"),
+                getValue: (row) => t(`managementTypes.${row.managementType}`),
+              },
             ]}
           />
         </CardContent>
@@ -228,6 +252,12 @@ export function ApprovalReviewPage() {
             columns={columns}
             data={permissionRequests}
             getRowId={(row) => row.id}
+            getRowHref={(row) =>
+              canViewRequestDetail
+                ? `/approval-documents/requests/${row.id}`
+                : undefined
+            }
+            getRowLabel={(row) => `${row.title} ${common("details")}`}
             empty={t("empty")}
             filterLabel={common("search")}
             noResults={common("noResults")}
@@ -252,12 +282,7 @@ export function ApprovalReviewPage() {
               {
                 id: "request-status",
                 label: common("status"),
-                getValue: (row) =>
-                  row.status === "draft"
-                    ? t("draft")
-                    : row.status === "approved"
-                      ? t("approvedStatus")
-                      : t("submittedStatus"),
+                getValue: requestStatusLabel,
               },
             ]}
           />

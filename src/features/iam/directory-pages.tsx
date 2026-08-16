@@ -1,5 +1,7 @@
 "use client"
 
+import { accessPolicyAssignmentTargets } from "@/features/access-policies/model"
+import { employmentStatusValues } from "@/features/iam/model"
 import { uiResourceKeys } from "@/config/menu-registry"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Building2, Pencil, Users } from "lucide-react"
@@ -48,10 +50,7 @@ import {
 } from "@/components/ui/select"
 import { snackbar } from "@/components/ui/snackbar"
 import { organizationInputSchema, userInputSchema } from "@/features/iam/model"
-import {
-  isSystemManagedGroup,
-  isSystemManagedRole,
-} from "@/domain/system-references"
+import { isSystemManagedRole } from "@/domain/system-references"
 import type { BackofficeErrorCode } from "@/domain/common"
 import {
   employmentStatuses,
@@ -64,7 +63,6 @@ import { RelationshipRemoveAction } from "@/application/ui/relationship-remove-a
 import { useBackoffice } from "@/application/state/provider"
 import {
   AccessPolicyEffectBadge,
-  ApprovalStatusBadge,
   EmploymentStatusBadge,
   EmploymentStatusSelect,
   ServiceTypeBadge,
@@ -77,8 +75,6 @@ import {
   type EffectiveAccessPolicyGrant,
   type EffectiveAccessPolicyPath,
 } from "@/features/access-policies/access-policy-assignment"
-import type { ApprovalDocument } from "@/features/access-policies/model"
-import { resolveUserCredentialHistory } from "@/features/credentials/credential-ownership"
 import type { ApiKey } from "@/features/credentials/model"
 import { resolveOrganizationMembershipRemovalImpact } from "@/features/iam/relationship-impact"
 import type { ManagedService } from "@/features/service-catalog/model"
@@ -100,6 +96,7 @@ function isDescendant(
 
 function UserCreationDialog() {
   const backoffice = useBackoffice()
+  const sessionAccess = useSessionAccess()
   const common = useTranslations("backoffice.common")
   const t = useTranslations("backoffice.users")
   const employmentT = useTranslations("backoffice.employmentStatuses")
@@ -118,7 +115,10 @@ function UserCreationDialog() {
       setError("invalid-input")
       return
     }
-    const result = await backoffice.createUser(parsed.data)
+    const result = await backoffice.createUser(
+      parsed.data,
+      sessionAccess.currentUser?.id ?? "",
+    )
     if (!result.ok) {
       setError(result.error)
       return
@@ -176,7 +176,7 @@ function UserCreationDialog() {
             </FieldLabel>
             <Select
               name="employmentStatus"
-              defaultValue="employed"
+              defaultValue={employmentStatusValues.employed}
               required
               items={employmentStatuses.map((status) => ({
                 value: status,
@@ -236,6 +236,7 @@ function OrganizationFormDialog({
   organization?: Organization | undefined
 }) {
   const backoffice = useBackoffice()
+  const sessionAccess = useSessionAccess()
   const common = useTranslations("backoffice.common")
   const t = useTranslations("backoffice.organizations")
   const [open, setOpen] = useState(false)
@@ -248,7 +249,7 @@ function OrganizationFormDialog({
   )
   const [error, setError] = useState<BackofficeErrorCode>()
   const employedUsers = backoffice.users.filter(
-    (user) => user.employmentStatus === "employed",
+    (user) => user.employmentStatus === employmentStatusValues.employed,
   )
   const parentCandidates = backoffice.organizations.filter(
     (candidate) =>
@@ -289,9 +290,10 @@ function OrganizationFormDialog({
       setError("invalid-input")
       return
     }
+    const requesterId = sessionAccess.currentUser?.id ?? ""
     const result = await (organization
-      ? backoffice.updateOrganization(organization.id, parsed.data)
-      : backoffice.createOrganization(parsed.data))
+      ? backoffice.updateOrganization(organization.id, parsed.data, requesterId)
+      : backoffice.createOrganization(parsed.data, requesterId))
     if (!result.ok) {
       setError(result.error)
       return
@@ -408,6 +410,7 @@ function AddOrganizationUsersDialog({
   organization: Organization
 }) {
   const backoffice = useBackoffice()
+  const sessionAccess = useSessionAccess()
   const t = useTranslations("backoffice.organizations")
   const candidates = backoffice.users.filter(
     (user) => !user.organizationIds.includes(organization.id),
@@ -426,7 +429,11 @@ function AddOrganizationUsersDialog({
       }))}
       successMessage={t("membersAdded")}
       onAssign={(ids) =>
-        backoffice.addUsersToOrganization(organization.id, ids)
+        backoffice.addUsersToOrganization(
+          organization.id,
+          ids,
+          sessionAccess.currentUser?.id ?? "",
+        )
       }
     />
   )
@@ -438,6 +445,7 @@ function AddOrganizationRolesDialog({
   organization: Organization
 }) {
   const backoffice = useBackoffice()
+  const sessionAccess = useSessionAccess()
   const t = useTranslations("backoffice.organizations")
   const candidates = backoffice.roles.filter(
     (role) => !role.organizationIds.includes(organization.id),
@@ -457,7 +465,11 @@ function AddOrganizationRolesDialog({
       }))}
       successMessage={t("rolesAdded")}
       onAssign={(ids) =>
-        backoffice.assignOrganizationsToRoles([organization.id], ids)
+        backoffice.assignOrganizationsToRoles(
+          [organization.id],
+          ids,
+          sessionAccess.currentUser?.id ?? "",
+        )
       }
     />
   )
@@ -465,6 +477,7 @@ function AddOrganizationRolesDialog({
 
 function AddUserOrganizationsDialog({ user }: { user: BackofficeUser }) {
   const backoffice = useBackoffice()
+  const sessionAccess = useSessionAccess()
   const t = useTranslations("backoffice.users")
   const candidates = backoffice.organizations.filter(
     (organization) => !user.organizationIds.includes(organization.id),
@@ -481,13 +494,20 @@ function AddUserOrganizationsDialog({ user }: { user: BackofficeUser }) {
         title: organization.name,
       }))}
       successMessage={t("organizationsAdded")}
-      onAssign={(ids) => backoffice.addOrganizationsToUser(user.id, ids)}
+      onAssign={(ids) =>
+        backoffice.addOrganizationsToUser(
+          user.id,
+          ids,
+          sessionAccess.currentUser?.id ?? "",
+        )
+      }
     />
   )
 }
 
 function AddUserRolesDialog({ user }: { user: BackofficeUser }) {
   const backoffice = useBackoffice()
+  const sessionAccess = useSessionAccess()
   const t = useTranslations("backoffice.users")
   const candidates = backoffice.roles.filter(
     (role) => !role.userIds.includes(user.id),
@@ -506,34 +526,13 @@ function AddUserRolesDialog({ user }: { user: BackofficeUser }) {
         searchText: `${role.name} ${role.description}`,
       }))}
       successMessage={t("rolesAdded")}
-      onAssign={(ids) => backoffice.assignUsersToRoles([user.id], ids)}
-    />
-  )
-}
-
-function AddUserGroupsDialog({ user }: { user: BackofficeUser }) {
-  const backoffice = useBackoffice()
-  const t = useTranslations("backoffice.users")
-  const candidates = backoffice.groups.filter(
-    (group) =>
-      !isSystemManagedGroup(backoffice.systemReferences, group.id) &&
-      !group.userIds.includes(user.id),
-  )
-
-  return (
-    <AssignmentDialog
-      triggerLabel={t("addGroups")}
-      title={t("addGroups")}
-      description={t("addGroupsDescription")}
-      searchLabel={t("groupSearch")}
-      options={candidates.map((group) => ({
-        id: group.id,
-        title: group.name,
-        description: group.description,
-        searchText: `${group.name} ${group.description}`,
-      }))}
-      successMessage={t("groupsAdded")}
-      onAssign={(ids) => backoffice.assignUsersToGroups([user.id], ids)}
+      onAssign={(ids) =>
+        backoffice.assignUsersToRoles(
+          [user.id],
+          ids,
+          sessionAccess.currentUser?.id ?? "",
+        )
+      }
     />
   )
 }
@@ -625,7 +624,9 @@ export function OrganizationsPage() {
         actions={canCreate ? <OrganizationFormDialog /> : undefined}
       />
       {canCreate &&
-      backoffice.users.every((user) => user.employmentStatus !== "employed") ? (
+      backoffice.users.every(
+        (user) => user.employmentStatus !== employmentStatusValues.employed,
+      ) ? (
         <p className="rounded-lg border border-warning-foreground/30 bg-warning p-3 text-sm text-warning-foreground">
           {t("userRequired")}{" "}
           <UiResourceLink
@@ -637,27 +638,11 @@ export function OrganizationsPage() {
           </UiResourceLink>
         </p>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:max-w-sm">
         <MetricCard
           icon={Building2}
           title={t("total")}
           value={backoffice.organizations.length}
-        />
-        <MetricCard
-          icon={Users}
-          title={t("leaderCount")}
-          value={
-            new Set(backoffice.organizations.map((item) => item.leaderUserId))
-              .size
-          }
-        />
-        <MetricCard
-          icon={Users}
-          title={t("memberCount")}
-          value={
-            backoffice.users.filter((user) => user.organizationIds.length > 0)
-              .length
-          }
         />
       </div>
       <DataTable
@@ -797,8 +782,10 @@ export function UsersPage() {
           icon={Users}
           title={t("employedCount")}
           value={
-            visibleUsers.filter((item) => item.employmentStatus === "employed")
-              .length
+            visibleUsers.filter(
+              (item) =>
+                item.employmentStatus === employmentStatusValues.employed,
+            ).length
           }
         />
         <MetricCard
@@ -907,13 +894,6 @@ export function OrganizationDetailPage({
   const roles = backoffice.roles.filter((role) =>
     role.organizationIds.includes(organization.id),
   )
-  const approvalLines = backoffice.approvalLines.filter((line) =>
-    line.steps.some(
-      (step) =>
-        step.assigneeMode === "fixed-organization" &&
-        step.organizationId === organization.id,
-    ),
-  )
   const ownedServices = backoffice.services.filter(
     (service) => service.ownerOrganizationId === organization.id,
   )
@@ -964,12 +944,14 @@ export function OrganizationDetailPage({
                       roles: impact.lostRoleIds.length,
                       policies: impact.lostPolicyIds.length,
                       credentials: impact.lostCredentialIds.length,
+                      requests: impact.affectedRequestIds.length,
                     })}
                     confirmDisabled={impact.blocked}
                     onRemove={() =>
                       backoffice.removeUsersFromOrganizations(
                         [row.original.id],
                         [organization.id],
+                        sessionAccess.currentUser?.id ?? "",
                       )
                     }
                   />
@@ -1141,79 +1123,57 @@ export function OrganizationDetailPage({
               columns={credentialColumns}
               data={ownedCredentials}
               getRowId={(row) => row.id}
-              getRowHref={(row) => `/api-keys/${row.id}`}
+              getRowHref={(row) => `/credentials/${row.id}`}
               getRowLabel={(row) => `${row.name} ${common("details")}`}
               empty={t("ownedCredentialsEmpty")}
             />
           </CardContent>
         </Card>
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="flex-row items-start justify-between gap-4">
-            <div className="grid gap-1.5">
-              <CardTitle>{t("roles")}</CardTitle>
-              <CardDescription>{t("rolesDescription")}</CardDescription>
-            </div>
-            {canAssignRoles ? (
-              <AddOrganizationRolesDialog organization={organization} />
-            ) : null}
-          </CardHeader>
-          <CardContent className="grid gap-2 sm:grid-cols-2">
-            {roles.length ? (
-              roles.map((role) => (
-                <div
-                  key={role.id}
-                  className="flex items-center gap-2 rounded-lg border p-2"
+      <Card>
+        <CardHeader className="flex-row items-start justify-between gap-4">
+          <div className="grid gap-1.5">
+            <CardTitle>{t("roles")}</CardTitle>
+            <CardDescription>{t("rolesDescription")}</CardDescription>
+          </div>
+          {canAssignRoles ? (
+            <AddOrganizationRolesDialog organization={organization} />
+          ) : null}
+        </CardHeader>
+        <CardContent className="grid gap-2 sm:grid-cols-2">
+          {roles.length ? (
+            roles.map((role) => (
+              <div
+                key={role.id}
+                className="flex items-center gap-2 rounded-lg border p-2"
+              >
+                <UiResourceLink
+                  resourceKey={uiResourceKeys.roles.detail.key}
+                  href={`/roles/${role.id}`}
+                  className="min-w-0 flex-1 rounded-md px-1 py-1 text-primary hover:underline"
                 >
-                  <UiResourceLink
-                    resourceKey={uiResourceKeys.roles.detail.key}
-                    href={`/roles/${role.id}`}
-                    className="min-w-0 flex-1 rounded-md px-1 py-1 text-primary hover:underline"
-                  >
-                    {role.name}
-                  </UiResourceLink>
-                  {canAssignRoles ? (
-                    <RelationshipRemoveAction
-                      subjectName={organization.name}
-                      targetName={role.name}
-                      onRemove={() =>
-                        backoffice.unassignOrganizationsFromRoles(
-                          [organization.id],
-                          [role.id],
-                        )
-                      }
-                    />
-                  ) : null}
-                </div>
-              ))
-            ) : (
-              <p className="text-muted-foreground">{t("rolesEmpty")}</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("approvalLines")}</CardTitle>
-            <CardDescription>{t("approvalLinesDescription")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {approvalLines.length ? (
-              approvalLines.map((line) => (
-                <div
-                  key={line.id}
-                  className="flex justify-between rounded-lg border p-3"
-                >
-                  <span>{line.name}</span>
-                  <StatusBadge status={line.status} />
-                </div>
-              ))
-            ) : (
-              <p className="text-muted-foreground">{t("approvalLinesEmpty")}</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                  {role.name}
+                </UiResourceLink>
+                {canAssignRoles ? (
+                  <RelationshipRemoveAction
+                    subjectName={organization.name}
+                    targetName={role.name}
+                    onRemove={() =>
+                      backoffice.unassignOrganizationsFromRoles(
+                        [organization.id],
+                        [role.id],
+                        sessionAccess.currentUser?.id ?? "",
+                      )
+                    }
+                  />
+                ) : null}
+              </div>
+            ))
+          ) : (
+            <p className="text-muted-foreground">{t("rolesEmpty")}</p>
+          )}
+        </CardContent>
+      </Card>
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader className="flex-row items-start justify-between gap-4">
@@ -1274,9 +1234,6 @@ export function UserDetailPage({ userId }: { userId: string }) {
   const canAssignRoles = sessionAccess.canAccessUiResource(
     uiResourceKeys.users.detail.actions.assignUserRole,
   )
-  const canAssignGroups = sessionAccess.canAccessUiResource(
-    uiResourceKeys.users.detail.actions.assignUserGroup,
-  )
   const t = useTranslations("backoffice.users")
   const common = useTranslations("backoffice.common")
   const labels = useBackofficeLabels()
@@ -1305,36 +1262,21 @@ export function UserDetailPage({ userId }: { userId: string }) {
   const roles = backoffice.roles.filter((role) =>
     role.userIds.includes(user.id),
   )
-  const groups = backoffice.groups.filter((group) =>
-    group.userIds.includes(user.id),
-  )
-  const lines = backoffice.approvalLines.filter((line) =>
-    line.steps.some(
-      (step) => step.assigneeMode === "fixed-user" && step.userId === user.id,
-    ),
-  )
   const effectivePolicyGrants = resolveEffectiveAccessPolicyGrants(
     backoffice,
     user.id,
   )
-  const credentialHistory = resolveUserCredentialHistory(backoffice, user.id)
 
   function policyPathLabel(path: EffectiveAccessPolicyPath) {
-    if (path.type === "user") return t("policyPathDirectUser")
-    if (path.type === "organization") {
+    if (path.type === accessPolicyAssignmentTargets.user)
+      return t("policyPathDirectUser")
+    if (path.type === accessPolicyAssignmentTargets.organization) {
       const organization = backoffice.organizations.find(
         (candidate) => candidate.id === path.targetId,
       )
       if (!organization)
         throw new Error(`Policy organization not found: ${path.targetId}`)
       return t("policyPathOrganization", { name: organization.name })
-    }
-    if (path.type === "group") {
-      const group = backoffice.groups.find(
-        (candidate) => candidate.id === path.targetId,
-      )
-      if (!group) throw new Error(`Policy group not found: ${path.targetId}`)
-      return t("policyPathGroup", { name: group.name })
     }
     const role = backoffice.roles.find(
       (candidate) => candidate.id === path.targetId,
@@ -1355,6 +1297,16 @@ export function UserDetailPage({ userId }: { userId: string }) {
       organization: organization.name,
       role: role.name,
     })
+  }
+
+  function policyGrantExpiration(paths: readonly EffectiveAccessPolicyPath[]) {
+    if (paths.some((path) => path.expiresAt === null)) return t("noExpiration")
+    const expiresAt = paths
+      .map((path) => path.expiresAt)
+      .filter((value): value is string => value !== null)
+      .toSorted()
+      .at(-1)
+    return expiresAt ? labels.dateTime(expiresAt) : t("noExpiration")
   }
 
   const policyColumns: ColumnDef<EffectiveAccessPolicyGrant>[] = [
@@ -1393,48 +1345,10 @@ export function UserDetailPage({ userId }: { userId: string }) {
         </div>
       ),
     },
-  ]
-  const userCredentialColumns: ColumnDef<ApiKey>[] = [
-    { accessorKey: "name", header: t("credentialName") },
     {
-      id: "service",
-      header: t("service"),
-      cell: ({ row }) => {
-        const service = backoffice.services.find(
-          (candidate) => candidate.id === row.original.serviceId,
-        )
-        if (!service)
-          throw new Error(`Credential service not found: ${row.original.id}`)
-        return service.name
-      },
-    },
-    {
-      accessorKey: "status",
-      header: common("status"),
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
-    },
-    {
-      accessorKey: "createdAt",
-      header: common("createdAt"),
-      cell: ({ row }) => labels.dateTime(row.original.createdAt),
-    },
-  ]
-  const requestColumns: ColumnDef<ApprovalDocument>[] = [
-    { accessorKey: "title", header: t("requestTitle") },
-    {
-      accessorKey: "type",
-      header: t("requestType"),
-      cell: ({ row }) => labels.approvalType(row.original.type),
-    },
-    {
-      accessorKey: "status",
-      header: common("status"),
-      cell: ({ row }) => <ApprovalStatusBadge status={row.original.status} />,
-    },
-    {
-      accessorKey: "createdAt",
-      header: common("createdAt"),
-      cell: ({ row }) => labels.dateTime(row.original.createdAt),
+      id: "expiresAt",
+      header: t("policyExpiresAt"),
+      cell: ({ row }) => policyGrantExpiration(row.original.paths),
     },
   ]
   return (
@@ -1453,7 +1367,11 @@ export function UserDetailPage({ userId }: { userId: string }) {
                 nickname: user.nickname,
               })}
               onChange={(status) =>
-                backoffice.setUserEmploymentStatus(user.id, status)
+                backoffice.setUserEmploymentStatus(
+                  user.id,
+                  status,
+                  sessionAccess.currentUser?.id ?? "",
+                )
               }
             />
           ) : undefined
@@ -1532,12 +1450,14 @@ export function UserDetailPage({ userId }: { userId: string }) {
                             roles: impact.lostRoleIds.length,
                             policies: impact.lostPolicyIds.length,
                             credentials: impact.lostCredentialIds.length,
+                            requests: impact.affectedRequestIds.length,
                           })}
                           confirmDisabled={impact.blocked}
                           onRemove={() =>
                             backoffice.removeUsersFromOrganizations(
                               [user.id],
                               [organization.id],
+                              sessionAccess.currentUser?.id ?? "",
                             )
                           }
                         />
@@ -1551,44 +1471,6 @@ export function UserDetailPage({ userId }: { userId: string }) {
           )}
         </CardContent>
       </Card>
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("credentialHistory")}</CardTitle>
-            <CardDescription>
-              {t("credentialHistoryDescription")}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DataTable
-              caption={t("credentialHistory")}
-              columns={userCredentialColumns}
-              data={[...credentialHistory.credentials]}
-              getRowId={(row) => row.id}
-              getRowHref={(row) => `/api-keys/${row.id}`}
-              getRowLabel={(row) => `${row.name} ${common("details")}`}
-              empty={t("credentialHistoryEmpty")}
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("requestHistory")}</CardTitle>
-            <CardDescription>{t("requestHistoryDescription")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DataTable
-              caption={t("requestHistory")}
-              columns={requestColumns}
-              data={[...credentialHistory.requests]}
-              getRowId={(row) => row.id}
-              getRowHref={(row) => `/approval-documents/requests/${row.id}`}
-              getRowLabel={(row) => `${row.title} ${common("details")}`}
-              empty={t("requestHistoryEmpty")}
-            />
-          </CardContent>
-        </Card>
-      </div>
       <Card>
         <CardHeader className="flex-row items-start justify-between gap-4">
           <div className="grid gap-1.5">
@@ -1620,7 +1502,11 @@ export function UserDetailPage({ userId }: { userId: string }) {
                       role.id,
                     )}
                     onRemove={() =>
-                      backoffice.unassignUsersFromRoles([user.id], [role.id])
+                      backoffice.unassignUsersFromRoles(
+                        [user.id],
+                        [role.id],
+                        sessionAccess.currentUser?.id ?? "",
+                      )
                     }
                   />
                 ) : null}
@@ -1628,79 +1514,6 @@ export function UserDetailPage({ userId }: { userId: string }) {
             ))
           ) : (
             <p className="text-muted-foreground">{t("rolesEmpty")}</p>
-          )}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="flex-row items-start justify-between gap-4">
-          <div className="grid gap-1.5">
-            <CardTitle>{t("groups")}</CardTitle>
-            <CardDescription>{t("groupsDescription")}</CardDescription>
-          </div>
-          {canAssignGroups ? <AddUserGroupsDialog user={user} /> : null}
-        </CardHeader>
-        <CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {groups.length ? (
-            groups.map((group) => {
-              const isSystemGroup = isSystemManagedGroup(
-                backoffice.systemReferences,
-                group.id,
-              )
-              return (
-                <div
-                  key={group.id}
-                  className="flex items-center gap-2 rounded-lg border p-2"
-                >
-                  <UiResourceLink
-                    resourceKey={uiResourceKeys.groups.detail.key}
-                    href={`/groups/${group.id}`}
-                    className="min-w-0 flex-1 rounded-md px-1 py-1 text-primary hover:underline"
-                  >
-                    {group.name}
-                  </UiResourceLink>
-                  {canAssignGroups ? (
-                    <RelationshipRemoveAction
-                      subjectName={user.nickname}
-                      targetName={group.name}
-                      disabled={isSystemGroup}
-                      onRemove={() =>
-                        backoffice.unassignUsersFromGroups(
-                          [user.id],
-                          [group.id],
-                        )
-                      }
-                    />
-                  ) : null}
-                </div>
-              )
-            })
-          ) : (
-            <p className="text-muted-foreground">{t("groupsEmpty")}</p>
-          )}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("approvalParticipation")}</CardTitle>
-          <CardDescription>
-            {t("approvalParticipationDescription")}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {lines.length ? (
-            lines.map((line) => (
-              <div
-                key={line.id}
-                className="flex justify-between rounded-lg border p-3"
-              >
-                <span>{line.name}</span>
-                <StatusBadge status={line.status} />
-              </div>
-            ))
-          ) : (
-            <p className="text-muted-foreground">
-              {t("approvalParticipationEmpty")}
-            </p>
           )}
         </CardContent>
       </Card>

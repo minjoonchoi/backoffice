@@ -1,3 +1,4 @@
+import { approvalStepKindValues } from "@/features/request-templates/model"
 import { z } from "zod"
 
 import { entityIdSchema, type EntityStatus } from "@/domain/common"
@@ -6,29 +7,90 @@ import {
   awsSecretNameSchema,
 } from "@/features/credentials/model"
 import {
+  approvalStepKindSchema,
   approvalTypeSchema,
+  approvalTypeValues,
   type ApprovalType,
   type ResolvedApprovalStep,
 } from "@/features/request-templates/model"
 
-export const accessPolicyEffectSchema = z.enum(["allow", "deny"])
-export const accessPolicyTypeSchema = z.enum(["access-grant"])
-export const accessPolicyResourceTypeSchema = z.enum([
-  "endpoint",
-  "ui-namespace",
-  "ui-resource",
-])
-export const accessPolicyAssignmentTargetSchema = z.enum([
-  "user",
-  "organization",
-  "role",
-  "group",
-])
+export const accessPolicyEffects = { allow: "allow", deny: "deny" } as const
+export const accessPolicyTypes = { accessGrant: "access-grant" } as const
+export const accessPolicyManagementTypes = {
+  operatorManaged: "operator-managed",
+  systemManaged: "system-managed",
+} as const
+export const accessPolicyResourceTypes = {
+  endpoint: "endpoint",
+  uiResource: "ui-resource",
+} as const
+export const accessPolicyAssignmentTargets = {
+  user: "user",
+  organization: "organization",
+  role: "role",
+  application: "application",
+} as const
+export const approvalDocumentKinds = {
+  general: "general",
+  apiKeyIssuance: "api-key-issuance",
+  apiKeyLifecycle: "api-key-lifecycle",
+} as const
+export const approvalDocumentStatuses = {
+  draft: "draft",
+  submitted: "submitted",
+  approved: "approved",
+  rejected: "rejected",
+  withdrawn: "withdrawn",
+} as const
+export const approvalStepStatuses = {
+  waiting: "waiting",
+  pending: "pending",
+  completed: "completed",
+  rejected: "rejected",
+} as const
+export const approvalDocumentSubmissions = {
+  draft: "draft",
+  submitted: "submitted",
+} as const
+export const approvalDecisions = {
+  approve: "approve",
+  reject: "reject",
+  acknowledge: "acknowledge",
+} as const
+export const approvalAssigneeTypes = {
+  user: "user",
+  organization: "organization",
+} as const
+export const approvalDocumentHistoryEventTypes = {
+  draftSaved: "draft-saved",
+  submitted: "submitted",
+  approved: "approved",
+  agreed: "agreed",
+  referenced: "referenced",
+  rejected: "rejected",
+  withdrawn: "withdrawn",
+  resubmitted: "resubmitted",
+} as const
+
+export const accessPolicyEffectSchema = z.enum(accessPolicyEffects)
+export const accessPolicyTypeSchema = z.enum(accessPolicyTypes)
+export const accessPolicyManagementTypeSchema = z.enum(
+  accessPolicyManagementTypes,
+)
+export const accessPolicyResourceTypeSchema = z.enum(accessPolicyResourceTypes)
+export const accessPolicyAssignmentTargetSchema = z.enum(
+  accessPolicyAssignmentTargets,
+)
 
 export const accessPolicyResourceSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("endpoint"), id: entityIdSchema }),
-  z.object({ type: z.literal("ui-namespace"), id: entityIdSchema }),
-  z.object({ type: z.literal("ui-resource"), id: entityIdSchema }),
+  z.object({
+    type: z.literal(accessPolicyResourceTypes.endpoint),
+    id: entityIdSchema,
+  }),
+  z.object({
+    type: z.literal(accessPolicyResourceTypes.uiResource),
+    id: entityIdSchema,
+  }),
 ])
 
 export const accessPolicyInputSchema = z.object({
@@ -62,10 +124,55 @@ const approvalDocumentBaseSchema = z.object({
       (values) =>
         new Set(values.map((value) => value.fieldId)).size === values.length,
     ),
-  stepAssignments: z.array(
-    z.object({ stepId: entityIdSchema, userId: entityIdSchema }),
-  ),
-  submission: z.enum(["draft", "submitted"]),
+  approvalSteps: z
+    .array(
+      z.object({
+        id: entityIdSchema,
+        stage: z.number().int().min(1).max(12),
+        kind: approvalStepKindSchema,
+        assigneeType: z.enum(approvalAssigneeTypes),
+        assigneeId: entityIdSchema,
+      }),
+    )
+    .min(2)
+    .max(12)
+    .superRefine((steps, context) => {
+      if (new Set(steps.map((step) => step.id)).size !== steps.length) {
+        context.addIssue({ code: "custom", path: ["id"] })
+      }
+      if (
+        steps[0]?.kind !== approvalStepKindValues.request ||
+        steps[0].stage !== 1 ||
+        steps
+          .slice(1)
+          .some((step) => step.kind === approvalStepKindValues.request)
+      ) {
+        context.addIssue({ code: "custom", path: ["kind"] })
+      }
+      if (
+        !steps.some(
+          (step) =>
+            step.kind === approvalStepKindValues.approval ||
+            step.kind === approvalStepKindValues.agreement,
+        )
+      ) {
+        context.addIssue({ code: "custom", path: ["kind"] })
+      }
+      if (
+        steps.some((step, index) => {
+          const previous = steps[index - 1]
+          return (
+            index > 0 &&
+            (!previous ||
+              step.stage < previous.stage ||
+              step.stage > previous.stage + 1)
+          )
+        })
+      ) {
+        context.addIssue({ code: "custom", path: ["stage"] })
+      }
+    }),
+  submission: z.enum(approvalDocumentSubmissions),
 })
 
 const credentialEndpointIdsSchema = z
@@ -75,21 +182,27 @@ const credentialEndpointIdsSchema = z
 
 const generalApprovalDocumentInputSchema = z.discriminatedUnion("type", [
   approvalDocumentBaseSchema.extend({
-    documentKind: z.literal("general"),
-    type: z.literal("access-grant"),
+    documentKind: z.literal(approvalDocumentKinds.general),
+    type: z.literal(accessPolicyTypes.accessGrant),
     accessPolicyId: entityIdSchema,
+    expiresAt: z.iso.datetime(),
   }),
   approvalDocumentBaseSchema.extend({
-    documentKind: z.literal("general"),
-    type: z.enum(["resource-create", "access-revoke", "resource-dispose"]),
+    documentKind: z.literal(approvalDocumentKinds.general),
+    type: z.enum([
+      approvalTypeValues.resourceCreate,
+      approvalTypeValues.accessRevoke,
+      approvalTypeValues.resourceDispose,
+    ]),
   }),
 ])
 
 export const approvalDocumentInputSchema = z.union([
   generalApprovalDocumentInputSchema,
   approvalDocumentBaseSchema.extend({
-    documentKind: z.literal("api-key-issuance"),
-    type: z.literal("api-key"),
+    documentKind: z.literal(approvalDocumentKinds.apiKeyIssuance),
+    type: z.literal(approvalTypeValues.apiKey),
+    applicationId: entityIdSchema,
     serviceId: entityIdSchema,
     endpointIds: credentialEndpointIdsSchema,
     keyName: z.string().trim().min(2).max(80),
@@ -97,33 +210,58 @@ export const approvalDocumentInputSchema = z.union([
     awsSecretKey: awsSecretKeySchema,
   }),
   approvalDocumentBaseSchema.extend({
-    documentKind: z.literal("api-key-lifecycle"),
-    type: z.literal("api-key-replace"),
+    documentKind: z.literal(approvalDocumentKinds.apiKeyLifecycle),
+    type: z.literal(approvalTypeValues.apiKeyReplace),
     apiKeyId: entityIdSchema,
     awsSecretName: awsSecretNameSchema,
     awsSecretKey: awsSecretKeySchema,
   }),
   approvalDocumentBaseSchema.extend({
-    documentKind: z.literal("api-key-lifecycle"),
-    type: z.literal("api-key-dispose"),
+    documentKind: z.literal(approvalDocumentKinds.apiKeyLifecycle),
+    type: z.literal(approvalTypeValues.apiKeyDispose),
     apiKeyId: entityIdSchema,
   }),
 ])
 
 export type AccessPolicyEffect = z.infer<typeof accessPolicyEffectSchema>
 export type AccessPolicyType = z.infer<typeof accessPolicyTypeSchema>
+export type AccessPolicyManagementType = z.infer<
+  typeof accessPolicyManagementTypeSchema
+>
 export type AccessPolicyResourceType = z.infer<
   typeof accessPolicyResourceTypeSchema
 >
 export type AccessPolicyAssignmentTarget = z.infer<
   typeof accessPolicyAssignmentTargetSchema
 >
-export type AccessPolicyInput = z.infer<typeof accessPolicyInputSchema>
+export type AccessPolicyInput = z.input<typeof accessPolicyInputSchema>
+export type AccessPolicyValue = z.output<typeof accessPolicyInputSchema>
 export type AccessPolicyResource = z.infer<typeof accessPolicyResourceSchema>
 export type ApprovalDocumentInput = z.infer<typeof approvalDocumentInputSchema>
 
-export type AccessPolicy = AccessPolicyInput & {
+export const approvalDocumentActionInputSchema = z.object({
+  documentId: entityIdSchema,
+  actorUserId: entityIdSchema,
+  stepId: entityIdSchema,
+  decision: z.enum(approvalDecisions),
+  comment: z.string().trim().max(1000),
+})
+
+export const approvalDocumentTransitionInputSchema = z.object({
+  documentId: entityIdSchema,
+  actorUserId: entityIdSchema,
+})
+
+export type ApprovalDocumentActionInput = z.infer<
+  typeof approvalDocumentActionInputSchema
+>
+export type ApprovalDocumentTransitionInput = z.infer<
+  typeof approvalDocumentTransitionInputSchema
+>
+
+export type AccessPolicy = AccessPolicyValue & {
   id: string
+  managementType: AccessPolicyManagementType
   status: EntityStatus
   createdAt: string
 }
@@ -132,26 +270,46 @@ export type AccessPolicyAssignment = {
   accessPolicyId: string
   targetType: AccessPolicyAssignmentTarget
   targetId: string
+  expiresAt: string | null
+  createdAt: string
+}
+export type ApprovalDocumentStatus =
+  (typeof approvalDocumentStatuses)[keyof typeof approvalDocumentStatuses]
+export type ApprovalStepStatus =
+  (typeof approvalStepStatuses)[keyof typeof approvalStepStatuses]
+export type ApprovalDocumentStep = ResolvedApprovalStep & {
+  status: ApprovalStepStatus
+  processedById: string | null
+  processedAt: string | null
+  comment: string | null
+}
+export type ApprovalDocumentHistoryEvent = {
+  id: string
+  type: (typeof approvalDocumentHistoryEventTypes)[keyof typeof approvalDocumentHistoryEventTypes]
+  actorUserId: string
+  stepId: string | null
+  comment: string | null
   createdAt: string
 }
 type StoredApprovalDocumentInput<
   Input extends ApprovalDocumentInput = ApprovalDocumentInput,
 > = Input extends ApprovalDocumentInput
-  ? Omit<Input, "submission" | "stepAssignments">
+  ? Omit<Input, "submission" | "approvalSteps">
   : never
 
 export type ApprovalDocument = StoredApprovalDocumentInput & {
   id: string
-  status: "draft" | "submitted" | "approved"
+  status: ApprovalDocumentStatus
   createdAt: string
-  approvalSteps: ResolvedApprovalStep[]
+  approvalSteps: ApprovalDocumentStep[]
+  history: ApprovalDocumentHistoryEvent[]
 }
 export type ApprovalCompletion = { document: ApprovalDocument }
 
 export function isCredentialApprovalType(type: ApprovalType) {
   return (
-    type === "api-key" ||
-    type === "api-key-replace" ||
-    type === "api-key-dispose"
+    type === approvalTypeValues.apiKey ||
+    type === approvalTypeValues.apiKeyReplace ||
+    type === approvalTypeValues.apiKeyDispose
   )
 }

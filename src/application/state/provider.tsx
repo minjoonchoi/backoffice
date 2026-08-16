@@ -17,6 +17,7 @@ import { createBackofficeApiClient } from "@/application/api/client-factory"
 import { createBackofficeCommands } from "@/application/state/commands"
 import type { CommandResult } from "@/domain/common"
 import type { BackofficeState } from "@/application/state/model"
+import { useAuditActor } from "@/features/audit/audit-actor-provider"
 
 type BackofficeContextValue = BackofficeState & BackofficeCommands
 
@@ -31,7 +32,10 @@ export function BackofficeProvider({
   initialState: BackofficeState
   apiClientFactory?: BackofficeApiClientFactory
 }) {
-  const [apiClient] = useState(() => apiClientFactory({ initialState }))
+  const { getActorUserId } = useAuditActor()
+  const [apiClient] = useState(() =>
+    apiClientFactory({ initialState, getActorUserId }),
+  )
   const [state, setState] = useState<BackofficeState>(() =>
     structuredClone(initialState),
   )
@@ -51,8 +55,8 @@ export function BackofficeProvider({
   )
 
   const commands = useMemo<BackofficeCommands>(
-    () => createBackofficeCommands(apiClient, runCommand),
-    [apiClient, runCommand],
+    () => createBackofficeCommands(apiClient, runCommand, getActorUserId),
+    [apiClient, getActorUserId, runCommand],
   )
 
   const value = useMemo<BackofficeContextValue>(
