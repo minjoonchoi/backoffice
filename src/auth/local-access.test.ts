@@ -71,6 +71,8 @@ describe("local backoffice access", () => {
     expect(policyOperatorUiAccess.resourceKeys).toContain(
       uiResourceKeys.approvalDocuments.list.actions.simulatePolicyAccess,
     )
+    expect(access.menuIds).toContain(uiResourceKeys.requests.key)
+    expect(memberAccess.menuIds).not.toContain(uiResourceKeys.requests.key)
   })
 
   it("hides menus whose root UI resource is inactive", () => {

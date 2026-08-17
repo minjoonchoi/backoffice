@@ -4,8 +4,13 @@ import { requestTemplateFieldControlValues } from "@/features/request-templates/
 import { requestTemplateFieldBindingValues } from "@/features/request-templates/model"
 import { requestCategoryValues } from "@/features/request-templates/model"
 import { approvalTypeValues } from "@/features/request-templates/model"
+import { approvalExecutionTypeValues } from "@/features/request-templates/model"
 import { serviceTypeValues } from "@/features/service-catalog/model"
 import { entityStatuses } from "@/domain/common"
+import {
+  approvalDocumentKinds,
+  approvalDocumentSubmissions,
+} from "@/features/access-policies/model"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
@@ -25,7 +30,9 @@ import { snackbar } from "@/components/ui/snackbar"
 import { Textarea } from "@/components/ui/textarea"
 import { FormSelect } from "@/components/patterns/form-select"
 import {
+  awsSecretKeyInputPattern,
   awsSecretKeySchema,
+  awsSecretNameInputPattern,
   awsSecretNameSchema,
 } from "@/features/credentials/model"
 import type {
@@ -167,10 +174,9 @@ export function CredentialIssuancePage({
       />
     )
   }
-  const approvalLineComplete = requestApprovalLineDraftIsComplete(
-    approvalSteps,
-    requester?.id,
-  )
+  const approvalLineComplete =
+    template?.approvalExecution.type === approvalExecutionTypeValues.groo ||
+    requestApprovalLineDraftIsComplete(approvalSteps, requester?.id)
   const targetComplete = Boolean(
     selectedApplication &&
     selectedService &&
@@ -195,7 +201,8 @@ export function CredentialIssuancePage({
     serviceOwnerOrganizationId: string | null | undefined,
   ) {
     setApprovalSteps(
-      nextTemplate
+      nextTemplate?.approvalExecution.type ===
+        approvalExecutionTypeValues.internal
         ? createRequestApprovalLineDraft(backoffice, nextTemplate, {
             requesterId: requester?.id,
             requestOrganizationId: nextOrganizationId,
@@ -280,7 +287,7 @@ export function CredentialIssuancePage({
             <Input
               id={id}
               required={field.required}
-              pattern="[A-Za-z0-9/_+=.@-]+"
+              pattern={awsSecretNameInputPattern}
               maxLength={512}
               value={awsSecretName}
               onChange={(event) => {
@@ -296,7 +303,7 @@ export function CredentialIssuancePage({
             <Input
               id={id}
               required={field.required}
-              pattern="[A-Za-z0-9_.-]+"
+              pattern={awsSecretKeyInputPattern}
               maxLength={128}
               value={awsSecretKey}
               onChange={(event) => {
@@ -573,13 +580,26 @@ export function CredentialIssuancePage({
             </ul>
           </section>
         ) : null}
-        <RequestApprovalLineEditor
-          steps={approvalSteps}
-          onChange={setApprovalSteps}
-          users={backoffice.users}
-          organizations={backoffice.organizations}
-          requesterId={requester?.id}
-        />
+        {template?.approvalExecution.type ===
+        approvalExecutionTypeValues.groo ? (
+          <section
+            className="grid gap-1 rounded-card border border-info-foreground/20 bg-info p-3 text-info-foreground"
+            aria-labelledby="groo-approval-summary"
+          >
+            <h4 id="groo-approval-summary" className="font-medium">
+              {t("grooApprovalTitle")}
+            </h4>
+            <p className="text-sm">{t("grooApprovalDescription")}</p>
+          </section>
+        ) : (
+          <RequestApprovalLineEditor
+            steps={approvalSteps}
+            onChange={setApprovalSteps}
+            users={backoffice.users}
+            organizations={backoffice.organizations}
+            requesterId={requester?.id}
+          />
+        )}
       </section>
     )
   }
@@ -590,9 +610,9 @@ export function CredentialIssuancePage({
       return
     }
     const parsed = approvalDocumentInputSchema.safeParse({
-      documentKind: "api-key-issuance",
+      documentKind: approvalDocumentKinds.apiKeyIssuance,
       title: t("documentTitle", { keyName }),
-      type: "api-key",
+      type: approvalTypeValues.apiKey,
       organizationId: requestOrganizationId,
       requesterId: requester?.id,
       approvalLineId: template.id,
@@ -606,7 +626,7 @@ export function CredentialIssuancePage({
           value: customValues[field.id] ?? "",
         })),
       approvalSteps: toRequestApprovalStepInputs(approvalSteps),
-      submission: "submitted",
+      submission: approvalDocumentSubmissions.submitted,
       applicationId,
       serviceId,
       endpointIds,

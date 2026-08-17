@@ -12,7 +12,10 @@ import type {
   AccessPolicyAssignment,
   AccessPolicyResource,
 } from "@/features/access-policies/model"
-import { accessPolicyManagementTypes } from "@/features/access-policies/model"
+import {
+  accessPolicyManagementTypes,
+  accessPolicyTypes,
+} from "@/features/access-policies/model"
 import type { UiResourceApi } from "@/features/ui-resources/api"
 import {
   entityIdListSchema,
@@ -49,7 +52,7 @@ export function createLocalUiResourceApi(
           uiResourceKeys.uiResources.list.actions.importUiResources,
         ) ||
         !hasEffectiveAccessPolicyResource(state, requesterId, {
-          type: "endpoint",
+          type: accessPolicyResourceTypes.endpoint,
           id: state.systemReferences.serviceEndpointIds.importUiResources,
         })
       ) {
@@ -182,7 +185,7 @@ export function createLocalUiResourceApi(
                   ? []
                   : ([
                       {
-                        type: "ui-resource",
+                        type: accessPolicyResourceTypes.uiResource,
                         id: resource.id,
                       },
                     ] satisfies AccessPolicyResource[]),
@@ -353,7 +356,7 @@ export function createLocalUiResourceApi(
       const namespaceBase = createEntityBase()
       const managementResources: AccessPolicyResource[] = [
         {
-          type: "endpoint",
+          type: accessPolicyResourceTypes.endpoint,
           id: state.systemReferences.serviceEndpointIds.importUiResources,
         },
       ]
@@ -375,7 +378,10 @@ export function createLocalUiResourceApi(
             candidate.orphanedAt === null,
         )
         if (!resource) return { ok: false, error: "ui-resource-not-found" }
-        managementResources.push({ type: "ui-resource", id: resource.id })
+        managementResources.push({
+          type: accessPolicyResourceTypes.uiResource,
+          id: resource.id,
+        })
       }
       const managerPolicyBase = createRecordBase()
       const namespace: Namespace = {
@@ -388,16 +394,16 @@ export function createLocalUiResourceApi(
         ...managerPolicyBase,
         name: `${namespace.name} UI 리소스 관리 접근`,
         description: `${namespace.name} 관리 역할에 UI 리소스 관리 액션과 동기화 API 접근을 허용하고 동기화 시 선택된 UI 리소스를 추가합니다.`,
-        type: "access-grant",
+        type: accessPolicyTypes.accessGrant,
         managementType: accessPolicyManagementTypes.systemManaged,
-        effect: "allow",
+        effect: accessPolicyEffects.allow,
         resources: managementResources,
         status: entityStatuses.active,
       }
       const managerAssignment: AccessPolicyAssignment = {
         ...createRecordBase(),
         accessPolicyId: managerPolicy.id,
-        targetType: "role",
+        targetType: accessPolicyAssignmentTargets.role,
         targetId: namespace.managerRoleId,
         expiresAt: null,
       }

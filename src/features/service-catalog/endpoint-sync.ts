@@ -13,6 +13,9 @@ export const endpointSyncKinds = {
   delete: "delete",
   unchanged: "unchanged",
 } as const
+export const endpointSyncBlockedReasons = {
+  referencedResource: "referenced-resource",
+} as const
 export type EndpointSyncKind =
   (typeof endpointSyncKinds)[keyof typeof endpointSyncKinds]
 
@@ -31,7 +34,9 @@ export type EndpointSyncOperation = Readonly<{
   current: ServiceEndpoint | null
   next: ServiceEndpointValue | null
   impact: EndpointSyncImpact
-  blockedReason: "referenced-resource" | null
+  blockedReason:
+    | (typeof endpointSyncBlockedReasons)[keyof typeof endpointSyncBlockedReasons]
+    | null
 }>
 
 export type EndpointSyncPlan = Readonly<{
@@ -220,14 +225,14 @@ export function createEndpointSyncPlan(
       const changes = fieldChanges(currentFields, [])
       const impact = resolveImpact(state, serviceId, current.id, changes)
       return {
-        key: operationKey("delete", endpointIdentity(current)),
-        kind: "delete",
+        key: operationKey(endpointSyncKinds.delete, endpointIdentity(current)),
+        kind: endpointSyncKinds.delete,
         current,
         next: null,
         impact,
         blockedReason:
           impact.accessPolicyIds.length > 0 || impact.credentialIds.length > 0
-            ? "referenced-resource"
+            ? endpointSyncBlockedReasons.referencedResource
             : null,
       }
     })

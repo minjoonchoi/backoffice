@@ -15,6 +15,10 @@ export const requestCategoryValues = {
   permission: "permission",
   credential: "credential",
 } as const
+export const approvalExecutionTypeValues = {
+  internal: "internal",
+  groo: "groo",
+} as const
 export const approvalStepKindValues = {
   request: "request",
   approval: "approval",
@@ -48,6 +52,22 @@ export const requestTemplateFieldControlValues = {
 
 export const approvalTypeSchema = z.enum(approvalTypeValues)
 export const requestCategorySchema = z.enum(requestCategoryValues)
+export const approvalExecutionTypeSchema = z.enum(approvalExecutionTypeValues)
+export const grooDocumentIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^\S+$/)
+export const approvalExecutionSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal(approvalExecutionTypeValues.internal) }).strict(),
+  z
+    .object({
+      type: z.literal(approvalExecutionTypeValues.groo),
+      draftDocumentId: grooDocumentIdSchema,
+    })
+    .strict(),
+])
 export const approvalStepKindSchema = z.enum(approvalStepKindValues)
 export const approvalAssigneeModeSchema = z.enum(approvalAssigneeModeValues)
 export const requestTemplateFieldBindingSchema = z.enum(
@@ -98,7 +118,6 @@ export const approvalStepInputSchema = z.discriminatedUnion("assigneeMode", [
 
 const approvalStepsInputSchema = z
   .array(approvalStepInputSchema)
-  .min(1)
   .max(12)
   .refine(
     (steps) =>
@@ -164,9 +183,17 @@ export const approvalLineInputSchema = z
     name: z.string().trim().min(2).max(100),
     category: requestCategorySchema,
     type: approvalTypeSchema,
+    approvalExecution: approvalExecutionSchema,
     steps: approvalStepsInputSchema,
     fields: z.array(requestTemplateFieldInputSchema).max(30),
   })
+  .refine(
+    (template) =>
+      template.approvalExecution.type === approvalExecutionTypeValues.groo
+        ? template.steps.length === 0
+        : template.steps.length > 0,
+    { path: ["steps"] },
+  )
   .refine(
     (template) =>
       template.category === requestCategoryValues.credential
@@ -204,6 +231,8 @@ export const approvalLineInputSchema = z
 
 export type ApprovalType = z.infer<typeof approvalTypeSchema>
 export type RequestCategory = z.infer<typeof requestCategorySchema>
+export type ApprovalExecutionType = z.infer<typeof approvalExecutionTypeSchema>
+export type ApprovalExecution = z.infer<typeof approvalExecutionSchema>
 export type ApprovalStepKind = z.infer<typeof approvalStepKindSchema>
 export type ApprovalAssigneeMode = z.infer<typeof approvalAssigneeModeSchema>
 export type RequestTemplateFieldBinding = z.infer<

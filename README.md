@@ -33,7 +33,7 @@ pnpm dev:mock
 
 목록은 한 페이지에 최대 20개를 표시하며, 컬럼 조건을 선택해 검색합니다. 모바일 전용 패턴, 브랜드 테마와 다크 모드는 현재 범위에 포함하지 않습니다.
 
-요구사항은 [문서 안내](docs/README.md)를 기준으로 [UI 기능 요구사항](docs/ui-functional-requirements.md)과 [서버 기능 요구사항](docs/server-functional-requirements.md)을 분리해 관리합니다. MVP 화면에서 제외한 확정 범위는 [MVP 이후 UI 기능 요구사항](docs/post-mvp-ui-functional-requirements.md)과 [MVP 이후 서버 기능 요구사항](docs/post-mvp-server-functional-requirements.md)에서 별도로 추적합니다.
+요구사항은 [문서 안내](docs/README.md)를 기준으로 [UI 기능 요구사항](docs/ui-functional-requirements.md)과 [서버 기능 요구사항](docs/server-functional-requirements.md)을 분리해 관리합니다. 실제 화면과 사용자 시나리오의 연결은 [메뉴별 PRD](docs/menu-prd/README.md)에서 확인하고, 갱신 작업은 [PRD 작성·갱신 가이드](docs/prd-authoring-guide.md)를 따릅니다. MVP 화면에서 제외한 확정 범위는 [MVP 이후 UI 기능 요구사항](docs/post-mvp-ui-functional-requirements.md)과 [MVP 이후 서버 기능 요구사항](docs/post-mvp-server-functional-requirements.md)에서 별도로 추적합니다.
 
 ## 로컬 mock 데이터
 

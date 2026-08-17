@@ -11,6 +11,12 @@ import type {
   AccessPolicyResource,
 } from "@/features/access-policies/model"
 import { accessPolicyManagementTypes } from "@/features/access-policies/model"
+import {
+  accessPolicyAssignmentTargets,
+  accessPolicyEffects,
+  accessPolicyResourceTypes,
+  accessPolicyTypes,
+} from "@/features/access-policies/model"
 import type { BackofficeState } from "@/application/state/model"
 import type { Role } from "@/features/iam/model"
 import type { Namespace, UiResource } from "@/features/ui-resources/model"
@@ -126,7 +132,7 @@ export const initialUiResources: UiResource[] =
 function uiResourceReference(key: string): AccessPolicyResource {
   const resource = initialUiResources.find((candidate) => candidate.key === key)
   if (!resource) throw new Error(`Initial UI resource not found: ${key}`)
-  return { type: "ui-resource", id: resource.id }
+  return { type: accessPolicyResourceTypes.uiResource, id: resource.id }
 }
 function uiResourceReferences(keys: readonly string[]) {
   return [...new Set(keys)].map(uiResourceReference)
@@ -190,9 +196,9 @@ function createUiAccessPolicy(
       id,
       name,
       description,
-      type: "access-grant",
+      type: accessPolicyTypes.accessGrant,
       managementType: accessPolicyManagementTypes.systemManaged,
-      effect: "allow",
+      effect: accessPolicyEffects.allow,
       resources: [
         ...uiResourceReferences(resourceKeys),
         ...additionalResources,
@@ -210,10 +216,15 @@ const roleUiAccessPolicies = [
     "Backoffice 시스템 관리자 UI 접근",
     "Backoffice 시스템 관리자 역할에 Backoffice 네임스페이스의 모든 UI 리소스를 허용합니다.",
     initialUiResources.map((resource) => resource.key),
-    [{ targetType: "role", targetId: defaultBackofficeAdminRole.id }],
     [
       {
-        type: "endpoint",
+        targetType: accessPolicyAssignmentTargets.role,
+        targetId: defaultBackofficeAdminRole.id,
+      },
+    ],
+    [
+      {
+        type: accessPolicyResourceTypes.endpoint,
         id: localSystemReferences.serviceEndpointIds.importUiResources,
       },
     ],
@@ -229,14 +240,24 @@ const roleUiAccessPolicies = [
       uiResourceKeys.approvalDocuments.requestDetail.actions.withdrawRequest,
       uiResourceKeys.approvalDocuments.requestDetail.actions.resubmitRequest,
     ],
-    [{ targetType: "role", targetId: defaultGeneralUserRole.id }],
+    [
+      {
+        targetType: accessPolicyAssignmentTargets.role,
+        targetId: defaultGeneralUserRole.id,
+      },
+    ],
   ),
   createUiAccessPolicy(
     "45000000-0000-4000-8000-000000000107",
     "Backoffice IAM 운영자 UI 접근",
     "Backoffice IAM 운영자 역할에 사용자, 조직, 역할과 어플리케이션의 조회·관리 기능을 허용합니다.",
     iamOperatorUiResourceKeys,
-    [{ targetType: "role", targetId: defaultIamOperatorRole.id }],
+    [
+      {
+        targetType: accessPolicyAssignmentTargets.role,
+        targetId: defaultIamOperatorRole.id,
+      },
+    ],
   ),
   createUiAccessPolicy(
     "45000000-0000-4000-8000-000000000103",
@@ -246,17 +267,27 @@ const roleUiAccessPolicies = [
       ...getMenuUiResourceKeys([uiResourceKeys.approvalDocuments.key]),
       ...policyOperatorUiResourceKeys,
     ],
-    [{ targetType: "role", targetId: defaultPolicyOperatorRole.id }],
+    [
+      {
+        targetType: accessPolicyAssignmentTargets.role,
+        targetId: defaultPolicyOperatorRole.id,
+      },
+    ],
   ),
   createUiAccessPolicy(
     uiResourceManagerAccessPolicyId,
     "Backoffice UI 리소스 관리자 UI 접근",
     "Backoffice UI 리소스 관리자 역할에 리소스 조회·동기화·상태 변경·고아 리소스 정리를 허용합니다.",
     uiResourceManagerUiResourceKeys,
-    [{ targetType: "role", targetId: defaultUiResourceManagerRole.id }],
     [
       {
-        type: "endpoint",
+        targetType: accessPolicyAssignmentTargets.role,
+        targetId: defaultUiResourceManagerRole.id,
+      },
+    ],
+    [
+      {
+        type: accessPolicyResourceTypes.endpoint,
         id: localSystemReferences.serviceEndpointIds.importUiResources,
       },
     ],
@@ -284,7 +315,12 @@ const roleUiAccessPolicies = [
       uiResourceKeys.apiKeys.list.actions.registerCredential,
       uiResourceKeys.apiKeys.detail.actions.emergencyRevokeCredential,
     ],
-    [{ targetType: "role", targetId: defaultServiceOperatorRole.id }],
+    [
+      {
+        targetType: accessPolicyAssignmentTargets.role,
+        targetId: defaultServiceOperatorRole.id,
+      },
+    ],
   ),
 ]
 

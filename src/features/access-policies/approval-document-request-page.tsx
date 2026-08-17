@@ -1,6 +1,11 @@
 "use client"
 
-import { approvalDocumentSubmissions } from "@/features/access-policies/model"
+import {
+  accessPolicyTypes,
+  approvalDocumentKinds,
+  approvalDocumentSubmissions,
+  type ApprovalDocumentSubmission,
+} from "@/features/access-policies/model"
 import { requestCategoryValues } from "@/features/request-templates/model"
 import { employmentStatusValues } from "@/features/iam/model"
 import { entityStatuses } from "@/domain/common"
@@ -181,11 +186,11 @@ function ApprovalDocumentRequestForm({
     )
   }
 
-  function parseRequest(submission: "draft" | "submitted") {
+  function parseRequest(submission: ApprovalDocumentSubmission) {
     const parsed = approvalDocumentInputSchema.safeParse({
-      documentKind: "general",
+      documentKind: approvalDocumentKinds.general,
       title: documentsT("policyDocumentTitle", { policy: policy.name }),
-      type: "access-grant",
+      type: accessPolicyTypes.accessGrant,
       organizationId: requestOrganizationId,
       requesterId,
       approvalLineId: approvalLine.id,
@@ -203,7 +208,7 @@ function ApprovalDocumentRequestForm({
     return parsed.data
   }
 
-  async function persistRequest(submission: "draft" | "submitted") {
+  async function persistRequest(submission: ApprovalDocumentSubmission) {
     const input = parseRequest(submission)
     if (!input) return
     const result = await backoffice.createApprovalDocument(input)

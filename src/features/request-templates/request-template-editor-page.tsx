@@ -5,6 +5,8 @@ import { requestTemplateFieldBindingValues } from "@/features/request-templates/
 import { approvalAssigneeModeValues } from "@/features/request-templates/model"
 import { requestCategoryValues } from "@/features/request-templates/model"
 import { approvalTypeValues } from "@/features/request-templates/model"
+import { approvalExecutionTypeValues } from "@/features/request-templates/model"
+import { approvalStepKindValues } from "@/features/request-templates/model"
 import { employmentStatusValues } from "@/features/iam/model"
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react"
 import Link from "next/link"
@@ -29,10 +31,12 @@ import { snackbar } from "@/components/ui/snackbar"
 import { FormSelect } from "@/components/patterns/form-select"
 import {
   approvalTypes,
+  approvalExecutionTypeSchema,
   approvalAssigneeModes,
   approvalStepKinds,
   requestCategories,
   type ApprovalAssigneeMode,
+  type ApprovalExecutionType,
   type ApprovalLine,
   type ApprovalStepKind,
   type ApprovalType,
@@ -50,6 +54,7 @@ import {
   useBackofficeLabels,
 } from "@/application/ui/backoffice-ui"
 import { resolveRequestTemplateImpact } from "@/features/request-templates/request-template-analysis"
+import { cn } from "@/lib/utils"
 
 type StepDraft = {
   id: string
@@ -201,6 +206,15 @@ function RequestTemplateEditorForm({ template }: { template?: ApprovalLine }) {
     template?.category ?? null,
   )
   const [type, setType] = useState<ApprovalType | null>(template?.type ?? null)
+  const [approvalExecutionType, setApprovalExecutionType] =
+    useState<ApprovalExecutionType>(
+      template?.approvalExecution.type ?? approvalExecutionTypeValues.internal,
+    )
+  const [grooDraftDocumentId, setGrooDraftDocumentId] = useState(
+    template?.approvalExecution.type === approvalExecutionTypeValues.groo
+      ? template.approvalExecution.draftDocumentId
+      : "",
+  )
   const [steps, setSteps] = useState<StepDraft[]>(() =>
     createStepDrafts(template),
   )
@@ -266,6 +280,13 @@ function RequestTemplateEditorForm({ template }: { template?: ApprovalLine }) {
       name,
       category,
       type,
+      approvalExecution:
+        approvalExecutionType === approvalExecutionTypeValues.groo
+          ? {
+              type: approvalExecutionTypeValues.groo,
+              draftDocumentId: grooDraftDocumentId,
+            }
+          : { type: approvalExecutionTypeValues.internal },
       steps: steps.map((step) => {
         const base = {
           kind: step.kind,
@@ -357,6 +378,29 @@ function RequestTemplateEditorForm({ template }: { template?: ApprovalLine }) {
               {type ? labels.approvalType(type) : "—"}
             </dd>
           </div>
+          <div
+            className={cn(
+              "grid gap-1 border-b p-3",
+              approvalExecutionType === approvalExecutionTypeValues.groo
+                ? "sm:border-r"
+                : "sm:col-span-2",
+            )}
+          >
+            <dt className="text-xs text-muted-foreground">
+              {t("approvalExecution")}
+            </dt>
+            <dd className="font-medium">
+              {t(`approvalExecutions.${approvalExecutionType}`)}
+            </dd>
+          </div>
+          {approvalExecutionType === approvalExecutionTypeValues.groo ? (
+            <div className="grid gap-1 border-b p-3">
+              <dt className="text-xs text-muted-foreground">
+                {t("grooDraftDocumentId")}
+              </dt>
+              <dd className="font-medium break-all">{grooDraftDocumentId}</dd>
+            </div>
+          ) : null}
           <div className="grid gap-1 p-3 sm:border-r">
             <dt className="text-xs text-muted-foreground">{t("stepCount")}</dt>
             <dd className="font-medium">{steps.length}</dd>
@@ -390,27 +434,30 @@ function RequestTemplateEditorForm({ template }: { template?: ApprovalLine }) {
             </AlertDescription>
           </Alert>
         ) : null}
-        <section className="grid gap-2" aria-labelledby="review-steps-title">
-          <h4 id="review-steps-title" className="font-medium">
-            {t("configuredStepsTitle")}
-          </h4>
-          <ul className="grid gap-2">
-            {steps.map((stepDraft, index) => (
-              <li
-                key={stepDraft.id}
-                className="grid gap-1 rounded-control border bg-surface-subtle px-3 py-2 sm:grid-cols-[auto_1fr_auto] sm:items-center"
-              >
-                <Badge variant="secondary">{index + 1}</Badge>
-                <span className="font-medium">
-                  {labels.stepKind(stepDraft.kind)} · {assigneeLabel(stepDraft)}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {t("currentRequestStage", { stage: stepDraft.stage })}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        {approvalExecutionType === approvalExecutionTypeValues.internal ? (
+          <section className="grid gap-2" aria-labelledby="review-steps-title">
+            <h4 id="review-steps-title" className="font-medium">
+              {t("configuredStepsTitle")}
+            </h4>
+            <ul className="grid gap-2">
+              {steps.map((stepDraft, index) => (
+                <li
+                  key={stepDraft.id}
+                  className="grid gap-1 rounded-control border bg-surface-subtle px-3 py-2 sm:grid-cols-[auto_1fr_auto] sm:items-center"
+                >
+                  <Badge variant="secondary">{index + 1}</Badge>
+                  <span className="font-medium">
+                    {labels.stepKind(stepDraft.kind)} ·{" "}
+                    {assigneeLabel(stepDraft)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {t("currentRequestStage", { stage: stepDraft.stage })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         <section className="grid gap-2" aria-labelledby="review-fields-title">
           <h4 id="review-fields-title" className="font-medium">
             {t("configuredFieldsTitle")}
@@ -514,181 +561,233 @@ function RequestTemplateEditorForm({ template }: { template?: ApprovalLine }) {
                         label: labels.approvalType(item),
                       }))}
                   />
+                  <FormSelect
+                    label={t("approvalExecution")}
+                    value={approvalExecutionType}
+                    onValueChange={(value) => {
+                      if (!value) return
+                      setApprovalExecutionType(value)
+                      if (value === approvalExecutionTypeValues.groo) {
+                        setSteps([])
+                      } else if (steps.length === 0) {
+                        setSteps([
+                          {
+                            id: crypto.randomUUID(),
+                            kind: approvalStepKindValues.request,
+                            assigneeMode: approvalAssigneeModeValues.requester,
+                            stage: 1,
+                            userId: employedUsers[0]?.id ?? null,
+                            organizationId:
+                              backoffice.organizations[0]?.id ?? null,
+                          },
+                        ])
+                      }
+                    }}
+                    options={approvalExecutionTypeSchema.options.map(
+                      (item) => ({
+                        value: item,
+                        label: t(`approvalExecutions.${item}`),
+                      }),
+                    )}
+                  />
+                  {approvalExecutionType ===
+                  approvalExecutionTypeValues.groo ? (
+                    <Field>
+                      <FieldLabel htmlFor="groo-draft-document-id">
+                        {t("grooDraftDocumentId")}
+                      </FieldLabel>
+                      <Input
+                        id="groo-draft-document-id"
+                        value={grooDraftDocumentId}
+                        required
+                        maxLength={200}
+                        pattern="\\S+"
+                        onChange={(event) => {
+                          setGrooDraftDocumentId(event.currentTarget.value)
+                        }}
+                      />
+                    </Field>
+                  ) : null}
                 </div>
 
-                <section aria-labelledby="steps-title" className="grid gap-3">
-                  <div className="flex items-center justify-between">
-                    <h3 id="steps-title" className="font-medium">
-                      {t("preview")}
-                    </h3>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={addStep}
-                      disabled={steps.length >= 12}
-                    >
-                      <Plus />
-                      {t("addStep")}
-                    </Button>
-                  </div>
-                  {steps.map((step, index) => (
-                    <div
-                      key={step.id}
-                      className="grid items-end gap-2 rounded-lg border bg-surface-subtle p-3 md:grid-cols-[auto_6rem_1fr_1fr_1fr_auto]"
-                    >
-                      <span className="pb-2 font-semibold tabular-nums">
-                        {index + 1}
-                      </span>
-                      <Field>
-                        <FieldLabel htmlFor={`${step.id}-stage`}>
-                          {t("stageLabel")}
-                        </FieldLabel>
-                        <Input
-                          id={`${step.id}-stage`}
-                          type="number"
-                          min={1}
-                          max={12}
-                          value={step.stage}
-                          onChange={(event) => {
-                            const stage = event.currentTarget.valueAsNumber
-                            setSteps((current) =>
-                              current.map((item) =>
-                                item.id === step.id ? { ...item, stage } : item,
-                              ),
-                            )
-                          }}
-                        />
-                      </Field>
-                      <FormSelect
-                        label={t("step")}
-                        value={step.kind}
-                        onValueChange={(value) => {
-                          if (!value) return
-                          setSteps((current) =>
-                            current.map((item) =>
-                              item.id === step.id
-                                ? { ...item, kind: value }
-                                : item,
-                            ),
-                          )
-                        }}
-                        options={approvalStepKinds.map((item) => ({
-                          value: item,
-                          label: labels.stepKind(item),
-                        }))}
-                      />
-                      <FormSelect
-                        label={t("assigneeMode")}
-                        value={step.assigneeMode}
-                        onValueChange={(value) => {
-                          if (!value) return
-                          setSteps((current) =>
-                            current.map((item) =>
-                              item.id === step.id
-                                ? { ...item, assigneeMode: value }
-                                : item,
-                            ),
-                          )
-                        }}
-                        options={approvalAssigneeModes
-                          .filter(
-                            (item) =>
-                              category === requestCategoryValues.credential ||
-                              item !==
-                                approvalAssigneeModeValues.serviceOwnerOrganization,
-                          )
-                          .map((item) => ({
-                            value: item,
-                            label: labels.assigneeMode(item),
-                          }))}
-                      />
-                      {step.assigneeMode ===
-                      approvalAssigneeModeValues.fixedUser ? (
-                        <FormSelect
-                          label={t("assignee")}
-                          value={step.userId}
-                          onValueChange={(value) => {
-                            setSteps((current) =>
-                              current.map((item) =>
-                                item.id === step.id
-                                  ? { ...item, userId: value }
-                                  : item,
-                              ),
-                            )
-                          }}
-                          options={employedUsers.map((user) => ({
-                            value: user.id,
-                            label: user.nickname,
-                          }))}
-                        />
-                      ) : step.assigneeMode ===
-                        approvalAssigneeModeValues.fixedOrganization ? (
-                        <FormSelect
-                          label={t("assignee")}
-                          value={step.organizationId}
-                          onValueChange={(value) => {
-                            setSteps((current) =>
-                              current.map((item) =>
-                                item.id === step.id
-                                  ? { ...item, organizationId: value }
-                                  : item,
-                              ),
-                            )
-                          }}
-                          options={backoffice.organizations.map(
-                            (organization) => ({
-                              value: organization.id,
-                              label: organization.name,
-                            }),
-                          )}
-                        />
-                      ) : (
-                        <div className="pb-2 text-sm text-muted-foreground">
-                          {labels.assigneeMode(step.assigneeMode)}
-                        </div>
-                      )}
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`${String(index + 1)} ${t("moveUp")}`}
-                          disabled={index === 0}
-                          onClick={() => {
-                            move(index, -1)
-                          }}
-                        >
-                          <ArrowUp />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`${String(index + 1)} ${t("moveDown")}`}
-                          disabled={index === steps.length - 1}
-                          onClick={() => {
-                            move(index, 1)
-                          }}
-                        >
-                          <ArrowDown />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`${String(index + 1)} ${t("removeStep")}`}
-                          onClick={() => {
-                            setSteps((current) =>
-                              current.filter((item) => item.id !== step.id),
-                            )
-                          }}
-                        >
-                          <Trash2 />
-                        </Button>
-                      </div>
+                {approvalExecutionType ===
+                approvalExecutionTypeValues.internal ? (
+                  <section aria-labelledby="steps-title" className="grid gap-3">
+                    <div className="flex items-center justify-between">
+                      <h3 id="steps-title" className="font-medium">
+                        {t("preview")}
+                      </h3>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={addStep}
+                        disabled={steps.length >= 12}
+                      >
+                        <Plus />
+                        {t("addStep")}
+                      </Button>
                     </div>
-                  ))}
-                </section>
+                    {steps.map((step, index) => (
+                      <div
+                        key={step.id}
+                        className="grid items-end gap-2 rounded-lg border bg-surface-subtle p-3 md:grid-cols-[auto_6rem_1fr_1fr_1fr_auto]"
+                      >
+                        <span className="pb-2 font-semibold tabular-nums">
+                          {index + 1}
+                        </span>
+                        <Field>
+                          <FieldLabel htmlFor={`${step.id}-stage`}>
+                            {t("stageLabel")}
+                          </FieldLabel>
+                          <Input
+                            id={`${step.id}-stage`}
+                            type="number"
+                            min={1}
+                            max={12}
+                            value={step.stage}
+                            onChange={(event) => {
+                              const stage = event.currentTarget.valueAsNumber
+                              setSteps((current) =>
+                                current.map((item) =>
+                                  item.id === step.id
+                                    ? { ...item, stage }
+                                    : item,
+                                ),
+                              )
+                            }}
+                          />
+                        </Field>
+                        <FormSelect
+                          label={t("step")}
+                          value={step.kind}
+                          onValueChange={(value) => {
+                            if (!value) return
+                            setSteps((current) =>
+                              current.map((item) =>
+                                item.id === step.id
+                                  ? { ...item, kind: value }
+                                  : item,
+                              ),
+                            )
+                          }}
+                          options={approvalStepKinds.map((item) => ({
+                            value: item,
+                            label: labels.stepKind(item),
+                          }))}
+                        />
+                        <FormSelect
+                          label={t("assigneeMode")}
+                          value={step.assigneeMode}
+                          onValueChange={(value) => {
+                            if (!value) return
+                            setSteps((current) =>
+                              current.map((item) =>
+                                item.id === step.id
+                                  ? { ...item, assigneeMode: value }
+                                  : item,
+                              ),
+                            )
+                          }}
+                          options={approvalAssigneeModes
+                            .filter(
+                              (item) =>
+                                category === requestCategoryValues.credential ||
+                                item !==
+                                  approvalAssigneeModeValues.serviceOwnerOrganization,
+                            )
+                            .map((item) => ({
+                              value: item,
+                              label: labels.assigneeMode(item),
+                            }))}
+                        />
+                        {step.assigneeMode ===
+                        approvalAssigneeModeValues.fixedUser ? (
+                          <FormSelect
+                            label={t("assignee")}
+                            value={step.userId}
+                            onValueChange={(value) => {
+                              setSteps((current) =>
+                                current.map((item) =>
+                                  item.id === step.id
+                                    ? { ...item, userId: value }
+                                    : item,
+                                ),
+                              )
+                            }}
+                            options={employedUsers.map((user) => ({
+                              value: user.id,
+                              label: user.nickname,
+                            }))}
+                          />
+                        ) : step.assigneeMode ===
+                          approvalAssigneeModeValues.fixedOrganization ? (
+                          <FormSelect
+                            label={t("assignee")}
+                            value={step.organizationId}
+                            onValueChange={(value) => {
+                              setSteps((current) =>
+                                current.map((item) =>
+                                  item.id === step.id
+                                    ? { ...item, organizationId: value }
+                                    : item,
+                                ),
+                              )
+                            }}
+                            options={backoffice.organizations.map(
+                              (organization) => ({
+                                value: organization.id,
+                                label: organization.name,
+                              }),
+                            )}
+                          />
+                        ) : (
+                          <div className="pb-2 text-sm text-muted-foreground">
+                            {labels.assigneeMode(step.assigneeMode)}
+                          </div>
+                        )}
+                        <div className="flex gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`${String(index + 1)} ${t("moveUp")}`}
+                            disabled={index === 0}
+                            onClick={() => {
+                              move(index, -1)
+                            }}
+                          >
+                            <ArrowUp />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`${String(index + 1)} ${t("moveDown")}`}
+                            disabled={index === steps.length - 1}
+                            onClick={() => {
+                              move(index, 1)
+                            }}
+                          >
+                            <ArrowDown />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`${String(index + 1)} ${t("removeStep")}`}
+                            onClick={() => {
+                              setSteps((current) =>
+                                current.filter((item) => item.id !== step.id),
+                              )
+                            }}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </section>
+                ) : null}
 
                 <section aria-labelledby="fields-title" className="grid gap-3">
                   <div className="flex items-center justify-between gap-3">

@@ -35,8 +35,8 @@
 - 토큰의 단일 원천은 `src/app/globals.css`의 primitive → semantic → component CSS 변수 계층이다.
 - 화면과 컴포넌트에서는 가능한 한 `bg-surface`, `text-text-subtle`, `border-border-subtle`, `h-control` 같은 semantic/component utility를 사용한다.
 - 기능 코드에 색상 hex나 임의의 상태색을 추가하지 않는다. 의미가 반복되면 기존 token을 사용하고 실제로 새로운 의미가 필요할 때만 token 계층을 확장한다.
-- 기본 시각 언어는 Noto Sans KR, 32px control, cool neutral과 blue point를 사용하는 light theme다. 브랜드 테마와 dark mode는 현재 범위가 아니다.
-- 간격, radius, shadow와 motion은 기존 scale을 사용한다. 시선을 끄는 장식보다 정보 밀도와 상태 구분을 우선한다.
+- 기본 시각 언어는 Noto Sans KR, 14px body, 20~24px page title, 32px control, cool neutral과 blue point를 사용하는 light theme다. 브랜드 테마와 dark mode는 현재 범위가 아니다.
+- 카드 기본 패딩은 12px, 테이블 헤더는 32px, layout gutter는 12~24px를 기준으로 한다. 간격, radius, shadow와 motion은 기존 scale을 사용하며 시선을 끄는 장식보다 정보 밀도와 상태 구분을 우선한다.
 - motion은 짧고 기능적인 피드백에만 사용하며 `prefers-reduced-motion`에서도 정보나 동작이 사라지지 않게 한다.
 
 ## 레이아웃과 콘텐츠

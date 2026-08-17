@@ -6,6 +6,7 @@ coverage/
 storybook-static/
 test-results/
 playwright-report/
+output/
 .env*
 !.env.example
 *.tsbuildinfo

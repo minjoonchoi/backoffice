@@ -45,7 +45,7 @@ function AlertDialogContent({
         data-slot="alert-dialog-content"
         initialFocus={initialFocus}
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-[calc(100%_-_2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-overlay border bg-popover p-4 text-popover-foreground shadow-overlay duration-(--duration-fast) outline-none data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
+          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-[calc(100%_-_2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 gap-3 overflow-y-auto rounded-overlay border bg-popover p-3 text-body text-popover-foreground shadow-overlay duration-(--duration-fast) outline-none data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
           className,
         )}
         {...props}
@@ -60,7 +60,7 @@ function AlertDialogHeader({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  return <div className={cn("grid gap-1.5", className)} {...props} />
+  return <div className={cn("grid gap-1", className)} {...props} />
 }
 
 function AlertDialogFooter({
@@ -70,7 +70,7 @@ function AlertDialogFooter({
   return (
     <div
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        "-mx-3 -mb-3 flex flex-col-reverse gap-2 rounded-b-overlay border-t bg-muted/50 p-3 sm:flex-row sm:justify-end",
         className,
       )}
       {...props}
@@ -84,7 +84,7 @@ function AlertDialogTitle({
 }: AlertDialogPrimitive.Title.Props) {
   return (
     <AlertDialogPrimitive.Title
-      className={cn("text-base font-medium", className)}
+      className={cn("text-sm font-medium", className)}
       {...props}
     />
   )
@@ -96,7 +96,7 @@ function AlertDialogDescription({
 }: AlertDialogPrimitive.Description.Props) {
   return (
     <AlertDialogPrimitive.Description
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn("text-body text-muted-foreground", className)}
       {...props}
     />
   )

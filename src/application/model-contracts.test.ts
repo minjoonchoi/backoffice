@@ -69,6 +69,11 @@ describe("backoffice input schemas", () => {
         .filter((menu) => menu.section === "uiCatalog")
         .map((menu) => menu.id),
     ).toEqual(["namespaces", "uiResources"])
+    expect(
+      menuDefinitions
+        .filter((menu) => menu.section === "systemManagement")
+        .map((menu) => menu.id),
+    ).toEqual(["requests", "approvalLines", "auditLogs"])
   })
 
   it("registers stable feature keys against code-owned menus", () => {
@@ -242,6 +247,7 @@ describe("backoffice input schemas", () => {
         name: "권한 부여 요청 템플릿",
         category: "permission",
         type: "access-grant",
+        approvalExecution: { type: "internal" },
         steps: [
           { kind: "request", assigneeMode: "requester", stage: 1 },
           {
@@ -269,6 +275,7 @@ describe("backoffice input schemas", () => {
         name: "잘못된 접근 정책 템플릿",
         category: "permission",
         type: "access-grant",
+        approvalExecution: { type: "internal" },
         steps: [
           {
             kind: "agreement",
@@ -286,6 +293,7 @@ describe("backoffice input schemas", () => {
       name: "API Key 발급 요청 템플릿",
       category: "credential",
       type: "api-key",
+      approvalExecution: { type: "internal" },
       steps: [{ kind: "request", assigneeMode: "requester", stage: 1 }],
       fields: [
         {
@@ -337,6 +345,32 @@ describe("backoffice input schemas", () => {
     expect(
       approvalLineInputSchema.safeParse({
         ...template,
+        approvalExecution: {
+          type: "groo",
+          draftDocumentId: "GROO-CREDENTIAL-ISSUANCE-V1",
+        },
+        steps: [],
+      }).success,
+    ).toBe(true)
+    expect(
+      approvalLineInputSchema.safeParse({
+        ...template,
+        approvalExecution: { type: "groo", draftDocumentId: "" },
+        steps: [],
+      }).success,
+    ).toBe(false)
+    expect(
+      approvalLineInputSchema.safeParse({
+        ...template,
+        approvalExecution: {
+          type: "groo",
+          draftDocumentId: "GROO-CREDENTIAL-ISSUANCE-V1",
+        },
+      }).success,
+    ).toBe(false)
+    expect(
+      approvalLineInputSchema.safeParse({
+        ...template,
         fields: [
           ...template.fields,
           { ...template.fields[0], key: "duplicate-service" },
@@ -357,6 +391,7 @@ describe("backoffice input schemas", () => {
         name: "잘못된 요청 템플릿",
         category: "permission",
         type: "access-grant",
+        approvalExecution: { type: "internal" },
         steps: [
           { kind: "request", assigneeMode: "requester", stage: 1 },
           { kind: "approval", assigneeMode: "fixed-user", stage: 3 },

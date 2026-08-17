@@ -36,9 +36,8 @@ export const RequestTemplateConfiguration: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(
-      canvas.getByRole("heading", { name: "결재 라인 구성" }),
-    ).toBeVisible()
+    await expect(canvas.getByText("Groo 연동 기안")).toBeVisible()
+    await expect(canvas.getByText("GROO-CREDENTIAL-ISSUANCE-V1")).toBeVisible()
     await expect(
       canvas.getByRole("heading", { name: "입력 항목 구성" }),
     ).toBeVisible()
@@ -62,9 +61,7 @@ export const RequestTemplateReadOnly: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(
-      canvas.getByRole("heading", { name: "결재 라인 구성" }),
-    ).toBeVisible()
+    await expect(canvas.getByText("Groo 연동 기안")).toBeVisible()
     await expect(
       canvas.queryByRole("button", { name: "요청 템플릿 수정" }),
     ).not.toBeInTheDocument()

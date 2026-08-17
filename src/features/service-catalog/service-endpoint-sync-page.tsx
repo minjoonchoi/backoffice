@@ -392,7 +392,7 @@ export function ServiceEndpointSyncPage() {
                   {t("syncFinalReviewDescription")}
                 </p>
               </div>
-              <div className="grid overflow-hidden rounded-card border sm:grid-cols-4">
+              <div className="grid overflow-hidden rounded-card border sm:grid-cols-3">
                 {(["add", "update", "delete"] as const).map((kind) => (
                   <div
                     key={kind}
@@ -410,14 +410,6 @@ export function ServiceEndpointSyncPage() {
                     </strong>
                   </div>
                 ))}
-                <div className="grid gap-1 p-4">
-                  <span className="text-xs text-muted-foreground">
-                    {t("notificationRecipients")}
-                  </span>
-                  <strong className="text-xl tabular-nums">
-                    {affectedUserIds.length}
-                  </strong>
-                </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <section className="grid content-start gap-2 rounded-card border p-4">

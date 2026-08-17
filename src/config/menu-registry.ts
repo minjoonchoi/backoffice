@@ -1,3 +1,8 @@
+import {
+  uiResourceTypeValues,
+  type UiResourceType,
+} from "../features/ui-resources/ui-resource-manifest.ts"
+
 export type MenuSection =
   "common" | "directory" | "serviceCatalog" | "uiCatalog" | "systemManagement"
 
@@ -117,6 +122,15 @@ export const uiResourceRegistry = {
           deleteApplication: "어플리케이션 삭제",
         },
       },
+    },
+  },
+  requests: {
+    href: "/requests",
+    defaultView: "list",
+    section: "systemManagement",
+    name: "요청",
+    views: {
+      list: { actions: {} },
     },
   },
   approvalLines: {
@@ -387,7 +401,7 @@ export const uiResourceKeys = createUiResourceKeys()
 export type UiResourceRegistryEntry = {
   key: string
   parentKey: string | null
-  type: "menu" | "view" | "action" | "component"
+  type: UiResourceType
   name: string
   description: string
 }
@@ -414,7 +428,7 @@ export const uiResourceManifest = {
       ([menuId, menu]): UiResourceRegistryEntry => ({
         key: menuId,
         parentKey: null,
-        type: "menu",
+        type: uiResourceTypeValues.menu,
         name: menu.name,
         description: `${menu.name} 메뉴의 최상위 UI 리소스입니다.`,
       }),
@@ -423,7 +437,7 @@ export const uiResourceManifest = {
       entries(menu.views).map(([viewId]): UiResourceRegistryEntry => ({
         key: `${menuId}:${viewId}`,
         parentKey: menuId,
-        type: "view",
+        type: uiResourceTypeValues.view,
         name: `${menu.name} ${uiResourceViewNames[viewId]}`,
         description: `${menu.name} 메뉴의 ${uiResourceViewNames[viewId]} 화면입니다.`,
       })),
@@ -434,7 +448,7 @@ export const uiResourceManifest = {
           ([action, actionName]): UiResourceRegistryEntry => ({
             key: `${menuId}:${viewId}:${action}`,
             parentKey: `${menuId}:${viewId}`,
-            type: "action",
+            type: uiResourceTypeValues.action,
             name: actionName,
             description: `${menu.name} 메뉴의 ${actionName} UI 기능입니다.`,
           }),

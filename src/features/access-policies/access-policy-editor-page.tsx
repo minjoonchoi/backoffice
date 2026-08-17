@@ -1,7 +1,16 @@
 "use client"
 
 import { requestTemplateFieldBindingValues } from "@/features/request-templates/model"
-import { accessPolicyResourceTypes } from "@/features/access-policies/model"
+import {
+  accessPolicyEffects,
+  accessPolicyResourceTypeSchema,
+  accessPolicyResourceTypes,
+  type AccessPolicy,
+  type AccessPolicyEffect,
+  type AccessPolicyResource,
+  type AccessPolicyResourceType,
+  type AccessPolicyValue,
+} from "@/features/access-policies/model"
 import { serviceTypeValues } from "@/features/service-catalog/model"
 import { entityStatuses } from "@/domain/common"
 import { X } from "lucide-react"
@@ -35,19 +44,22 @@ import { snackbar } from "@/components/ui/snackbar"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   RequestMultiTargetSelector,
   RequestTargetSelector,
 } from "@/features/credentials/request-target-selector"
 import { accessPolicyApprovalLines } from "@/features/access-policies/access-policy-template"
 import { FormSelect } from "@/components/patterns/form-select"
-import type {
-  AccessPolicy,
-  AccessPolicyEffect,
-  AccessPolicyValue,
-  AccessPolicyResource,
-  AccessPolicyResourceType,
-} from "@/features/access-policies/model"
-import { accessPolicyResourceTypeSchema } from "@/features/access-policies/model"
+import type { BackofficeUser } from "@/features/iam/model"
+import {
+  resolveAccessPolicyResourceDisplay,
+  type AccessPolicyResourceDisplay,
+} from "@/features/access-policies/access-policy-resources"
 import {
   resolveAccessPolicyUpdateImpact,
   type AccessPolicyUpdateImpact,
@@ -87,6 +99,77 @@ type SelectedResourceRow = {
   name: string
 }
 
+const policyResourceImpactOutcomeValues = {
+  available: "available",
+  unavailable: "unavailable",
+} as const
+
+type PolicyResourceImpactOutcome =
+  (typeof policyResourceImpactOutcomeValues)[keyof typeof policyResourceImpactOutcomeValues]
+
+type PolicyResourceImpactRow = {
+  id: string
+  resource: AccessPolicyResourceDisplay
+  outcome: PolicyResourceImpactOutcome
+  affectedUsers: BackofficeUser[]
+}
+
+function impactResourceLabel(resource: AccessPolicyResourceDisplay) {
+  return [resource.scope, resource.identifier, resource.name]
+    .filter((value) => value !== null)
+    .join(" · ")
+}
+
+function PolicyImpactUsersSummary({
+  users,
+  moreLabel,
+  ariaLabel,
+}: {
+  users: readonly BackofficeUser[]
+  moreLabel: string
+  ariaLabel: string
+}) {
+  const primaryUser = users[0]
+  if (!primaryUser) return null
+  const summary =
+    users.length > 1
+      ? `${primaryUser.nickname} · ${moreLabel}`
+      : primaryUser.nickname
+
+  return users.length > 1 ? (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={ariaLabel}
+            className="cursor-help text-left text-sm font-medium underline decoration-border underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        }
+      >
+        {summary}
+      </TooltipTrigger>
+      <TooltipContent align="end" className="max-w-80 px-3 py-2">
+        <ul className="grid gap-1.5">
+          {users.map((user) => (
+            <li key={user.id} className="grid gap-0.5">
+              <span className="font-medium">{user.nickname}</span>
+              <span className="opacity-80">{user.email}</span>
+            </li>
+          ))}
+        </ul>
+      </TooltipContent>
+    </Tooltip>
+  ) : (
+    <span className="grid min-w-0 gap-0.5">
+      <span className="truncate font-medium">{primaryUser.nickname}</span>
+      <span className="truncate text-xs text-muted-foreground">
+        {primaryUser.email}
+      </span>
+    </span>
+  )
+}
+
 const uiFeatureResourceTypes = new Set<AccessPolicyResourceType>([
   accessPolicyResourceTypes.uiResource,
   accessPolicyResourceTypes.endpoint,
@@ -95,16 +178,18 @@ const uiFeatureResourceTypes = new Set<AccessPolicyResourceType>([
 function inferConfigurationMode(
   policy: AccessPolicy | undefined,
 ): PolicyConfigurationMode {
-  if (!policy) return "ui-feature"
+  if (!policy) return policyConfigurationModes.uiFeature
   const types = new Set(policy.resources.map((resource) => resource.type))
   if (
     types.size === uiFeatureResourceTypes.size &&
     [...uiFeatureResourceTypes].every((type) => types.has(type))
   ) {
-    return "ui-feature"
+    return policyConfigurationModes.uiFeature
   }
-  if (types.size === 1 && types.has("endpoint")) return "endpoint"
-  return "custom"
+  if (types.size === 1 && types.has(accessPolicyResourceTypes.endpoint)) {
+    return policyConfigurationModes.endpoint
+  }
+  return policyConfigurationModes.custom
 }
 
 export function AccessPolicyEditorPage({
@@ -208,7 +293,7 @@ function AccessPolicyEditorForm({
   )
   const [description, setDescription] = useState(draftSource?.description ?? "")
   const [resourceEffect, setResourceEffect] = useState<AccessPolicyEffect>(
-    policy?.effect ?? "allow",
+    policy?.effect ?? accessPolicyEffects.allow,
   )
   const [endpointIds, setEndpointIds] = useState<Set<string>>(
     new Set(
@@ -317,14 +402,14 @@ function AccessPolicyEditorForm({
   const selectedResourceRows: SelectedResourceRow[] = [
     ...selectedEndpoints.map(({ endpoint, service }) => ({
       id: endpoint.id,
-      type: "endpoint" as const,
+      type: accessPolicyResourceTypes.endpoint,
       scope: service.name,
       identifier: `${endpoint.method} ${endpoint.path}`,
       name: endpoint.name,
     })),
     ...selectedUiResourceOptions.map(({ namespace, resource }) => ({
       id: resource.id,
-      type: "ui-resource" as const,
+      type: accessPolicyResourceTypes.uiResource,
       scope: namespace.name,
       identifier: resource.key,
       name: resource.name,
@@ -340,9 +425,12 @@ function AccessPolicyEditorForm({
     : selectedResourceTypes[0]
   const resourceCount = endpointIds.size + uiResourceIds.size
   const selectedResources: AccessPolicyResource[] = [
-    ...[...endpointIds].map((id) => ({ type: "endpoint" as const, id })),
+    ...[...endpointIds].map((id) => ({
+      type: accessPolicyResourceTypes.endpoint,
+      id,
+    })),
     ...[...uiResourceIds].map((id) => ({
-      type: "ui-resource" as const,
+      type: accessPolicyResourceTypes.uiResource,
       id,
     })),
   ]
@@ -488,7 +576,9 @@ function AccessPolicyEditorForm({
     const nextTypes =
       value === policyConfigurationModes.uiFeature
         ? new Set<AccessPolicyResourceType>(uiFeatureResourceTypes)
-        : new Set<AccessPolicyResourceType>(["endpoint"])
+        : new Set<AccessPolicyResourceType>([
+            accessPolicyResourceTypes.endpoint,
+          ])
     setResourceTypes(nextTypes)
     setActiveResourceType(
       value === policyConfigurationModes.uiFeature
@@ -528,7 +618,7 @@ function AccessPolicyEditorForm({
         value: policyConfigurationModes.endpoint,
         title: t("configurationModes.endpoint.title"),
         description: t("configurationModes.endpoint.description"),
-        types: ["endpoint"],
+        types: [accessPolicyResourceTypes.endpoint],
       },
       {
         value: policyConfigurationModes.custom,
@@ -640,8 +730,14 @@ function AccessPolicyEditorForm({
             if (value) setResourceEffect(value)
           }}
           options={[
-            { value: "allow", label: t("allow") },
-            { value: "deny", label: t("deny") },
+            {
+              value: accessPolicyEffects.allow,
+              label: t(accessPolicyEffects.allow),
+            },
+            {
+              value: accessPolicyEffects.deny,
+              label: t(accessPolicyEffects.deny),
+            },
           ]}
         />
       </section>
@@ -919,8 +1015,11 @@ function AccessPolicyEditorForm({
                 </TabsTrigger>
               ))}
             </TabsList>
-            <TabsContent value="endpoint" className="grid min-h-0 gap-4">
-              {resourceTypes.has("endpoint") ? (
+            <TabsContent
+              value={accessPolicyResourceTypes.endpoint}
+              className="grid min-h-0 gap-4"
+            >
+              {resourceTypes.has(accessPolicyResourceTypes.endpoint) ? (
                 <div className="grid min-h-0 items-start gap-4 md:grid-cols-2">
                   <RequestTargetSelector
                     label={t("endpointServiceSelection")}
@@ -970,8 +1069,11 @@ function AccessPolicyEditorForm({
                 </div>
               ) : null}
             </TabsContent>
-            <TabsContent value="ui-resource" className="grid min-h-0 gap-4">
-              {resourceTypes.has("ui-resource") ? (
+            <TabsContent
+              value={accessPolicyResourceTypes.uiResource}
+              className="grid min-h-0 gap-4"
+            >
+              {resourceTypes.has(accessPolicyResourceTypes.uiResource) ? (
                 <div className="grid min-h-0 items-start gap-4 md:grid-cols-2">
                   <RequestTargetSelector
                     label={t("uiResourceNamespace")}
@@ -1096,18 +1198,7 @@ function AccessPolicyEditorForm({
   function renderUpdateImpact() {
     if (!policy || !reviewedImpact) return null
     const updateImpact = reviewedImpact
-    const permissionChanges = updateImpact.permissionChanges.map((change) => {
-      const user = backoffice.users.find(
-        (candidate) => candidate.id === change.userId,
-      )
-      if (!user) {
-        throw new Error(
-          `Policy permission change user not found: ${change.userId}`,
-        )
-      }
-      return { ...change, user }
-    })
-    const notificationRecipients =
+    const notificationRecipientUsers =
       updateImpact.notificationRecipientUserIds.map((userId) => {
         const user = backoffice.users.find(
           (candidate) => candidate.id === userId,
@@ -1117,156 +1208,248 @@ function AccessPolicyEditorForm({
         }
         return user
       })
-    const assignmentTypes = ["user", "organization", "role"] as const
+    const notificationRecipientsById = new Map(
+      notificationRecipientUsers.map((user) => [user.id, user]),
+    )
+    const resourceImpactsById = new Map<string, PolicyResourceImpactRow>()
+
+    function addResourceImpact(
+      reference: AccessPolicyResource,
+      user: BackofficeUser,
+      outcome: PolicyResourceImpactOutcome,
+    ) {
+      const id = `${outcome}:${reference.type}:${reference.id}`
+      const existing = resourceImpactsById.get(id)
+      if (existing) {
+        if (
+          !existing.affectedUsers.some((candidate) => candidate.id === user.id)
+        ) {
+          existing.affectedUsers.push(user)
+        }
+        return
+      }
+      resourceImpactsById.set(id, {
+        id,
+        resource: resolveAccessPolicyResourceDisplay(backoffice, reference),
+        outcome,
+        affectedUsers: [user],
+      })
+    }
+
+    for (const permissionChange of updateImpact.permissionChanges) {
+      const user = notificationRecipientsById.get(permissionChange.userId)
+      if (!user) {
+        throw new Error(
+          `Policy permission change user not found: ${permissionChange.userId}`,
+        )
+      }
+      for (const resource of permissionChange.gainedResources) {
+        addResourceImpact(
+          resource,
+          user,
+          policyResourceImpactOutcomeValues.available,
+        )
+      }
+      for (const resource of permissionChange.lostResources) {
+        addResourceImpact(
+          resource,
+          user,
+          policyResourceImpactOutcomeValues.unavailable,
+        )
+      }
+    }
+    const resourceImpacts = [...resourceImpactsById.values()].sort(
+      (left, right) => {
+        if (left.outcome !== right.outcome) {
+          return left.outcome === policyResourceImpactOutcomeValues.unavailable
+            ? -1
+            : 1
+        }
+        return impactResourceLabel(left.resource).localeCompare(
+          impactResourceLabel(right.resource),
+        )
+      },
+    )
+    const resourceImpactColumns: ColumnDef<PolicyResourceImpactRow>[] = [
+      {
+        id: "resource",
+        header: t("impactedResource"),
+        cell: ({ row }) => (
+          <span className="grid min-w-0 gap-0.5">
+            <span className="truncate text-xs text-muted-foreground">
+              {row.original.resource.scope}
+            </span>
+            <span className="font-medium">{row.original.resource.name}</span>
+            <code className="truncate text-xs text-text-subtle">
+              {row.original.resource.identifier}
+            </code>
+          </span>
+        ),
+        size: 360,
+      },
+      {
+        id: "outcome",
+        header: t("actualAccessResult"),
+        cell: ({ row }) => {
+          const unavailable =
+            row.original.outcome ===
+            policyResourceImpactOutcomeValues.unavailable
+          return (
+            <Badge variant={unavailable ? "destructive" : "success"}>
+              {t(
+                unavailable
+                  ? "accessBecomesUnavailable"
+                  : "accessBecomesAvailable",
+              )}
+            </Badge>
+          )
+        },
+        size: 220,
+      },
+      {
+        id: "affectedUsers",
+        header: t("affectedTargets"),
+        cell: ({ row }) => (
+          <span className="grid gap-1.5">
+            <Badge
+              variant={
+                row.original.outcome ===
+                policyResourceImpactOutcomeValues.unavailable
+                  ? "warning"
+                  : "secondary"
+              }
+            >
+              {t("affectedUserCount", {
+                count: row.original.affectedUsers.length,
+              })}
+            </Badge>
+            <PolicyImpactUsersSummary
+              users={row.original.affectedUsers}
+              moreLabel={t("additionalAffectedUsers", {
+                count: Math.max(0, row.original.affectedUsers.length - 1),
+              })}
+              ariaLabel={t("affectedUserListLabel", {
+                count: row.original.affectedUsers.length,
+                names: row.original.affectedUsers
+                  .map((user) => user.nickname)
+                  .join(", "),
+              })}
+            />
+          </span>
+        ),
+        size: 300,
+      },
+    ]
+    const hasActualResourceImpact = resourceImpacts.length > 0
 
     return (
       <div className="grid gap-4">
         {renderReview()}
         <section
-          className="grid gap-4 rounded-card border border-warning-foreground/30 bg-warning p-4"
+          className="grid gap-4 rounded-card border border-border-subtle bg-surface-subtle p-4"
           aria-labelledby={`${formId}-update-impact`}
         >
           <div className="grid gap-1">
             <h3 id={`${formId}-update-impact`} className="font-semibold">
               {t("updateImpactTitle")}
             </h3>
-            <p className="text-sm text-warning-foreground">
-              {t("updateImpactDescription")}
+            <p className="text-sm text-muted-foreground">
+              {t(
+                hasActualResourceImpact
+                  ? "updateImpactDescriptionWithChanges"
+                  : "updateImpactDescriptionWithoutChanges",
+              )}
             </p>
           </div>
-          <div className="grid gap-3 lg:grid-cols-2">
-            <div className="grid content-start gap-3 rounded-card border border-warning-foreground/20 bg-surface p-3">
-              <h4 className="text-sm font-semibold">{t("changeSummary")}</h4>
-              <div className="flex flex-wrap gap-2">
-                {updateImpact.nameChanged ? (
-                  <Badge variant="outline">{t("changedFields.name")}</Badge>
-                ) : null}
-                {updateImpact.descriptionChanged ? (
-                  <Badge variant="outline">
-                    {t("changedFields.description")}
-                  </Badge>
-                ) : null}
-                {updateImpact.effectChanged ? (
-                  <Badge variant="warning">
-                    {t("effectChange", {
-                      before: t(policy.effect),
-                      after: t(resourceEffect),
-                    })}
-                  </Badge>
-                ) : null}
-                {updateImpact.addedResources.length > 0 ? (
-                  <Badge variant="success">
-                    {t("addedResourceCount", {
-                      count: updateImpact.addedResources.length,
-                    })}
-                  </Badge>
-                ) : null}
-                {updateImpact.removedResources.length > 0 ? (
-                  <Badge variant="destructive">
-                    {t("removedResourceCount", {
-                      count: updateImpact.removedResources.length,
-                    })}
-                  </Badge>
-                ) : null}
-                {!policyChanged ? (
-                  <span className="text-sm text-muted-foreground">
-                    {t("noPolicyChanges")}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            <div className="grid content-start gap-3 rounded-card border border-warning-foreground/20 bg-surface p-3">
-              <h4 className="text-sm font-semibold">
-                {t("assignmentImpactTitle")}
-              </h4>
-              <dl className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                {assignmentTypes.map((targetType) => (
-                  <div key={targetType} className="grid gap-0.5">
-                    <dt className="text-xs text-muted-foreground">
-                      {t(`assignmentTargetTypes.${targetType}`)}
-                    </dt>
-                    <dd className="font-semibold">
-                      {updateImpact.assignmentCounts[targetType]}
-                    </dd>
-                  </div>
-                ))}
-                <div className="grid gap-0.5">
-                  <dt className="text-xs text-muted-foreground">
-                    {t("affectedUsers")}
-                  </dt>
-                  <dd className="font-semibold">{permissionChanges.length}</dd>
-                </div>
-              </dl>
-            </div>
+          <div className="flex flex-wrap gap-2" aria-label={t("changeSummary")}>
+            {updateImpact.nameChanged ? (
+              <Badge variant="outline">{t("changedFields.name")}</Badge>
+            ) : null}
+            {updateImpact.descriptionChanged ? (
+              <Badge variant="outline">{t("changedFields.description")}</Badge>
+            ) : null}
+            {updateImpact.effectChanged ? (
+              <Badge variant="warning">
+                {t("effectChange", {
+                  before: t(policy.effect),
+                  after: t(resourceEffect),
+                })}
+              </Badge>
+            ) : null}
+            {updateImpact.addedResources.length > 0 ? (
+              <Badge variant="success">
+                {t("addedResourceCount", {
+                  count: updateImpact.addedResources.length,
+                })}
+              </Badge>
+            ) : null}
+            {updateImpact.removedResources.length > 0 ? (
+              <Badge variant="destructive">
+                {t("removedResourceCount", {
+                  count: updateImpact.removedResources.length,
+                })}
+              </Badge>
+            ) : null}
           </div>
-          {permissionChanges.length > 0 ? (
-            <div className="grid gap-2">
-              <h4 className="text-sm font-semibold">
-                {t("permissionChangesTitle")}
-              </h4>
-              <ul className="grid max-h-36 auto-rows-max grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
-                {permissionChanges.map(
-                  ({ user, gainedResources, lostResources }) => (
-                    <li
-                      key={user.id}
-                      className="flex min-w-0 items-center justify-between gap-2 rounded-control border border-warning-foreground/20 bg-surface px-3 py-2"
-                    >
-                      <span className="min-w-0 truncate font-medium">
-                        {user.nickname}
-                      </span>
-                      <span className="flex shrink-0 gap-1">
-                        {gainedResources.length > 0 ? (
-                          <Badge variant="success">
-                            {t("gainedPermissionCount", {
-                              count: gainedResources.length,
-                            })}
-                          </Badge>
-                        ) : null}
-                        {lostResources.length > 0 ? (
-                          <Badge variant="destructive">
-                            {t("lostPermissionCount", {
-                              count: lostResources.length,
-                            })}
-                          </Badge>
-                        ) : null}
-                      </span>
-                    </li>
-                  ),
-                )}
-              </ul>
+          {hasActualResourceImpact ? (
+            <div className="overflow-hidden rounded-card border border-border-subtle bg-surface p-3">
+              <TooltipProvider>
+                <DataTable
+                  caption={t("actualResourceImpactCaption")}
+                  columns={resourceImpactColumns}
+                  data={resourceImpacts}
+                  getRowId={(row) => row.id}
+                  empty={common("noResults")}
+                  filterLabel={common("search")}
+                  noResults={common("noResults")}
+                  filters={[
+                    {
+                      id: "resource",
+                      label: t("impactedResource"),
+                      getValue: (row) => impactResourceLabel(row.resource),
+                    },
+                    {
+                      id: "outcome",
+                      label: t("actualAccessResult"),
+                      getValue: (row) =>
+                        t(
+                          row.outcome ===
+                            policyResourceImpactOutcomeValues.unavailable
+                            ? "accessBecomesUnavailable"
+                            : "accessBecomesAvailable",
+                        ),
+                    },
+                    {
+                      id: "affectedUsers",
+                      label: t("affectedTargets"),
+                      getValue: (row) =>
+                        row.affectedUsers
+                          .map((user) => `${user.nickname} ${user.email}`)
+                          .join(" "),
+                    },
+                  ]}
+                />
+              </TooltipProvider>
             </div>
-          ) : (
-            <p className="text-sm text-warning-foreground">
-              {t("noEffectivePermissionChanges")}
-            </p>
-          )}
-          {notificationRecipients.length > 0 ? (
-            <div className="grid gap-2">
-              <h4 className="text-sm font-semibold">
-                {t("notificationRecipients")}
+          ) : null}
+          {notificationRecipientUsers.length > 0 ? (
+            <section
+              className="grid gap-0.5 rounded-card border border-border-subtle bg-surface px-3 py-2.5"
+              aria-labelledby={`${formId}-notification-delivery`}
+            >
+              <h4
+                id={`${formId}-notification-delivery`}
+                className="text-sm font-semibold"
+              >
+                {t("notificationDeliveryTitle")}
               </h4>
-              <ul className="grid max-h-36 auto-rows-max grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
-                {notificationRecipients.map((user) => (
-                  <li
-                    key={user.id}
-                    className="grid gap-0.5 rounded-control border border-warning-foreground/20 bg-surface px-3 py-2"
-                  >
-                    <span className="font-medium">{user.nickname}</span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {user.email}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <p className="text-xs text-warning-foreground">
-                {t("notificationRecipientsDescription")}
+              <p className="text-xs text-muted-foreground">
+                {t("notificationDeliveryDescription", {
+                  count: notificationRecipientUsers.length,
+                })}
               </p>
-            </div>
-          ) : (
-            <p className="text-sm text-warning-foreground">
-              {t("noAffectedUsers")}
-            </p>
-          )}
+            </section>
+          ) : null}
         </section>
       </div>
     )

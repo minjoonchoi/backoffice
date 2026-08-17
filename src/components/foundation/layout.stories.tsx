@@ -45,7 +45,7 @@ export const DashboardLayout: Story = {
         <h1 className="text-title font-semibold tracking-tight">Layout</h1>
         <p className="text-body leading-6 text-text-subtle">
           화면 크기가 아니라 업무 복잡도에 맞춰 콘텐츠 폭을 고릅니다. gutter는
-          16–32px 사이에서 유동적으로 변합니다.
+          12–24px 사이에서 유동적으로 변합니다.
         </p>
       </header>
 

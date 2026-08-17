@@ -105,7 +105,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-[calc(100%_-_2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-overlay border bg-popover p-4 text-sm text-popover-foreground shadow-overlay duration-(--duration-fast) outline-none data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
+          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-[calc(100%_-_2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-3 overflow-y-auto rounded-overlay border bg-popover p-3 text-body text-popover-foreground shadow-overlay duration-(--duration-fast) outline-none data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
           className,
         )}
         {...props}
@@ -136,7 +136,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("grid gap-1.5 pr-8", className)}
+      className={cn("grid gap-1 pr-8", className)}
       {...props}
     />
   )
@@ -147,7 +147,7 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-overlay border-t bg-surface-subtle p-4 sm:flex-row sm:justify-end",
+        "-mx-3 -mb-3 flex flex-col-reverse gap-2 rounded-b-overlay border-t bg-surface-subtle p-3 sm:flex-row sm:justify-end",
         className,
       )}
       {...props}
@@ -159,7 +159,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-base leading-snug font-medium", className)}
+      className={cn("text-sm leading-snug font-medium", className)}
       {...props}
     />
   )
@@ -172,7 +172,7 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn("text-body text-muted-foreground", className)}
       {...props}
     />
   )

@@ -842,7 +842,7 @@ export function ApiKeyDetailPage({ apiKeyId }: { apiKeyId: string }) {
             <>
               {canRequestReplacement &&
               replacementTemplate &&
-              !submittedTypes.has("api-key-replace") ? (
+              !submittedTypes.has(approvalTypeValues.apiKeyReplace) ? (
                 <Button
                   nativeButton={false}
                   render={
@@ -857,7 +857,7 @@ export function ApiKeyDetailPage({ apiKeyId }: { apiKeyId: string }) {
               )}
               {canRequestDisposal &&
               disposalTemplate &&
-              !submittedTypes.has("api-key-dispose") ? (
+              !submittedTypes.has(approvalTypeValues.apiKeyDispose) ? (
                 <Button
                   variant="outline"
                   nativeButton={false}

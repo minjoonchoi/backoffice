@@ -28,7 +28,14 @@ import type {
   AccessPolicy,
   AccessPolicyAssignment,
 } from "@/features/access-policies/model"
-import { accessPolicyManagementTypes } from "@/features/access-policies/model"
+import {
+  accessPolicyManagementTypes,
+  type accessPolicyAssignmentTargets,
+} from "@/features/access-policies/model"
+
+type PolicyAssignmentCardTargetType =
+  | typeof accessPolicyAssignmentTargets.organization
+  | typeof accessPolicyAssignmentTargets.role
 
 type PolicyAssignmentRow = Readonly<{
   assignment: AccessPolicyAssignment
@@ -41,7 +48,7 @@ export function AccessPolicyAssignmentCard({
   targetName,
   canManage = false,
 }: {
-  targetType: "organization" | "role"
+  targetType: PolicyAssignmentCardTargetType
   targetId: string
   targetName: string
   canManage?: boolean

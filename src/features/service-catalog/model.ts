@@ -17,6 +17,7 @@ export const endpointLifecycleValues = {
   active: "active",
   deprecated: "deprecated",
 } as const
+export const endpointVersionInputPattern = "[A-Za-z0-9][A-Za-z0-9._\\-]*"
 export const endpointFieldLocationValues = {
   path: "path",
   query: "query",

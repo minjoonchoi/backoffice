@@ -178,9 +178,85 @@ export const UpdatePolicyReviewsImpact: Story = {
         name: "정책 변경 영향을 확인하세요",
       }),
     ).toBeVisible()
-    await expect(within(dialog).getByText("설명 변경")).toBeVisible()
-    await expect(within(dialog).getByText("Charlotte")).toBeVisible()
-    await expect(within(dialog).getByText("알림 대상 사용자")).toBeVisible()
+    await expect(
+      within(dialog).getByText("설명 변경", {
+        selector: '[data-slot="badge"]',
+      }),
+    ).toBeVisible()
+    await expect(
+      within(dialog).getByRole("heading", {
+        name: "저장 후 알림",
+      }),
+    ).toBeVisible()
+    const notificationSection = within(dialog).getByRole("region", {
+      name: "저장 후 알림",
+    })
+    await expect(
+      within(notificationSection).getByText(/변경 알림을 발송합니다/),
+    ).toBeVisible()
+    await expect(
+      within(notificationSection).queryByText("운영 모니터링 허용"),
+    ).not.toBeInTheDocument()
+    await expect(
+      within(dialog).queryByText("현재 부여 대상"),
+    ).not.toBeInTheDocument()
+    await expect(
+      within(dialog).getByText(
+        "다른 활성 정책까지 계산한 결과 실제 리소스 접근은 변경되지 않습니다.",
+      ),
+    ).toBeVisible()
+    await expect(
+      within(dialog).queryByRole("table", {
+        name: "정책 변경에 따른 실제 리소스 접근 영향 목록",
+      }),
+    ).not.toBeInTheDocument()
+  },
+}
+
+export const UpdatePolicyShowsActualResourceRisk: Story = {
+  render: () => {
+    const policy = localFixture.accessPolicies.find(
+      (candidate) => candidate.name === "운영 모니터링 허용",
+    )
+    if (!policy) throw new Error("Assigned policy fixture is missing")
+    return (
+      <SessionAccessProvider
+        localSwitchingEnabled
+        initialUserId={findUserId("Owen")}
+      >
+        <AccessPolicyEditorPage policyId={policy.id} />
+      </SessionAccessProvider>
+    )
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const screen = within(canvasElement.ownerDocument.body)
+
+    await userEvent.click(
+      canvas.getByRole("combobox", { name: "리소스 접근 효과" }),
+    )
+    await userEvent.click(await screen.findByRole("option", { name: "거부" }))
+    await userEvent.click(
+      canvas.getByRole("button", { name: "변경 영향 검토" }),
+    )
+
+    const impactTable = canvas.getByRole("table", {
+      name: "정책 변경에 따른 실제 리소스 접근 영향 목록",
+    })
+    await expect(impactTable).toBeVisible()
+    const healthResourceRow = within(impactTable).getByRole("row", {
+      name: /GET \/health/,
+    })
+    await expect(within(healthResourceRow).getByText("접근 불가")).toBeVisible()
+    await expect(
+      within(healthResourceRow).queryByText(/실제 접근을 잃습니다/),
+    ).not.toBeInTheDocument()
+    await expect(canvas.queryByText("현재 부여 대상")).not.toBeInTheDocument()
+    await expect(
+      within(healthResourceRow).getByRole("button", {
+        name: /영향 대상 사용자.*Charlotte/,
+      }),
+    ).toBeVisible()
   },
 }
 

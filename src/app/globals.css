@@ -246,16 +246,16 @@
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --font-size-caption: var(--primitive-font-size-1);
   --font-size-body: var(--primitive-font-size-2);
-  --font-size-heading: var(--primitive-font-size-4);
-  --font-size-title: var(--primitive-font-size-5);
+  --font-size-heading: var(--primitive-font-size-3);
+  --font-size-title: var(--primitive-font-size-4);
   --line-height-caption: var(--primitive-line-height-1);
   --line-height-body: var(--primitive-line-height-2);
-  --line-height-heading: var(--primitive-line-height-4);
-  --line-height-title: var(--primitive-line-height-5);
+  --line-height-heading: var(--primitive-line-height-3);
+  --line-height-title: var(--primitive-line-height-4);
   --layout-gutter: clamp(
-    var(--primitive-space-4),
-    3vw,
-    var(--primitive-space-8)
+    var(--primitive-space-3),
+    2vw,
+    var(--primitive-space-6)
   );
   --layout-content-narrow: 45rem;
   --layout-content-default: 70rem;
@@ -310,7 +310,7 @@
   }
 
   body {
-    @apply bg-background font-sans text-foreground antialiased;
+    @apply bg-background font-sans text-body text-foreground antialiased;
   }
 
   button,

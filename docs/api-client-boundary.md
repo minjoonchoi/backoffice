@@ -101,6 +101,15 @@ src/lib/api-transport.ts   # 공통 HTTP 실행과 응답 schema 검증
 
 현재 snapshot 계약은 화면에 필요한 조합 상태를 한 번에 제공한다. 서버 검색·정렬·페이지네이션을 도입할 때는 같은 client 아래에 domain query 계약을 추가하고, mock과 HTTP 구현을 함께 바꾼다. mock과 HTTP를 동시에 호출하거나 실패 시 mock으로 자동 전환하는 fallback은 두지 않는다.
 
+## 외부 inbound hook 경계
+
+Groo 결재 완료 hook은 브라우저에서 호출하는 `BackofficeApiClient` 계약에 포함하지 않는다. 운영 서버의 별도 inbound endpoint가 서명·발신 시각·재전송 방지 값을 검증한 뒤, 저장된 Groo 요청 ID로 요청을 찾아 [groo-approval-hook.ts](../src/features/access-policies/groo-approval-hook.ts)의 상태 전이 규칙을 적용한다.
+
+- 화면은 hook URL, 인증 정보나 완료 상태를 직접 조작하지 않는다.
+- hook 처리기는 같은 결과의 재전송을 멱등 처리하고 상충 결과를 거부한다.
+- 요청 상태 변경, 감사 이벤트, 알림 outbox는 서버의 한 트랜잭션으로 저장한다.
+- 프런트 mock client에 운영 hook을 흉내 내는 fallback endpoint를 추가하지 않는다.
+
 목록 query는 한 종류의 엔티티와 고정된 행 DTO만 반환한다. 한 화면에서 여러 엔티티 유형이 필요하면 `resourceType` union 응답 하나로 합치지 않고 feature client에 유형별 query를 정의하고 화면의 탭·섹션에서 각각 호출한다. 정책 상세의 엔드포인트·UI 리소스가 대표 사례다. 반면 감사 이벤트, 알림과 동기화 작업은 대상 유형을 속성으로 가진 독립 엔티티이므로 한 query의 유형 필터로 조회할 수 있다.
 
 ## 검증 기준

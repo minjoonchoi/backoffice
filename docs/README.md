@@ -9,6 +9,13 @@
 | [MVP 이후 UI 기능 요구사항](post-mvp-ui-functional-requirements.md)       | MVP 화면에서 제외한 확정 UI 기능                             | 기획, 디자인, 프런트엔드, QA |
 | [MVP 이후 서버 기능 요구사항](post-mvp-server-functional-requirements.md) | 제외 UI에 전용으로 필요한 서버 기능                          | 백엔드, 아키텍처, 보안, QA   |
 
+## 메뉴별 PRD
+
+| 문서                                           | 책임                                                  |
+| ---------------------------------------------- | ----------------------------------------------------- |
+| [메뉴별 PRD 인덱스](menu-prd/README.md)        | 실제 화면을 사용자 시나리오별 UI·서버 요구사항과 연결 |
+| [PRD 작성·갱신 가이드](prd-authoring-guide.md) | Playwright 준비, 시나리오 선정, 캡처와 문서 갱신 절차 |
+
 ## 개발 가이드
 
 | 문서                                                      | 책임                                                                   |

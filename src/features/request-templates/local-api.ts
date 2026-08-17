@@ -93,6 +93,7 @@ export function createLocalRequestTemplateApi(
         name: parsed.data.name,
         category: parsed.data.category,
         type: parsed.data.type,
+        approvalExecution: parsed.data.approvalExecution,
         status: entityStatuses.active,
         createdAt: new Date().toISOString(),
         steps: parsed.data.steps.map((step, index) => ({
@@ -136,6 +137,7 @@ export function createLocalRequestTemplateApi(
         name: parsed.data.name,
         category: parsed.data.category,
         type: parsed.data.type,
+        approvalExecution: parsed.data.approvalExecution,
         status: entityStatuses.active,
         createdAt: new Date().toISOString(),
         steps: parsed.data.steps.map((step, index) => ({
@@ -183,6 +185,7 @@ export function createLocalRequestTemplateApi(
         name: parsed.data.name,
         category: parsed.data.category,
         type: parsed.data.type,
+        approvalExecution: parsed.data.approvalExecution,
         steps: parsed.data.steps.map((step, index) => ({
           ...step,
           id: existing.steps[index]?.id ?? crypto.randomUUID(),

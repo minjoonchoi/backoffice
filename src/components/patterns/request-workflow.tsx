@@ -41,13 +41,13 @@ export function RequestWorkflow({
   const formId = useId()
 
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-6">
+    <div className="mx-auto grid w-full max-w-5xl gap-4">
       <PageHeader title={title} description={description} />
       <Card>
         <CardContent>
           <form
             id={formId}
-            className="grid gap-6"
+            className="grid gap-4"
             onSubmit={(event) => {
               event.preventDefault()
               onSubmit(event.currentTarget)

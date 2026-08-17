@@ -4,6 +4,7 @@ import {
   Building2,
   AppWindow,
   ChevronRight,
+  ClipboardList,
   FilePlus2,
   GitBranch,
   GripVertical,
@@ -72,6 +73,7 @@ export type ShellLabels = {
   roles: string
   applications: string
   namespaces: string
+  requests: string
   approvalLines: string
   approvalDocuments: string
   services: string
@@ -179,6 +181,7 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
     roles: labels.roles,
     applications: labels.applications,
     namespaces: labels.namespaces,
+    requests: labels.requests,
     approvalLines: labels.approvalLines,
     approvalDocuments: labels.approvalDocuments,
     services: labels.services,
@@ -194,6 +197,7 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
     roles: ShieldCheck,
     applications: AppWindow,
     namespaces: PanelsTopLeft,
+    requests: ClipboardList,
     approvalLines: GitBranch,
     approvalDocuments: FilePlus2,
     services: PackageSearch,
@@ -277,7 +281,7 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="flex h-14 items-center justify-between border-b px-4">
+        <div className="flex h-12 items-center justify-between border-b px-3">
           <Link
             href={homeHref}
             className="flex min-w-0 items-center gap-2 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -314,7 +318,7 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
 
         <nav
           aria-label={labels.home}
-          className="flex-1 space-y-4 overflow-y-auto p-3"
+          className="flex-1 space-y-3 overflow-y-auto p-2"
         >
           {standaloneMenuDefinitions.length ? (
             <div className="grid gap-1">
@@ -330,10 +334,10 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
                     title={iconOnly ? menuLabels[item.id] : undefined}
                     aria-current={selected ? "page" : undefined}
                     className={cn(
-                      "flex h-9 items-center gap-3 overflow-hidden rounded-lg px-3 text-sm font-medium outline-none hover:bg-control-hover focus-visible:ring-3 focus-visible:ring-ring/50",
+                      "flex h-10 items-center gap-2 overflow-hidden rounded-md px-2.5 text-body font-medium outline-none hover:bg-control-hover focus-visible:ring-3 focus-visible:ring-ring/50 lg:h-8",
                       selected &&
                         "bg-brand-weak text-brand-weak-foreground hover:bg-brand-weak",
-                      iconOnly && "lg:h-11 lg:justify-center lg:px-0",
+                      iconOnly && "lg:h-10 lg:justify-center lg:px-0",
                     )}
                     onClick={() => {
                       setMobileOpen(false)
@@ -380,10 +384,10 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
                     title={iconOnly ? menuLabels[item.id] : undefined}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex h-9 items-center gap-3 overflow-hidden rounded-lg px-3 text-sm font-medium text-text-subtle outline-none hover:bg-control-hover hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+                      "flex h-10 items-center gap-2 overflow-hidden rounded-md px-2.5 text-body font-medium text-text-subtle outline-none hover:bg-control-hover hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 lg:h-8",
                       active &&
                         "bg-brand-weak text-brand-weak-foreground hover:bg-brand-weak",
-                      iconOnly && "lg:h-11 lg:justify-center lg:px-0",
+                      iconOnly && "lg:h-10 lg:justify-center lg:px-0",
                     )}
                     onClick={() => {
                       setMobileOpen(false)
@@ -463,7 +467,7 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
       </aside>
 
       <div className="min-w-0">
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b bg-background/95 px-4 backdrop-blur sm:px-6">
+        <header className="sticky top-0 z-20 flex h-12 items-center justify-between gap-2 border-b bg-background/95 px-3 backdrop-blur sm:px-4">
           <div className="flex min-w-0 items-center gap-2">
             <Button
               className="lg:hidden"
@@ -583,7 +587,7 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
         <main
           id="main-content"
           tabIndex={-1}
-          className="p-4 outline-none sm:p-6 lg:p-8"
+          className="p-3 outline-none sm:p-4 lg:p-5"
         >
           <div className="mx-auto w-full max-w-6xl">
             {currentAccessAllowed ? (

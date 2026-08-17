@@ -64,6 +64,7 @@ import { Textarea } from "@/components/ui/textarea"
 import {
   endpointFieldLocationValues,
   endpointLifecycleValues,
+  endpointVersionInputPattern,
   httpMethods,
   isEndpointRequestParameterLocation,
   serviceTypes,
@@ -920,7 +921,7 @@ function EndpointEditDialog({ endpoint }: { endpoint: ServiceEndpoint }) {
               required
               minLength={1}
               maxLength={40}
-              pattern="[A-Za-z0-9][A-Za-z0-9._-]*"
+              pattern={endpointVersionInputPattern}
               defaultValue={endpoint.version}
             />
           </Field>
@@ -1263,7 +1264,7 @@ function EndpointCreationDialog() {
                 required
                 minLength={1}
                 maxLength={40}
-                pattern="[A-Za-z0-9][A-Za-z0-9._-]*"
+                pattern={endpointVersionInputPattern}
                 defaultValue="v1"
               />
             </Field>

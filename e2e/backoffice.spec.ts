@@ -132,7 +132,7 @@ test("keeps system management last and separates IAM from organization leaders",
       .getByText("시스템 관리", { exact: true })
       .locator("..")
       .getByRole("link"),
-  ).toHaveText(["요청 템플릿", "감사"])
+  ).toHaveText(["요청", "요청 템플릿", "감사"])
 
   const header = page.locator("header")
   const organizationCount = header.getByRole("button", { name: "소속 조직: 1" })
@@ -155,7 +155,15 @@ test("keeps system management last and separates IAM from organization leaders",
   await expect(permissionTable).toBeVisible()
   await expect(permissionTable.getByText("운영 모니터링 허용")).toBeVisible()
   await expect(permissionTable.getByText("사용자 직접 부여")).toBeVisible()
-  await expect(permissionTable.getByText("조직 · 개발 1팀")).toBeVisible()
+  const additionalGrantPaths = permissionTable.getByRole("button", {
+    name: "전체 부여 경로 4개",
+  })
+  await expect(additionalGrantPaths).toHaveText("외 3개")
+  await additionalGrantPaths.hover()
+  await expect(
+    page.getByRole("tooltip").getByText("조직 · 개발 1팀"),
+  ).toBeVisible()
+  await page.locator("main").hover()
   await expect(page.getByText("승인 대기 요청", { exact: true })).toHaveCount(0)
   await page.getByRole("button", { name: "내 업무 정보" }).click()
   await expect(
@@ -222,7 +230,8 @@ test("keeps system management last and separates IAM from organization leaders",
   await expect(
     page.getByRole("heading", { level: 2, name: "접근 권한이 없습니다" }),
   ).toBeVisible()
-  await page.goto("/approval-documents")
+  await navigation.getByRole("link", { name: "정책", exact: true }).click()
+  await expect(page).toHaveURL(/\/approval-documents$/)
   await waitForHydration(page)
   await expect(page.getByText("운영 모니터링 허용")).toBeVisible()
   await expect(page.getByText("Developer API 이벤트 발행 거부")).toBeVisible()
@@ -850,8 +859,19 @@ test("reviews assigned policy impact and applies an authorized change directly",
   await expect(
     dialog.getByRole("heading", { name: "정책 변경 영향을 확인하세요" }),
   ).toBeVisible()
-  await expect(dialog.getByText("Charlotte", { exact: true })).toBeVisible()
-  await expect(dialog.getByText("알림 대상 사용자")).toBeVisible()
+  await expect(
+    dialog.getByText(
+      "다른 활성 정책까지 계산한 결과 실제 리소스 접근은 변경되지 않습니다.",
+    ),
+  ).toBeVisible()
+  await expect(
+    dialog.getByRole("heading", { name: "저장 후 알림" }),
+  ).toBeVisible()
+  await expect(
+    dialog.getByRole("table", {
+      name: "정책 변경에 따른 실제 리소스 접근 영향 목록",
+    }),
+  ).toHaveCount(0)
   await dialog.getByRole("button", { name: "저장" }).click()
   await expect(page).toHaveURL(/\/approval-documents\/[^/]+$/)
   await expect(page.getByText(updatedDescription)).toBeVisible()
@@ -1232,22 +1252,26 @@ test("registers an EXTERNAL API key through the manual owner flow", async ({
   ).toBeVisible()
   await dialog.getByRole("button", { name: "발급 요청 제출" }).click()
   await expect(page).toHaveURL(/\/approval-documents\/requests\/[0-9a-f-]+$/)
+  await expect(page.getByText("Groo 연동 기안", { exact: true })).toBeVisible()
+  await expect(page.getByText(/^groo-[0-9a-f-]+$/)).toBeVisible()
+  await expect(
+    page.getByText("내부에서 처리하지 않으며 Groo 완료 hook을 기다립니다."),
+  ).toBeVisible()
+  await expect(
+    page.getByRole("button", { name: "승인", exact: true }),
+  ).toHaveCount(0)
   await page.getByRole("link", { name: "자격증명", exact: true }).click()
 
-  const requestRow = page
+  const submittedRequestRow = page
     .getByRole("row")
     .filter({ hasText: "collaboration-e2e-key" })
     .filter({ hasText: "협업 SaaS" })
-  await processRequestStages(page, requestRow, [
-    { actor: "Emma", action: "승인" },
-    { actor: "James", action: "합의" },
-    { actor: "Ethan", action: "합의" },
-    { actor: "Benjamin", action: "합의" },
-    { actor: "Amelia", action: "확인" },
-  ])
+  await expect(submittedRequestRow).toContainText("승인 대기")
+
+  await switchSessionUser(page, "Benjamin")
   const approvedRequestRow = page
     .getByRole("row")
-    .filter({ hasText: "collaboration-e2e-key" })
+    .filter({ hasText: "collaboration-ready-key" })
     .filter({ hasText: "협업 SaaS" })
   await approvedRequestRow
     .getByRole("button", { name: "Credential 등록" })
@@ -1268,7 +1292,7 @@ test("registers an EXTERNAL API key through the manual owner flow", async ({
   const credentialRow = page
     .getByRole("table", { name: "자격증명 목록" })
     .getByRole("row")
-    .filter({ hasText: "collaboration-e2e-key" })
+    .filter({ hasText: "collaboration-ready-key" })
   await expect(credentialRow).toContainText("협업 SaaS")
   await expect(credentialRow).not.toContainText("external-e2e-secret-value")
 })
@@ -1558,6 +1582,50 @@ test("removes the unused menu management route from navigation", async ({
   await expect(
     page.getByRole("heading", { name: "페이지를 찾을 수 없습니다" }),
   ).toBeVisible()
+})
+
+test("shows the complete request list only with its UI resource access", async ({
+  page,
+}) => {
+  await page.goto("/requests")
+  await waitForHydration(page)
+
+  const requestTable = page.getByRole("table", { name: "전체 요청 목록" })
+  await expect(requestTable).toBeVisible()
+  await expect(
+    requestTable.getByText("접근 정책", { exact: true }),
+  ).toBeVisible()
+  await expect(requestTable.getByText("자격증명", { exact: true })).toHaveCount(
+    2,
+  )
+  await requestTable
+    .getByRole("row", { name: /로컬 API Key 발급 요청/ })
+    .getByRole("cell", { name: "로컬 API Key 발급 요청", exact: true })
+    .click()
+  await expect(page.getByText("Groo 연동 기안", { exact: true })).toBeVisible()
+  await expect(page.getByText("GROO-REQUEST-20260808-0001")).toBeVisible()
+  await expect(
+    page.getByText("Groo의 최종 결재 결과가 이 요청에 반영되었습니다."),
+  ).toBeVisible()
+  for (const action of ["승인", "반려", "요청 회수", "재상신"]) {
+    await expect(
+      page.getByRole("button", { name: action, exact: true }),
+    ).toHaveCount(0)
+  }
+
+  await page.goto("/requests")
+  await waitForHydration(page)
+
+  await switchSessionUser(page, "Daniel")
+  await expect(
+    page.getByRole("heading", { name: "접근 권한이 없습니다" }),
+  ).toBeVisible()
+  await expect(
+    page.locator("#app-sidebar").getByRole("link", {
+      name: "요청",
+      exact: true,
+    }),
+  ).toHaveCount(0)
 })
 
 test("credential request page passes accessibility checks at 320px", async ({

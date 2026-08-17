@@ -77,7 +77,7 @@ function SidePanelHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="side-panel-header"
-      className={cn("grid gap-1 border-b border-border-subtle p-4", className)}
+      className={cn("grid gap-1 border-b border-border-subtle p-3", className)}
       {...props}
     />
   )
@@ -87,7 +87,7 @@ function SidePanelBody({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="side-panel-body"
-      className={cn("min-h-0 overflow-y-auto p-4", className)}
+      className={cn("min-h-0 overflow-y-auto p-3", className)}
       {...props}
     />
   )
@@ -98,7 +98,7 @@ function SidePanelFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="side-panel-footer"
       className={cn(
-        "flex justify-end gap-2 border-t border-border-subtle bg-surface-subtle p-4",
+        "flex justify-end gap-2 border-t border-border-subtle bg-surface-subtle p-3",
         className,
       )}
       {...props}

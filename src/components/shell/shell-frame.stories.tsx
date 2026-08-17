@@ -31,6 +31,7 @@ const meta = {
       roles: "Roles",
       applications: "Applications",
       namespaces: "Namespaces",
+      requests: "Requests",
       approvalLines: "Request templates",
       approvalDocuments: "Policies",
       services: "Service catalog",

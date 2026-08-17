@@ -17,7 +17,7 @@ function Field({
       data-slot="field"
       data-invalid={invalid || undefined}
       data-disabled={disabled || undefined}
-      className={cn("group/field grid w-full gap-1.5", className)}
+      className={cn("group/field grid w-full gap-1", className)}
       {...props}
     />
   )
@@ -28,7 +28,7 @@ function FieldHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="field-header"
       className={cn(
-        "flex min-w-0 items-start justify-between gap-3",
+        "flex min-w-0 items-start justify-between gap-2",
         className,
       )}
       {...props}
@@ -66,7 +66,7 @@ function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
   return (
     <p
       data-slot="field-description"
-      className={cn("text-body text-text-subtle", className)}
+      className={cn("text-caption text-text-subtle", className)}
       {...props}
     />
   )
@@ -77,7 +77,7 @@ function FieldError({ className, ...props }: React.ComponentProps<"p">) {
     <p
       data-slot="field-error"
       role="alert"
-      className={cn("text-body text-destructive-foreground", className)}
+      className={cn("text-caption text-destructive-foreground", className)}
       {...props}
     />
   )

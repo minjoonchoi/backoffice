@@ -45,6 +45,8 @@ export const ShowsRequestProgress: Story = {
       name: /로컬 API Key 발급 요청/,
     })
     await expect(within(requestRow).getByText("승인 완료")).toBeVisible()
-    await expect(within(requestRow).getByText("6/6단계 완료")).toBeVisible()
+    await expect(within(requestRow).getByText("Groo 처리")).toBeVisible()
+    await expect(canvas.getByText("Groo 연동 기안")).toBeVisible()
+    await expect(canvas.getByText("GROO-CREDENTIAL-ISSUANCE-V1")).toBeVisible()
   },
 }

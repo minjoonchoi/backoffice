@@ -16,10 +16,18 @@ type AccessPolicyAssignmentState = Pick<
 >
 
 export type EffectiveAccessPolicyPath = Readonly<
-  | { type: "user"; targetId: string; expiresAt: string | null }
-  | { type: "organization"; targetId: string; expiresAt: string | null }
   | {
-      type: "role"
+      type: typeof accessPolicyAssignmentTargets.user
+      targetId: string
+      expiresAt: string | null
+    }
+  | {
+      type: typeof accessPolicyAssignmentTargets.organization
+      targetId: string
+      expiresAt: string | null
+    }
+  | {
+      type: typeof accessPolicyAssignmentTargets.role
       targetId: string
       viaOrganizationId: string | null
       expiresAt: string | null
@@ -81,7 +89,7 @@ export function resolveEffectiveAccessPolicyGrants(
             return assignment.targetId === subject.user.id
               ? [
                   {
-                    type: "user",
+                    type: accessPolicyAssignmentTargets.user,
                     targetId: assignment.targetId,
                     expiresAt: assignment.expiresAt,
                   },
@@ -94,7 +102,7 @@ export function resolveEffectiveAccessPolicyGrants(
             return subject.organizationIds.has(assignment.targetId)
               ? [
                   {
-                    type: "organization",
+                    type: accessPolicyAssignmentTargets.organization,
                     targetId: assignment.targetId,
                     expiresAt: assignment.expiresAt,
                   },
@@ -108,7 +116,7 @@ export function resolveEffectiveAccessPolicyGrants(
           const rolePaths: EffectiveAccessPolicyPath[] = []
           if (role.userIds.includes(subject.user.id)) {
             rolePaths.push({
-              type: "role",
+              type: accessPolicyAssignmentTargets.role,
               targetId: role.id,
               viaOrganizationId: null,
               expiresAt: assignment.expiresAt,
@@ -117,7 +125,7 @@ export function resolveEffectiveAccessPolicyGrants(
           for (const organizationId of role.organizationIds) {
             if (subject.organizationIds.has(organizationId)) {
               rolePaths.push({
-                type: "role",
+                type: accessPolicyAssignmentTargets.role,
                 targetId: role.id,
                 viaOrganizationId: organizationId,
                 expiresAt: assignment.expiresAt,

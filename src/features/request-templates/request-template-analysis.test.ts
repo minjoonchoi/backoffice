@@ -7,9 +7,9 @@ import {
 import { localFixture } from "@/mocks/fixture"
 
 describe("request template analysis", () => {
-  it("resolves dynamic approvers and linked service impact", () => {
+  it("resolves dynamic approvers for an internal template", () => {
     const template = localFixture.approvalLines.find(
-      (line) => line.type === "api-key",
+      (line) => line.type === "api-key-replace",
     )
     const requester = localFixture.users.find(
       (user) => user.nickname === "David",
@@ -59,5 +59,31 @@ describe("request template analysis", () => {
     expect(
       resolveRequestTemplateImpact(localFixture, template).serviceIds,
     ).toContain(service.id)
+  })
+
+  it("keeps Groo workflow stages outside the backoffice", () => {
+    const template = localFixture.approvalLines.find(
+      (line) => line.type === "api-key",
+    )
+    const requester = localFixture.users.find(
+      (user) => user.nickname === "David",
+    )
+    const requestOrganization = localFixture.organizations.find(
+      (organization) => organization.name === "개발 1팀",
+    )
+    const service = localFixture.services.find(
+      (candidate) => candidate.type === "internal",
+    )
+    if (!template || !requester || !requestOrganization || !service) {
+      throw new Error("Groo request template fixture is missing")
+    }
+
+    expect(
+      previewRequestTemplate(localFixture, template, {
+        requesterId: requester.id,
+        requestOrganizationId: requestOrganization.id,
+        serviceId: service.id,
+      }),
+    ).toEqual([])
   })
 })

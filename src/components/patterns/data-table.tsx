@@ -134,10 +134,10 @@ export function DataTable<Row>({
   })
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       {effectiveFilters.length > 0 ? (
         <FilterBar label={filterLabel}>
-          <div className="grid gap-3 sm:col-span-2 sm:grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)] lg:col-span-3">
+          <div className="grid gap-2 sm:col-span-2 sm:grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)] lg:col-span-3">
             {effectiveFilters.length > 1 && selectedFilter ? (
               <Field>
                 <FieldLabel htmlFor={`${filterIdPrefix}-condition`}>

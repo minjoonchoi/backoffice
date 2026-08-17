@@ -21,7 +21,7 @@ import {
 } from "@/application/ui/backoffice-ui"
 import { DataTable } from "@/components/patterns/data-table"
 import { PageHeader } from "@/components/patterns/page-header"
-import { Badge } from "@/components/ui/badge"
+import { Badge, badgeVariants } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -37,12 +37,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { uiResourceKeys } from "@/config/menu-registry"
 import {
   resolveEffectiveAccessPolicyGrants,
   type EffectiveAccessPolicyGrant,
   type EffectiveAccessPolicyPath,
 } from "@/features/access-policies/access-policy-assignment"
+import { cn } from "@/lib/utils"
 
 export function HomeDashboard() {
   const backoffice = useBackoffice()
@@ -132,18 +139,54 @@ export function HomeDashboard() {
     {
       id: "paths",
       header: t("policyGrantPaths"),
-      cell: ({ row }) => (
-        <div className="flex min-w-0 flex-wrap gap-1">
-          {row.original.paths.map((path, index) => (
-            <Badge
-              key={`${path.type}-${path.targetId}-${String(index)}`}
-              variant="outline"
-            >
-              {policyPathLabel(path)}
-            </Badge>
-          ))}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const [primaryPath, ...additionalPaths] = row.original.paths
+        if (!primaryPath) {
+          throw new Error(
+            `Policy grant path not found: ${row.original.policy.id}`,
+          )
+        }
+        const pathLabels = row.original.paths.map(policyPathLabel)
+
+        return (
+          <div className="flex min-w-0 items-center gap-1">
+            <Badge variant="outline">{policyPathLabel(primaryPath)}</Badge>
+            {additionalPaths.length ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        aria-label={t("policyGrantPathsTooltip", {
+                          count: pathLabels.length,
+                        })}
+                        className={cn(
+                          badgeVariants({ variant: "outline" }),
+                          "cursor-help outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring",
+                        )}
+                      />
+                    }
+                  >
+                    {t("additionalPolicyGrantPaths", {
+                      count: additionalPaths.length,
+                    })}
+                  </TooltipTrigger>
+                  <TooltipContent align="start" className="px-3 py-2">
+                    <ul className="grid gap-1">
+                      {pathLabels.map((label, index) => (
+                        <li key={`${row.original.policy.id}-${String(index)}`}>
+                          {label}
+                        </li>
+                      ))}
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : null}
+          </div>
+        )
+      },
       size: 360,
     },
   ]

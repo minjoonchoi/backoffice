@@ -42,6 +42,7 @@ import type {
   UiResourceType,
 } from "@/features/ui-resources/model"
 import { backofficeErrorCodes, type BackofficeErrorCode } from "@/domain/common"
+import { accessPolicyResourceTypes } from "@/features/access-policies/model"
 import {
   parseUiResourceManifestText,
   uiResourceTypeValues,
@@ -113,7 +114,7 @@ export function UiResourceSyncPage() {
       uiResourceKeys.uiResources.list.actions.importUiResources,
     ) &&
     hasEffectiveAccessPolicyResource(backoffice, sessionAccess.currentUser.id, {
-      type: "endpoint",
+      type: accessPolicyResourceTypes.endpoint,
       id: backoffice.systemReferences.serviceEndpointIds.importUiResources,
     }) &&
     namespaces.length > 0,
@@ -999,7 +1000,7 @@ export function UiResourcesPage() {
         backoffice,
         sessionAccess.currentUser.id,
         {
-          type: "endpoint",
+          type: accessPolicyResourceTypes.endpoint,
           id: backoffice.systemReferences.serviceEndpointIds.importUiResources,
         },
       ),

@@ -24,9 +24,15 @@ import { Input } from "@/components/ui/input"
 import { snackbar } from "@/components/ui/snackbar"
 import { Textarea } from "@/components/ui/textarea"
 import { FormSelect } from "@/components/patterns/form-select"
-import { approvalDocumentInputSchema } from "@/features/access-policies/model"
 import {
+  approvalDocumentInputSchema,
+  approvalDocumentKinds,
+  approvalDocumentSubmissions,
+} from "@/features/access-policies/model"
+import {
+  awsSecretKeyInputPattern,
   awsSecretKeySchema,
+  awsSecretNameInputPattern,
   awsSecretNameSchema,
   type ApiKey,
 } from "@/features/credentials/model"
@@ -228,7 +234,7 @@ function CredentialLifecycleRequestForm({
             id={`${type}-${field.id}`}
             value={awsSecretName}
             required={field.required}
-            pattern="[A-Za-z0-9/_+=.@-]+"
+            pattern={awsSecretNameInputPattern}
             maxLength={512}
             onChange={(event) => {
               setAwsSecretName(event.currentTarget.value)
@@ -245,7 +251,7 @@ function CredentialLifecycleRequestForm({
             id={`${type}-${field.id}`}
             value={awsSecretKey}
             required={field.required}
-            pattern="[A-Za-z0-9_.-]+"
+            pattern={awsSecretKeyInputPattern}
             maxLength={128}
             onChange={(event) => {
               setAwsSecretKey(event.currentTarget.value)
@@ -364,21 +370,21 @@ function CredentialLifecycleRequestForm({
           value: customValues[field.id] ?? "",
         })),
       approvalSteps: toRequestApprovalStepInputs(approvalSteps),
-      submission: "submitted",
+      submission: approvalDocumentSubmissions.submitted,
     }
     const parsed = approvalDocumentInputSchema.safeParse(
       type === approvalTypeValues.apiKeyReplace
         ? {
             ...base,
-            documentKind: "api-key-lifecycle",
-            type: "api-key-replace",
+            documentKind: approvalDocumentKinds.apiKeyLifecycle,
+            type: approvalTypeValues.apiKeyReplace,
             awsSecretName,
             awsSecretKey,
           }
         : {
             ...base,
-            documentKind: "api-key-lifecycle",
-            type: "api-key-dispose",
+            documentKind: approvalDocumentKinds.apiKeyLifecycle,
+            type: approvalTypeValues.apiKeyDispose,
           },
     )
     if (!parsed.success) {

@@ -21,6 +21,10 @@ import {
 } from "@/application/api/local-state"
 import type { BackofficeState } from "@/application/state/model"
 import {
+  userNotificationEventValues,
+  userNotificationTargetTypeValues,
+} from "@/application/state/model"
+import {
   entityIdListSchema,
   entityIdSchema,
   type BackofficeErrorCode,
@@ -346,8 +350,8 @@ export function createLocalAccessPolicyApi(
       const notifications = hasPolicyChanges(impact)
         ? impact.notificationRecipientUserIds.map((userId) => ({
             userId,
-            event: "access-policy-updated" as const,
-            targetType: "access-policy" as const,
+            event: userNotificationEventValues.accessPolicyUpdated,
+            targetType: userNotificationTargetTypeValues.accessPolicy,
             targetId: policy.id,
             readAt: null,
             ...createRecordBase(),

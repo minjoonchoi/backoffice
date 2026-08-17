@@ -46,13 +46,21 @@ function createRegistrationState(): BackofficeState {
   const externalService = state.services.find(
     (service) => service.type === "external",
   )
-  if (!sourceDocument || !internalService || !externalService) {
+  if (
+    sourceDocument?.approvalExecution.type !== "groo" ||
+    !internalService ||
+    !externalService
+  ) {
     throw new Error("Credential registration story fixture is incomplete")
   }
   state.approvalDocuments.push(
     {
       ...sourceDocument,
       id: "50000000-0000-4000-8000-000000000091",
+      approvalExecution: {
+        ...sourceDocument.approvalExecution,
+        requestId: "GROO-REQUEST-STORY-INTERNAL",
+      },
       title: "내부 서비스 등록 확인 요청",
       serviceId: internalService.id,
       endpointIds: state.serviceEndpoints
@@ -65,6 +73,10 @@ function createRegistrationState(): BackofficeState {
     {
       ...sourceDocument,
       id: "50000000-0000-4000-8000-000000000092",
+      approvalExecution: {
+        ...sourceDocument.approvalExecution,
+        requestId: "GROO-REQUEST-STORY-EXTERNAL",
+      },
       title: "외부 서비스 등록 확인 요청",
       serviceId: externalService.id,
       endpointIds: [],

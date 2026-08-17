@@ -6,6 +6,7 @@ import { approvalStepStatuses } from "@/features/access-policies/model"
 import { approvalDocumentStatuses } from "@/features/access-policies/model"
 import { approvalStepKindValues } from "@/features/request-templates/model"
 import { approvalTypeValues } from "@/features/request-templates/model"
+import { approvalExecutionTypeValues } from "@/features/request-templates/model"
 import { approvalDocumentKinds } from "@/features/access-policies/model"
 import { approvalAssigneeTypes } from "@/features/access-policies/model"
 import Link from "next/link"
@@ -124,6 +125,8 @@ export function ApprovalDocumentDetailPage({
     uiResourceKeys.approvalDocuments.requestDetail.actions.resubmitRequest,
   )
   const requesterOwnsDocument = currentUser?.id === document.requesterId
+  const usesGroo =
+    document.approvalExecution.type === approvalExecutionTypeValues.groo
 
   function isCurrentAssignee(step: ApprovalDocumentStep) {
     if (!currentUser) return false
@@ -197,26 +200,30 @@ export function ApprovalDocumentDetailPage({
     snackbar.success(t("requestResubmitted"))
   }
 
-  const headerActions = requesterOwnsDocument ? (
-    <>
-      {document.status === approvalDocumentStatuses.submitted && canWithdraw ? (
-        <ConfirmAction
-          trigger={t("withdrawRequest")}
-          title={t("withdrawRequestTitle")}
-          description={t("withdrawRequestDescription")}
-          confirmLabel={t("withdrawRequest")}
-          cancelLabel={common("cancel")}
-          onConfirm={withdraw}
-        />
-      ) : null}
-      {(document.status === approvalDocumentStatuses.draft ||
-        document.status === approvalDocumentStatuses.rejected ||
-        document.status === approvalDocumentStatuses.withdrawn) &&
-      canResubmit ? (
-        <Button onClick={() => void resubmit()}>{t("resubmitRequest")}</Button>
-      ) : null}
-    </>
-  ) : undefined
+  const headerActions =
+    requesterOwnsDocument && !usesGroo ? (
+      <>
+        {document.status === approvalDocumentStatuses.submitted &&
+        canWithdraw ? (
+          <ConfirmAction
+            trigger={t("withdrawRequest")}
+            title={t("withdrawRequestTitle")}
+            description={t("withdrawRequestDescription")}
+            confirmLabel={t("withdrawRequest")}
+            cancelLabel={common("cancel")}
+            onConfirm={withdraw}
+          />
+        ) : null}
+        {(document.status === approvalDocumentStatuses.draft ||
+          document.status === approvalDocumentStatuses.rejected ||
+          document.status === approvalDocumentStatuses.withdrawn) &&
+        canResubmit ? (
+          <Button onClick={() => void resubmit()}>
+            {t("resubmitRequest")}
+          </Button>
+        ) : null}
+      </>
+    ) : undefined
 
   return (
     <div className="grid gap-6">
@@ -255,6 +262,17 @@ export function ApprovalDocumentDetailPage({
               </UiResourceLink>
             </DetailItem>
             <DetailItem label={t("approvalLine")}>{template.name}</DetailItem>
+            <DetailItem label={t("approvalExecution")}>
+              {t(`approvalExecutions.${document.approvalExecution.type}`)}
+            </DetailItem>
+            {document.approvalExecution.type ===
+            approvalExecutionTypeValues.groo ? (
+              <DetailItem label={t("grooRequestId")}>
+                <code className="text-xs break-all">
+                  {document.approvalExecution.requestId}
+                </code>
+              </DetailItem>
+            ) : null}
             <DetailItem label={common("createdAt")}>
               {labels.dateTime(document.createdAt)}
             </DetailItem>
@@ -305,87 +323,108 @@ export function ApprovalDocumentDetailPage({
       ) : null}
       <Card>
         <CardHeader>
-          <CardTitle>{t("approvalFlow")}</CardTitle>
-          <CardDescription>{t("approvalFlowDescription")}</CardDescription>
+          <CardTitle>
+            {usesGroo ? t("grooApprovalFlow") : t("approvalFlow")}
+          </CardTitle>
+          <CardDescription>
+            {usesGroo
+              ? t("grooApprovalFlowDescription")
+              : t("approvalFlowDescription")}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <ol className="grid gap-2">
-            {document.approvalSteps.map((step) => {
-              const assignee =
-                step.assigneeType === approvalAssigneeTypes.user
-                  ? backoffice.users.find((user) => user.id === step.assigneeId)
-                      ?.nickname
-                  : backoffice.organizations.find(
-                      (item) => item.id === step.assigneeId,
-                    )?.name
-              if (!assignee)
-                throw new Error(`Request assignee not found: ${step.id}`)
-              return (
-                <li
-                  key={step.id}
-                  className="grid gap-1 rounded-card border border-border-subtle p-3 sm:grid-cols-[5rem_1fr_auto] sm:items-center"
-                >
-                  <span className="text-xs font-medium text-text-subtle">
-                    {t("approvalStage", { stage: step.stage })}
-                  </span>
-                  <span className="font-medium">{assignee}</span>
-                  <span className="flex flex-wrap items-center justify-end gap-2">
-                    <span className="text-sm text-muted-foreground">
-                      {labels.stepKind(step.kind)}
+          {usesGroo ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-card border border-border-subtle bg-surface-subtle p-3">
+              <ApprovalStatusBadge status={document.status} />
+              <span className="text-sm text-muted-foreground">
+                {document.status === approvalDocumentStatuses.submitted
+                  ? t("grooCompletionHookNotice")
+                  : t("grooCompletionAppliedNotice")}
+              </span>
+            </div>
+          ) : (
+            <ol className="grid gap-2">
+              {document.approvalSteps.map((step) => {
+                const assignee =
+                  step.assigneeType === approvalAssigneeTypes.user
+                    ? backoffice.users.find(
+                        (user) => user.id === step.assigneeId,
+                      )?.nickname
+                    : backoffice.organizations.find(
+                        (item) => item.id === step.assigneeId,
+                      )?.name
+                if (!assignee)
+                  throw new Error(`Request assignee not found: ${step.id}`)
+                return (
+                  <li
+                    key={step.id}
+                    className="grid gap-1 rounded-card border border-border-subtle p-3 sm:grid-cols-[5rem_1fr_auto] sm:items-center"
+                  >
+                    <span className="text-xs font-medium text-text-subtle">
+                      {t("approvalStage", { stage: step.stage })}
                     </span>
-                    <Badge
-                      variant={
-                        step.status === approvalStepStatuses.completed
-                          ? "success"
-                          : step.status === approvalStepStatuses.pending
-                            ? "warning"
-                            : step.status === approvalStepStatuses.rejected
-                              ? "destructive"
-                              : "secondary"
-                      }
-                    >
-                      {t(`stepStatuses.${step.status}`)}
-                    </Badge>
-                    {step.status === approvalStepStatuses.pending &&
-                    canProcess &&
-                    isCurrentAssignee(step) ? (
-                      <span className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setProcessing({
-                              step,
-                              decision:
-                                step.kind === approvalStepKindValues.reference
-                                  ? "acknowledge"
-                                  : "approve",
-                            })
-                          }}
-                        >
-                          {step.kind === approvalStepKindValues.agreement
-                            ? t("agree")
-                            : step.kind === approvalStepKindValues.reference
-                              ? t("acknowledge")
-                              : t("approve")}
-                        </Button>
-                        {step.kind !== approvalStepKindValues.reference ? (
+                    <span className="font-medium">{assignee}</span>
+                    <span className="flex flex-wrap items-center justify-end gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {labels.stepKind(step.kind)}
+                      </span>
+                      <Badge
+                        variant={
+                          step.status === approvalStepStatuses.completed
+                            ? "success"
+                            : step.status === approvalStepStatuses.pending
+                              ? "warning"
+                              : step.status === approvalStepStatuses.rejected
+                                ? "destructive"
+                                : "secondary"
+                        }
+                      >
+                        {t(`stepStatuses.${step.status}`)}
+                      </Badge>
+                      {step.status === approvalStepStatuses.pending &&
+                      canProcess &&
+                      isCurrentAssignee(step) ? (
+                        <span className="flex gap-2">
                           <Button
                             size="sm"
-                            variant="destructive"
                             onClick={() => {
-                              setProcessing({ step, decision: "reject" })
+                              setProcessing({
+                                step,
+                                decision:
+                                  step.kind === approvalStepKindValues.reference
+                                    ? "acknowledge"
+                                    : "approve",
+                              })
                             }}
                           >
-                            {t("reject")}
+                            {step.kind === approvalStepKindValues.agreement
+                              ? t("agree")
+                              : step.kind === approvalStepKindValues.reference
+                                ? t("acknowledge")
+                                : t("approve")}
                           </Button>
-                        ) : null}
-                      </span>
-                    ) : null}
-                  </span>
-                </li>
-              )
-            })}
-          </ol>
+                          {step.kind !== approvalStepKindValues.reference ? (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => {
+                                setProcessing({
+                                  step,
+                                  decision: approvalDecisions.reject,
+                                })
+                              }}
+                            >
+                              {t("reject")}
+                            </Button>
+                          ) : null}
+                        </span>
+                      ) : null}
+                    </span>
+                  </li>
+                )
+              })}
+            </ol>
+          )}
         </CardContent>
       </Card>
       <Card>
@@ -396,10 +435,10 @@ export function ApprovalDocumentDetailPage({
         <CardContent>
           <ol className="grid gap-3">
             {document.history.toReversed().map((event) => {
-              const actor = backoffice.users.find(
-                (user) => user.id === event.actorUserId,
-              )
-              if (!actor)
+              const actor = event.actorUserId
+                ? backoffice.users.find((user) => user.id === event.actorUserId)
+                : null
+              if (event.actorUserId && !actor)
                 throw new Error(`Request history actor not found: ${event.id}`)
               return (
                 <li
@@ -411,7 +450,7 @@ export function ApprovalDocumentDetailPage({
                       {historyEventLabel(event.type)}
                     </span>
                     <span className="ml-2 text-sm text-muted-foreground">
-                      {actor.nickname}
+                      {actor?.nickname ?? t("groo")}
                     </span>
                     {event.comment ? (
                       <span className="mt-1 block text-sm whitespace-pre-wrap text-text-subtle">

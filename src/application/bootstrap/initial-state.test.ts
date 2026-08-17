@@ -185,6 +185,7 @@ describe("backoffice initial state", () => {
       "/v1/roles/list",
       "/v1/access-policies/list",
       "/v1/credentials/list",
+      "/v1/requests/list",
       "/v1/request-templates/list",
       "/v1/services/list",
       "/v1/service-endpoints/list",
@@ -511,12 +512,6 @@ describe("backoffice initial state", () => {
         const requester = localFixture.users.find(
           (candidate) => candidate.id === item.requesterId,
         )
-        const service =
-          item.documentKind === "api-key-issuance"
-            ? localFixture.services.find(
-                (candidate) => candidate.id === item.serviceId,
-              )
-            : undefined
         return (
           organizationIds.has(item.organizationId) &&
           userIds.has(item.requesterId) &&
@@ -524,7 +519,8 @@ describe("backoffice initial state", () => {
           line?.type === item.type &&
           requester?.employmentStatus === "employed" &&
           requester.organizationIds.includes(item.organizationId) &&
-          (!service || service.ownerOrganizationId === item.organizationId) &&
+          (item.documentKind !== "api-key-issuance" ||
+            serviceIds.has(item.serviceId)) &&
           (item.documentKind !== "general" ||
             item.type !== "access-grant" ||
             accessPolicyIds.has(item.accessPolicyId)) &&

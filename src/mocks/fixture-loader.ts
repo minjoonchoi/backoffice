@@ -11,6 +11,7 @@ import {
   accessPolicyAssignmentTargets,
   accessPolicyResourceTypes,
   approvalAssigneeTypes,
+  approvalDocumentExecutionSchema,
   approvalDocumentKinds,
   accessPolicyTypeSchema,
   type AccessPolicy,
@@ -18,6 +19,8 @@ import {
 } from "@/features/access-policies/model"
 import {
   approvalLineInputSchema,
+  approvalExecutionSchema,
+  approvalExecutionTypeValues,
   approvalAssigneeModeValues,
   approvalTypeValues,
   approvalStepInputSchema,
@@ -103,8 +106,9 @@ const approvalLineSchema = z
     version: z.number().int().min(1),
     category: requestCategorySchema,
     type: approvalTypeSchema,
+    approvalExecution: approvalExecutionSchema,
     status: entityStatusSchema,
-    steps: z.array(approvalStepSchema).min(1).max(12),
+    steps: z.array(approvalStepSchema).max(12),
     fields: z.array(requestTemplateFieldSchema).max(30),
   })
   .strict()
@@ -231,7 +235,7 @@ const approvalDocumentHistoryEventSchema = z
       "withdrawn",
       "resubmitted",
     ]),
-    actorUserId: entityIdSchema,
+    actorUserId: entityIdSchema.nullable(),
     stepId: entityIdSchema.nullable(),
     comment: z.string().max(1000).nullable(),
   })
@@ -243,10 +247,11 @@ const approvalDocumentBaseShape = {
   organizationId: entityIdSchema,
   requesterId: entityIdSchema,
   approvalLineId: entityIdSchema,
+  approvalExecution: approvalDocumentExecutionSchema,
   content: z.string().trim().min(10).max(5000),
   fieldValues: z.array(fieldValueSchema).max(30),
   status: z.enum(["draft", "submitted", "approved", "rejected", "withdrawn"]),
-  approvalSteps: z.array(approvalDocumentStepSchema).min(1).max(12),
+  approvalSteps: z.array(approvalDocumentStepSchema).max(12),
   history: z.array(approvalDocumentHistoryEventSchema).min(1).max(1000),
 }
 
@@ -630,6 +635,7 @@ function validateFixtureReferences(
             : applicationIds
     assertReference(targetIds, assignment.targetId, "assignment target")
   }
+  const grooRequestIds = new Set<string>()
   for (const document of state.approvalDocuments) {
     assertReference(userIds, document.requesterId, "requester")
     assertReference(
@@ -642,6 +648,30 @@ function validateFixtureReferences(
       document.approvalLineId,
       "request template",
     )
+    const requestTemplate = state.approvalLines.find(
+      (template) => template.id === document.approvalLineId,
+    )
+    if (
+      requestTemplate?.approvalExecution.type !==
+        document.approvalExecution.type ||
+      (document.approvalExecution.type === approvalExecutionTypeValues.groo &&
+        (requestTemplate.approvalExecution.type !==
+          approvalExecutionTypeValues.groo ||
+          requestTemplate.approvalExecution.draftDocumentId !==
+            document.approvalExecution.draftDocumentId ||
+          document.approvalSteps.length > 0 ||
+          grooRequestIds.has(document.approvalExecution.requestId))) ||
+      (document.approvalExecution.type ===
+        approvalExecutionTypeValues.internal &&
+        document.approvalSteps.length === 0)
+    ) {
+      throw new Error(
+        `Fixture request approval execution is invalid: ${document.id}`,
+      )
+    }
+    if (document.approvalExecution.type === approvalExecutionTypeValues.groo) {
+      grooRequestIds.add(document.approvalExecution.requestId)
+    }
     if (
       document.documentKind === approvalDocumentKinds.general &&
       document.type === approvalTypeValues.accessGrant
@@ -693,7 +723,9 @@ function validateFixtureReferences(
       document.approvalSteps.map((step) => step.id),
     )
     for (const event of document.history) {
-      assertReference(userIds, event.actorUserId, "request history actor")
+      if (event.actorUserId) {
+        assertReference(userIds, event.actorUserId, "request history actor")
+      }
       if (event.stepId && !documentStepIds.has(event.stepId)) {
         throw new Error(
           `Fixture request history step is invalid: ${document.id}`,

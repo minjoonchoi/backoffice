@@ -2,6 +2,9 @@ import { z } from "zod"
 
 import { entityIdSchema, type EntityStatus } from "@/domain/common"
 
+export const awsSecretNameInputPattern = "[A-Za-z0-9_+=.@\\/\\-]+"
+export const awsSecretKeyInputPattern = "[A-Za-z0-9_.\\-]+"
+
 export const awsSecretNameSchema = z
   .string()
   .trim()

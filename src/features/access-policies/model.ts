@@ -7,9 +7,11 @@ import {
   awsSecretNameSchema,
 } from "@/features/credentials/model"
 import {
+  approvalExecutionTypeValues,
   approvalStepKindSchema,
   approvalTypeSchema,
   approvalTypeValues,
+  grooDocumentIdSchema,
   type ApprovalType,
   type ResolvedApprovalStep,
 } from "@/features/request-templates/model"
@@ -71,6 +73,21 @@ export const approvalDocumentHistoryEventTypes = {
   withdrawn: "withdrawn",
   resubmitted: "resubmitted",
 } as const
+export const grooApprovalResultValues = {
+  approved: "approved",
+  rejected: "rejected",
+} as const
+
+export const approvalDocumentExecutionSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal(approvalExecutionTypeValues.internal) }).strict(),
+  z
+    .object({
+      type: z.literal(approvalExecutionTypeValues.groo),
+      draftDocumentId: grooDocumentIdSchema,
+      requestId: grooDocumentIdSchema,
+    })
+    .strict(),
+])
 
 export const accessPolicyEffectSchema = z.enum(accessPolicyEffects)
 export const accessPolicyTypeSchema = z.enum(accessPolicyTypes)
@@ -134,9 +151,9 @@ const approvalDocumentBaseSchema = z.object({
         assigneeId: entityIdSchema,
       }),
     )
-    .min(2)
     .max(12)
     .superRefine((steps, context) => {
+      if (steps.length === 0) return
       if (new Set(steps.map((step) => step.id)).size !== steps.length) {
         context.addIssue({ code: "custom", path: ["id"] })
       }
@@ -252,11 +269,22 @@ export const approvalDocumentTransitionInputSchema = z.object({
   actorUserId: entityIdSchema,
 })
 
+export const grooApprovalCompletionInputSchema = z
+  .object({
+    requestId: grooDocumentIdSchema,
+    result: z.enum(grooApprovalResultValues),
+    completedAt: z.iso.datetime(),
+  })
+  .strict()
+
 export type ApprovalDocumentActionInput = z.infer<
   typeof approvalDocumentActionInputSchema
 >
 export type ApprovalDocumentTransitionInput = z.infer<
   typeof approvalDocumentTransitionInputSchema
+>
+export type GrooApprovalCompletionInput = z.infer<
+  typeof grooApprovalCompletionInputSchema
 >
 
 export type AccessPolicy = AccessPolicyValue & {
@@ -275,6 +303,10 @@ export type AccessPolicyAssignment = {
 }
 export type ApprovalDocumentStatus =
   (typeof approvalDocumentStatuses)[keyof typeof approvalDocumentStatuses]
+export type ApprovalDocumentSubmission =
+  (typeof approvalDocumentSubmissions)[keyof typeof approvalDocumentSubmissions]
+export type ApprovalAssigneeType =
+  (typeof approvalAssigneeTypes)[keyof typeof approvalAssigneeTypes]
 export type ApprovalStepStatus =
   (typeof approvalStepStatuses)[keyof typeof approvalStepStatuses]
 export type ApprovalDocumentStep = ResolvedApprovalStep & {
@@ -286,7 +318,7 @@ export type ApprovalDocumentStep = ResolvedApprovalStep & {
 export type ApprovalDocumentHistoryEvent = {
   id: string
   type: (typeof approvalDocumentHistoryEventTypes)[keyof typeof approvalDocumentHistoryEventTypes]
-  actorUserId: string
+  actorUserId: string | null
   stepId: string | null
   comment: string | null
   createdAt: string
@@ -301,6 +333,7 @@ export type ApprovalDocument = StoredApprovalDocumentInput & {
   id: string
   status: ApprovalDocumentStatus
   createdAt: string
+  approvalExecution: z.infer<typeof approvalDocumentExecutionSchema>
   approvalSteps: ApprovalDocumentStep[]
   history: ApprovalDocumentHistoryEvent[]
 }

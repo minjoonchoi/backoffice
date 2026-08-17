@@ -13,6 +13,7 @@ import {
   approvalDocumentKinds,
   approvalDocumentStatuses,
   approvalStepStatuses,
+  grooApprovalResultValues,
 } from "@/features/access-policies/model"
 import {
   auditActionValues,
@@ -22,6 +23,7 @@ import {
 import { employmentStatusValues } from "@/features/iam/model"
 import {
   approvalAssigneeModeValues,
+  approvalExecutionTypeValues,
   approvalStepKindValues,
   approvalTypeValues,
   requestCategoryValues,
@@ -57,7 +59,9 @@ const domainValueGroups: readonly Readonly<Record<string, string>>[] = [
   approvalDocumentKinds,
   approvalDocumentStatuses,
   approvalStepStatuses,
+  grooApprovalResultValues,
   approvalAssigneeModeValues,
+  approvalExecutionTypeValues,
   approvalStepKindValues,
   approvalTypeValues,
   requestCategoryValues,
@@ -82,7 +86,7 @@ function escapeRegExp(value: string) {
 }
 
 describe("domain value constants", () => {
-  it("does not compare production domain values through raw string literals", () => {
+  it("does not use raw domain values in production conditions or discriminators", () => {
     const sourceFiles = readdirSync(sourceRoot, { recursive: true })
       .filter(
         (path): path is string =>
@@ -96,7 +100,7 @@ describe("domain value constants", () => {
       return [...domainValues].flatMap((value) => {
         const literal = escapeRegExp(value)
         const comparison = new RegExp(
-          `(?:===|!==)\\s*["']${literal}["']|case\\s+["']${literal}["']|\\.includes\\(\\s*["']${literal}["']`,
+          `(?:===|!==)\\s*["']${literal}["']|case\\s+["']${literal}["']|\\.(?:has|includes)\\(\\s*["']${literal}["']|(?:type|status|effect|targetType|resourceType|documentKind|submission|decision|kind)\\s*:\\s*["']${literal}["']`,
         )
         return comparison.test(source)
           ? [`${path.slice(process.cwd().length + 1)}: ${value}`]

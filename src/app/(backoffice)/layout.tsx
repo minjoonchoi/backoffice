@@ -50,6 +50,7 @@ export default async function BackofficeLayout({
               roles: t("roles"),
               applications: t("applications"),
               namespaces: t("namespaces"),
+              requests: t("requests"),
               approvalLines: t("approvalLines"),
               approvalDocuments: t("approvalDocuments"),
               services: t("services"),

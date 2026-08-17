@@ -2,6 +2,7 @@
 
 import { requestCategoryValues } from "@/features/request-templates/model"
 import { approvalAssigneeTypes } from "@/features/access-policies/model"
+import type { ApprovalAssigneeType } from "@/features/access-policies/model"
 import { employmentStatusValues } from "@/features/iam/model"
 import { Copy, FlaskConical } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -160,7 +161,7 @@ export function RequestTemplatePreviewDialog({
         })
       : []
 
-  function assigneeLabel(type: "user" | "organization", id: string | null) {
+  function assigneeLabel(type: ApprovalAssigneeType, id: string | null) {
     if (!id) return t("unresolvedAssignee")
     return type === approvalAssigneeTypes.user
       ? (backoffice.users.find((user) => user.id === id)?.nickname ??

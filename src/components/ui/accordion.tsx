@@ -56,7 +56,7 @@ function AccordionTrigger({
       <AccordionPrimitive.Trigger
         data-slot="accordion-trigger"
         className={cn(
-          "flex min-h-12 w-full items-center gap-3 rounded-[inherit] px-4 py-3 text-left text-body transition-colors outline-none hover:bg-control-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-disabled:cursor-not-allowed data-disabled:opacity-50",
+          "flex min-h-10 w-full items-center gap-2 rounded-[inherit] px-3 py-2 text-left text-body transition-colors outline-none hover:bg-control-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-disabled:cursor-not-allowed data-disabled:opacity-50",
           className,
         )}
         {...props}
@@ -105,7 +105,7 @@ function AccordionContent({
       className="h-(--accordion-panel-height) overflow-hidden transition-[height] duration-(--duration-moderate) ease-(--ease-standard) data-ending-style:h-0 data-starting-style:h-0"
       {...props}
     >
-      <div className={cn("px-4 pb-4 text-body text-text-subtle", className)}>
+      <div className={cn("px-3 pb-3 text-body text-text-subtle", className)}>
         {children}
       </div>
     </AccordionPrimitive.Panel>

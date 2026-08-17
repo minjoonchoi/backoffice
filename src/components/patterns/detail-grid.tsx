@@ -24,7 +24,7 @@ function DetailItem({ label, children, className }: DetailItemProps) {
   return (
     <div
       className={cn(
-        "grid gap-1 border-b border-border-subtle p-4 last:border-b-0 sm:[&:nth-child(odd)]:border-r sm:[&:nth-last-child(2)]:border-b-0",
+        "grid gap-1 border-b border-border-subtle p-3 last:border-b-0 sm:[&:nth-child(odd)]:border-r sm:[&:nth-last-child(2)]:border-b-0",
         className,
       )}
     >

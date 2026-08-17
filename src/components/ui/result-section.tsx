@@ -17,7 +17,7 @@ function ResultSection({
       data-size={size}
       className={cn(
         "flex flex-col items-center justify-center text-center",
-        size === "medium" ? "min-h-48 gap-3 p-6" : "min-h-64 gap-4 p-8",
+        size === "medium" ? "min-h-40 gap-2 p-4" : "min-h-52 gap-3 p-6",
         className,
       )}
       {...props}
@@ -33,7 +33,7 @@ function ResultSectionMedia({
     <div
       data-slot="result-section-media"
       className={cn(
-        "flex size-11 items-center justify-center rounded-lg bg-brand-weak text-brand-weak-foreground [&_svg]:size-5",
+        "flex size-9 items-center justify-center rounded-md bg-brand-weak text-brand-weak-foreground [&_svg]:size-4",
         className,
       )}
       {...props}

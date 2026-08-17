@@ -16,7 +16,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 구현 전에 프로젝트 구조와 유사 코드를 확인한다.
 - 기존 네이밍, 설계 패턴, 라이브러리를 따른다.
 - 같은 기능을 중복 구현하지 않는다.
-- 상태·유형·대상처럼 조건에 쓰이는 문자열은 [프로젝트 코드 구조](docs/project-structure.md#도메인-식별값과-문자열)의 도메인 상수 규칙을 따른다.
+- 상태·유형·대상처럼 API 계약, 저장 값, 조건, discriminator와 `Set`·`Map` 조회에 쓰이는 문자열은 raw literal로 사용하지 않고 [프로젝트 코드 구조](docs/project-structure.md#도메인-식별값과-문자열)의 도메인 상수 규칙을 따른다.
 
 ## 2. 최소 범위 변경
 
@@ -102,3 +102,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 기존 domain과 구현 경계를 우선 확장하고 독립적인 업무 개념일 때만 새 구조를 추가한다.
 - UI, API 계약, 권한 리소스와 관련 요구사항 문서를 같은 변경에서 일치시킨다.
 - 유지할 동작과 변경할 동작을 테스트한 뒤 완료 체크리스트에 따라 전체 검증을 실행한다.
+
+## 13. 메뉴별 PRD
+
+- 메뉴 PRD를 생성·수정하거나 화면·route·권한·API 변경이 기존 PRD에 영향을 주면 [PRD 작성·갱신 가이드](docs/prd-authoring-guide.md)를 확인한다.
+- 실제 `dev:mock` 화면을 정해진 사용자·locale·viewport로 캡처하고 시나리오마다 UI 요구사항 ID, 필요한 서버 query·command, 권한과 실패 조건을 연결한다.
+- PRD를 요구사항 원본이나 운영 서버 구현 완료 증거로 사용하지 않으며 메뉴 PRD 인덱스, 영향 문서와 스크린샷을 같은 변경에서 일치시킨다.

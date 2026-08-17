@@ -14,6 +14,10 @@ import {
   createRecordBase,
 } from "@/application/api/local-state"
 import type { BackofficeState } from "@/application/state/model"
+import {
+  userNotificationEventValues,
+  userNotificationTargetTypeValues,
+} from "@/application/state/model"
 import { entityIdSchema, type CommandResult } from "@/domain/common"
 import { uiResourceKeys } from "@/config/menu-registry"
 import type { ApprovalLine } from "@/features/request-templates/model"
@@ -504,8 +508,8 @@ export function createLocalServiceCatalogApi(
             ...current.notifications,
             ...affectedUserIds.map((userId) => ({
               userId,
-              event: "service-endpoints-synchronized" as const,
-              targetType: "service" as const,
+              event: userNotificationEventValues.serviceEndpointsSynchronized,
+              targetType: userNotificationTargetTypeValues.service,
               targetId: input.serviceId,
               readAt: null,
               ...createRecordBase(),

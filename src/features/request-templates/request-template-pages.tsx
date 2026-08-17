@@ -2,6 +2,7 @@
 
 import { approvalStepStatuses } from "@/features/access-policies/model"
 import { approvalAssigneeModeValues } from "@/features/request-templates/model"
+import { approvalExecutionTypeValues } from "@/features/request-templates/model"
 import { uiResourceKeys } from "@/config/menu-registry"
 import type { ColumnDef } from "@tanstack/react-table"
 import { History, Pencil, Plus } from "lucide-react"
@@ -105,6 +106,23 @@ export function ApprovalLinesPage() {
         header: t("type"),
         cell: ({ row }) => labels.approvalType(row.original.type),
       },
+      {
+        id: "approvalExecution",
+        header: t("approvalExecution"),
+        cell: ({ row }) => (
+          <Badge
+            variant={
+              row.original.approvalExecution.type ===
+              approvalExecutionTypeValues.groo
+                ? "info"
+                : "secondary"
+            }
+          >
+            {t(`approvalExecutions.${row.original.approvalExecution.type}`)}
+          </Badge>
+        ),
+        size: 140,
+      },
       { accessorKey: "version", header: t("version"), size: 90 },
       {
         id: "steps",
@@ -194,6 +212,12 @@ export function ApprovalLinesPage() {
                 id: "template-type",
                 label: t("type"),
                 getValue: (row) => labels.approvalType(row.type),
+              },
+              {
+                id: "approval-execution",
+                label: t("approvalExecution"),
+                getValue: (row) =>
+                  t(`approvalExecutions.${row.approvalExecution.type}`),
               },
             ]}
           />
@@ -372,6 +396,12 @@ export function ApprovalLineDetailPage({
       id: "progress",
       header: t("requestProgress"),
       cell: ({ row }) => {
+        if (
+          row.original.approvalExecution.type ===
+          approvalExecutionTypeValues.groo
+        ) {
+          return <Badge variant="info">{t("grooDelegated")}</Badge>
+        }
         const completed = row.original.approvalSteps.filter(
           (step) => step.status === approvalStepStatuses.completed,
         ).length
@@ -435,7 +465,9 @@ export function ApprovalLineDetailPage({
           permissions.canClone ||
           permissions.canPreview ? (
             <>
-              {permissions.canPreview ? (
+              {permissions.canPreview &&
+              template.approvalExecution.type ===
+                approvalExecutionTypeValues.internal ? (
                 <RequestTemplatePreviewDialog template={template} />
               ) : null}
               {permissions.canClone ? (
@@ -467,6 +499,17 @@ export function ApprovalLineDetailPage({
             <DetailItem label={t("type")}>
               {labels.approvalType(template.type)}
             </DetailItem>
+            <DetailItem label={t("approvalExecution")}>
+              {t(`approvalExecutions.${template.approvalExecution.type}`)}
+            </DetailItem>
+            {template.approvalExecution.type ===
+            approvalExecutionTypeValues.groo ? (
+              <DetailItem label={t("grooDraftDocumentId")}>
+                <code className="text-xs break-all">
+                  {template.approvalExecution.draftDocumentId}
+                </code>
+              </DetailItem>
+            ) : null}
             <DetailItem label={common("status")}>
               <StatusBadge status={template.status} />
             </DetailItem>
@@ -545,21 +588,24 @@ export function ApprovalLineDetailPage({
           />
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("configuredStepsTitle")}</CardTitle>
-          <CardDescription>{t("configuredStepsDescription")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            caption={t("configuredStepsTitle")}
-            columns={stepColumns}
-            data={steps}
-            getRowId={(row) => row.id}
-            empty={t("configuredStepsEmpty")}
-          />
-        </CardContent>
-      </Card>
+      {template.approvalExecution.type ===
+      approvalExecutionTypeValues.internal ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("configuredStepsTitle")}</CardTitle>
+            <CardDescription>{t("configuredStepsDescription")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DataTable
+              caption={t("configuredStepsTitle")}
+              columns={stepColumns}
+              data={steps}
+              getRowId={(row) => row.id}
+              empty={t("configuredStepsEmpty")}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>{t("configuredFieldsTitle")}</CardTitle>

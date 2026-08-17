@@ -54,7 +54,24 @@ export const Default: Story = {
     await expect(
       within(policyTable).getByText("사용자 직접 부여"),
     ).toBeVisible()
-    await expect(within(policyTable).getByText("조직 · 개발 1팀")).toBeVisible()
+    const additionalPaths = within(policyTable).getByRole("button", {
+      name: "전체 부여 경로 4개",
+    })
+    await expect(additionalPaths).toHaveTextContent("외 3개")
+    await expect(
+      within(policyTable).queryByText("조직 · 개발 1팀"),
+    ).not.toBeInTheDocument()
+    await userEvent.hover(additionalPaths)
+    const grantPathsTooltip = await screen.findByRole("tooltip")
+    await waitFor(async () => {
+      await expect(
+        within(grantPathsTooltip).getByText("사용자 직접 부여"),
+      ).toBeVisible()
+      await expect(
+        within(grantPathsTooltip).getByText("조직 · 개발 1팀"),
+      ).toBeVisible()
+    })
+    await userEvent.unhover(additionalPaths)
     await expect(
       canvas.queryByText("승인 대기 요청", { exact: true }),
     ).not.toBeInTheDocument()

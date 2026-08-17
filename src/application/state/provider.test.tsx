@@ -751,6 +751,7 @@ describe("BackofficeProvider", () => {
         name: "동적 요청 템플릿",
         category: "permission",
         type: "resource-create",
+        approvalExecution: { type: "internal" },
         steps: [
           { kind: "request", assigneeMode: "requester", stage: 1 },
           {
@@ -1126,6 +1127,7 @@ describe("BackofficeProvider", () => {
         name: "API Key 발급 요청 템플릿",
         category: "credential",
         type: "api-key",
+        approvalExecution: { type: "internal" },
         steps: [
           {
             kind: "request",
@@ -1200,6 +1202,7 @@ describe("BackofficeProvider", () => {
         name: "API Key 교체 요청 템플릿",
         category: "credential",
         type: "api-key-replace",
+        approvalExecution: { type: "internal" },
         steps: [
           { kind: "request", assigneeMode: "requester", stage: 1 },
           {
@@ -1251,6 +1254,7 @@ describe("BackofficeProvider", () => {
         name: "API Key 폐기 요청 템플릿",
         category: "credential",
         type: "api-key-dispose",
+        approvalExecution: { type: "internal" },
         steps: [
           { kind: "request", assigneeMode: "requester", stage: 1 },
           {
@@ -1956,7 +1960,7 @@ describe("BackofficeProvider", () => {
     ).toEqual({ ok: false, error: "access-policy-already-assigned" })
   })
 
-  it("allows a request-time approver to replace an unresolved template assignee", async () => {
+  it("delegates credential issuance approval to Groo without internal steps", async () => {
     const { result } = renderHook(() => useBackoffice(), {
       wrapper: FixtureWrapper,
     })
@@ -1972,12 +1976,6 @@ describe("BackofficeProvider", () => {
     const template = localFixture.approvalLines.find(
       (candidate) => candidate.id === service?.credentialTemplateIds.issuance,
     )
-    const fallbackApprover = localFixture.users.find(
-      (user) => user.nickname === "David",
-    )
-    const unresolvedStep = template?.steps.find(
-      (step) => step.assigneeMode === "request-organization-leader",
-    )
     const application = localFixture.applications.find(
       (candidate) => candidate.ownerOrganizationId === requestOrganization?.id,
     )
@@ -1986,9 +1984,7 @@ describe("BackofficeProvider", () => {
       !requestOrganization ||
       !service ||
       !template ||
-      !application ||
-      !fallbackApprover ||
-      !unresolvedStep
+      !application
     ) {
       throw new Error("Credential approver fixture is incomplete")
     }
@@ -1996,25 +1992,14 @@ describe("BackofficeProvider", () => {
     const response = await act(() =>
       result.current.createApprovalDocument({
         documentKind: "api-key-issuance",
-        title: "상위 승인자 없는 자격증명 발급 요청",
+        title: "Groo 자격증명 발급 요청",
         type: "api-key",
         organizationId: requestOrganization.id,
         requesterId: requester.id,
         approvalLineId: template.id,
-        content: "상위 조직장이 없는 요청은 제출될 수 없습니다.",
+        content: "Groo 기안으로 결재 프로세스를 위임하는 요청입니다.",
         fieldValues: [],
-        approvalSteps: approvalStepsFromTemplate(
-          result.current,
-          template,
-          requester.id,
-          requestOrganization.id,
-          {
-            serviceOwnerOrganizationId: service.ownerOrganizationId,
-            userAssignments: {
-              [unresolvedStep.id]: fallbackApprover.id,
-            },
-          },
-        ),
+        approvalSteps: [],
         submission: "submitted",
         applicationId: application.id,
         serviceId: service.id,
@@ -2029,15 +2014,15 @@ describe("BackofficeProvider", () => {
 
     expect(response.ok).toBe(true)
     if (!response.ok) return
+    expect(response.value.approvalSteps).toEqual([])
+    expect(response.value.approvalExecution).toMatchObject({
+      type: "groo",
+      draftDocumentId: "GROO-CREDENTIAL-ISSUANCE-V1",
+    })
     expect(
-      response.value.approvalSteps.find((step) => step.id === unresolvedStep.id)
-        ?.assigneeId,
-    ).toBe(fallbackApprover.id)
-    expect(
-      localFixture.approvalLines
-        .find((line) => line.id === template.id)
-        ?.steps.find((step) => step.id === unresolvedStep.id)?.assigneeMode,
-    ).toBe("request-organization-leader")
+      response.value.approvalExecution.type === "groo" &&
+        response.value.approvalExecution.requestId,
+    ).toMatch(/^groo-/)
   })
 
   it("stores valid endpoints without status and rejects duplicate paths", async () => {
@@ -2226,11 +2211,30 @@ describe("BackofficeProvider", () => {
         }),
       ),
     ).toEqual({ ok: false, error: "protected-relationship" })
-    const deleted = await act(() => result.current.deleteService(service.id))
-    expect(deleted.ok && deleted.value.id).toBe(service.id)
-    expect(result.current.services.some((item) => item.id === service.id)).toBe(
-      false,
+    expect(await act(() => result.current.deleteService(service.id))).toEqual({
+      ok: false,
+      error: "protected-relationship",
+    })
+    const disposableService = await act(() =>
+      result.current.createService({
+        name: "삭제 검증 서비스",
+        slug: "deletion-test-service",
+        host: "https://deletion-test.example.com",
+        type: service.type,
+        ownerOrganizationId: service.ownerOrganizationId,
+        credentialTemplateIds: service.credentialTemplateIds,
+      }),
     )
+    if (!disposableService.ok) return
+    const deleted = await act(() =>
+      result.current.deleteService(disposableService.value.id),
+    )
+    expect(deleted.ok && deleted.value.id).toBe(disposableService.value.id)
+    expect(
+      result.current.services.some(
+        (item) => item.id === disposableService.value.id,
+      ),
+    ).toBe(false)
   })
 
   it("updates and deletes endpoints without weakening duplicate validation", async () => {

@@ -14,10 +14,13 @@ import type { Organization, BackofficeUser } from "@/features/iam/model"
 import type { ApprovalStepKind } from "@/features/request-templates/model"
 import type { RequestApprovalStepDraft } from "@/features/request-templates/request-approval-line"
 
-const editableStepKinds: Exclude<ApprovalStepKind, "request">[] = [
-  "approval",
-  "agreement",
-  "reference",
+const editableStepKinds: Exclude<
+  ApprovalStepKind,
+  typeof approvalStepKindValues.request
+>[] = [
+  approvalStepKindValues.approval,
+  approvalStepKindValues.agreement,
+  approvalStepKindValues.reference,
 ]
 
 function stabilizeParallelStages(steps: RequestApprovalStepDraft[]) {
@@ -80,8 +83,8 @@ export function RequestApprovalLineEditor({
       ...steps,
       {
         id: crypto.randomUUID(),
-        kind: "approval",
-        assigneeType: "user",
+        kind: approvalStepKindValues.approval,
+        assigneeType: approvalAssigneeTypes.user,
         assigneeId: null,
         parallelWithPrevious: false,
       },

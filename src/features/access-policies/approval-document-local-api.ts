@@ -7,6 +7,7 @@ import { requestTemplateFieldBindingValues } from "@/features/request-templates/
 import { approvalStepKindValues } from "@/features/request-templates/model"
 import { requestCategoryValues } from "@/features/request-templates/model"
 import { approvalTypeValues } from "@/features/request-templates/model"
+import { approvalExecutionTypeValues } from "@/features/request-templates/model"
 import { approvalDocumentKinds } from "@/features/access-policies/model"
 import { approvalAssigneeTypes } from "@/features/access-policies/model"
 import { serviceTypeValues } from "@/features/service-catalog/model"
@@ -14,6 +15,7 @@ import { employmentStatusValues } from "@/features/iam/model"
 import { entityStatuses } from "@/domain/common"
 import { hasEffectiveAccessPolicy } from "@/features/access-policies/access-policy-assignment"
 import {
+  accessPolicyAssignmentTargets,
   approvalDocumentActionInputSchema,
   approvalDocumentInputSchema,
   approvalDocumentTransitionInputSchema,
@@ -42,7 +44,7 @@ import { uiResourceKeys } from "@/config/menu-registry"
 
 function createHistoryEvent(
   type: ApprovalDocumentHistoryEvent["type"],
-  actorUserId: string,
+  actorUserId: string | null,
   stepId: string | null,
   comment: string | null,
   createdAt = new Date().toISOString(),
@@ -313,29 +315,34 @@ export function createLocalApprovalDocumentApi(
       }
 
       const requestStep = parsed.data.approvalSteps[0]
-      if (
-        requestStep?.kind !== approvalStepKindValues.request ||
-        requestStep.assigneeType !== approvalAssigneeTypes.user ||
-        requestStep.assigneeId !== requester.id ||
-        parsed.data.approvalSteps.some((step) =>
-          step.assigneeType === approvalAssigneeTypes.user
-            ? !state.users.some(
-                (user) =>
-                  user.id === step.assigneeId &&
-                  user.employmentStatus === employmentStatusValues.employed,
-              )
-            : !state.organizations.some(
-                (organization) => organization.id === step.assigneeId,
-              ),
-        ) ||
-        parsed.data.approvalSteps.some(
-          (step) =>
-            (step.kind === approvalStepKindValues.approval ||
-              step.kind === approvalStepKindValues.agreement) &&
-            step.assigneeType === approvalAssigneeTypes.user &&
-            step.assigneeId === requester.id,
-        )
-      ) {
+      const internalStepsInvalid =
+        line.approvalExecution.type === approvalExecutionTypeValues.internal &&
+        (requestStep?.kind !== approvalStepKindValues.request ||
+          requestStep.assigneeType !== approvalAssigneeTypes.user ||
+          requestStep.assigneeId !== requester.id ||
+          parsed.data.approvalSteps.some((step) =>
+            step.assigneeType === approvalAssigneeTypes.user
+              ? !state.users.some(
+                  (user) =>
+                    user.id === step.assigneeId &&
+                    user.employmentStatus === employmentStatusValues.employed,
+                )
+              : !state.organizations.some(
+                  (organization) => organization.id === step.assigneeId,
+                ),
+          ) ||
+          parsed.data.approvalSteps.some(
+            (step) =>
+              (step.kind === approvalStepKindValues.approval ||
+                step.kind === approvalStepKindValues.agreement) &&
+              step.assigneeType === approvalAssigneeTypes.user &&
+              step.assigneeId === requester.id,
+          ))
+      const grooSubmissionInvalid =
+        line.approvalExecution.type === approvalExecutionTypeValues.groo &&
+        (parsed.data.approvalSteps.length > 0 ||
+          parsed.data.submission !== approvalDocumentSubmissions.submitted)
+      if (internalStepsInvalid || grooSubmissionInvalid) {
         return { ok: false, error: "approval-reference-mismatch" }
       }
 
@@ -388,6 +395,13 @@ export function createLocalApprovalDocumentApi(
         fieldValues: parsed.data.fieldValues,
         status: parsed.data.submission,
         createdAt,
+        approvalExecution:
+          line.approvalExecution.type === approvalExecutionTypeValues.groo
+            ? {
+                ...line.approvalExecution,
+                requestId: `groo-${crypto.randomUUID()}`,
+              }
+            : line.approvalExecution,
         approvalSteps,
         history: [
           createHistoryEvent(
@@ -480,6 +494,11 @@ export function createLocalApprovalDocumentApi(
       )
       if (!document) {
         return { ok: false, error: "approval-document-not-found" }
+      }
+      if (
+        document.approvalExecution.type === approvalExecutionTypeValues.groo
+      ) {
+        return { ok: false, error: "approval-document-action-forbidden" }
       }
       if (document.status !== approvalDocumentStatuses.submitted) {
         return { ok: false, error: "approval-document-not-submitted" }
@@ -644,7 +663,7 @@ export function createLocalApprovalDocumentApi(
         const assignment: AccessPolicyAssignment = {
           ...createRecordBase(),
           accessPolicyId: policy.id,
-          targetType: "user",
+          targetType: accessPolicyAssignmentTargets.user,
           targetId: document.requesterId,
           expiresAt: document.expiresAt,
         }
@@ -724,6 +743,11 @@ export function createLocalApprovalDocumentApi(
         return { ok: false, error: "approval-document-not-found" }
       }
       if (
+        document.approvalExecution.type === approvalExecutionTypeValues.groo
+      ) {
+        return { ok: false, error: "approval-document-transition-invalid" }
+      }
+      if (
         document.status !== approvalDocumentStatuses.submitted ||
         document.requesterId !== parsed.data.actorUserId
       ) {
@@ -732,11 +756,11 @@ export function createLocalApprovalDocumentApi(
       const createdAt = new Date().toISOString()
       const withdrawnDocument: ApprovalDocument = {
         ...document,
-        status: "withdrawn",
+        status: approvalDocumentStatuses.withdrawn,
         history: [
           ...document.history,
           createHistoryEvent(
-            "withdrawn",
+            approvalDocumentHistoryEventTypes.withdrawn,
             parsed.data.actorUserId,
             null,
             null,
@@ -780,6 +804,11 @@ export function createLocalApprovalDocumentApi(
       if (!document) {
         return { ok: false, error: "approval-document-not-found" }
       }
+      if (
+        document.approvalExecution.type === approvalExecutionTypeValues.groo
+      ) {
+        return { ok: false, error: "approval-document-transition-invalid" }
+      }
       const resubmittable =
         document.status === approvalDocumentStatuses.draft ||
         document.status === approvalDocumentStatuses.rejected ||
@@ -822,7 +851,7 @@ export function createLocalApprovalDocumentApi(
       )
       const submittedDocument: ApprovalDocument = {
         ...document,
-        status: "submitted",
+        status: approvalDocumentStatuses.submitted,
         approvalSteps,
         history: [
           ...document.history,

@@ -122,6 +122,7 @@ describe("candidate management API flows", () => {
         name: `${clonedTemplate.value.name} 수정`,
         category: clonedTemplate.value.category,
         type: clonedTemplate.value.type,
+        approvalExecution: clonedTemplate.value.approvalExecution,
         steps: clonedTemplate.value.steps,
         fields: clonedTemplate.value.fields,
       },
