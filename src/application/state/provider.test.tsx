@@ -258,18 +258,18 @@ describe("BackofficeProvider", () => {
       wrapper: Wrapper,
     })
     const adminRole = result.current.roles.find(
-      (role) => role.name === "Backoffice 시스템 관리자",
+      (role) => role.name === "Access Governance 시스템 관리자",
     )
 
     expect(adminRole).toBeDefined()
     if (!adminRole) return
     expect(result.current.roles.map((role) => role.name)).toEqual([
-      "Backoffice 시스템 관리자",
-      "Backoffice 정책 운영자",
-      "Backoffice IAM 운영자",
-      "Backoffice 일반 사용자",
-      "Backoffice UI 리소스 관리자",
-      "Backoffice 서비스 운영자",
+      "Access Governance 시스템 관리자",
+      "Access Governance 정책 운영자",
+      "Access Governance IAM 운영자",
+      "Access Governance 일반 사용자",
+      "Access Governance UI 리소스 관리자",
+      "Access Governance 서비스 운영자",
     ])
     expect(result.current.uiResources).toHaveLength(
       uiResourceManifest.resources.length,
@@ -464,7 +464,7 @@ describe("BackofficeProvider", () => {
       await act(() =>
         result.current.createAccessPolicy(
           {
-            name: "Backoffice UI 리소스 허용",
+            name: "Access Governance UI 리소스 허용",
             description: "같은 유형의 UI 리소스 접근을 허용합니다.",
             type: "access-grant",
             effect: "allow",
@@ -562,9 +562,9 @@ describe("BackofficeProvider", () => {
       await act(() =>
         result.current.createAccessPolicy(
           {
-            name: "Backoffice 화면과 전역 API 접근",
+            name: "Access Governance 화면과 전역 API 접근",
             description:
-              "Backoffice UI 리소스와 전역 카탈로그 엔드포인트를 함께 허용합니다.",
+              "Access Governance UI 리소스와 전역 카탈로그 엔드포인트를 함께 허용합니다.",
             type: "access-grant",
             effect: "allow",
             resources: [
@@ -755,7 +755,7 @@ describe("BackofficeProvider", () => {
 
     const line = await act(() =>
       result.current.createApprovalLine({
-        name: "동적 요청 템플릿",
+        name: "동적 결재 템플릿",
         category: "permission",
         type: "resource-create",
         approvalExecution: { type: "internal" },
@@ -1131,7 +1131,7 @@ describe("BackofficeProvider", () => {
     if (!application.ok) return
     const line = await act(() =>
       result.current.createApprovalLine({
-        name: "API Key 발급 요청 템플릿",
+        name: "API Key 발급 결재 템플릿",
         category: "credential",
         type: "api-key",
         approvalExecution: { type: "internal" },
@@ -1206,7 +1206,7 @@ describe("BackofficeProvider", () => {
     if (!line.ok) return
     const replacementLine = await act(() =>
       result.current.createApprovalLine({
-        name: "API Key 교체 요청 템플릿",
+        name: "API Key 교체 결재 템플릿",
         category: "credential",
         type: "api-key-replace",
         approvalExecution: { type: "internal" },
@@ -1258,7 +1258,7 @@ describe("BackofficeProvider", () => {
     if (!replacementLine.ok) return
     const disposalLine = await act(() =>
       result.current.createApprovalLine({
-        name: "API Key 폐기 요청 템플릿",
+        name: "API Key 폐기 결재 템플릿",
         category: "credential",
         type: "api-key-dispose",
         approvalExecution: { type: "internal" },
@@ -1353,7 +1353,7 @@ describe("BackofficeProvider", () => {
       serviceId: service.value.id,
       endpointIds: credentialEndpointIds,
       keyName: "partner-integration",
-      awsSecretName: "backoffice/partner-api",
+      awsSecretName: "access-governance/partner-api",
       awsSecretKey: "partner-integration",
     }
     expect(
@@ -1372,6 +1372,12 @@ describe("BackofficeProvider", () => {
     expect(document.value).toMatchObject({
       documentKind: "api-key-issuance",
       endpointIds: credentialEndpointIds,
+    })
+    expect(
+      await act(() => result.current.createApprovalDocument(issuanceInput)),
+    ).toEqual({
+      ok: false,
+      error: "approval-document-already-exists",
     })
     const completion = await act(() =>
       completeApprovalDocument(result.current, document.value.id),
@@ -1410,7 +1416,7 @@ describe("BackofficeProvider", () => {
     expect(registeredApiKey).not.toHaveProperty("registrationMethod")
     expect(registeredApiKey.registeredByUserId).toBe(requester.value.id)
     expect(registeredApiKey).toMatchObject({
-      awsSecretName: "backoffice/partner-api",
+      awsSecretName: "access-governance/partner-api",
       awsSecretKey: "partner-integration",
       endpointIds: credentialEndpointIds,
       applicationId: application.value.id,
@@ -1520,7 +1526,7 @@ describe("BackofficeProvider", () => {
         serviceId: service.value.id,
         endpointIds: credentialEndpointIds,
         keyName: "secondary-integration",
-        awsSecretName: "backoffice/partner-api",
+        awsSecretName: "access-governance/partner-api",
         awsSecretKey: "secondary-integration",
       }),
     )
@@ -1571,7 +1577,7 @@ describe("BackofficeProvider", () => {
         serviceId: service.value.id,
         endpointIds: credentialEndpointIds,
         keyName: "secondary-integration",
-        awsSecretName: "backoffice/partner-api",
+        awsSecretName: "access-governance/partner-api",
         awsSecretKey: "secondary-integration",
       }),
     )
@@ -1613,7 +1619,7 @@ describe("BackofficeProvider", () => {
     )
   })
 
-  it("replaces and disposes an API key through linked request templates", async () => {
+  it("submits API key replacement and disposal through linked Groo templates", async () => {
     const { result } = renderHook(() => useBackoffice(), {
       wrapper: FixtureWrapper,
     })
@@ -1653,91 +1659,81 @@ describe("BackofficeProvider", () => {
         requesterId: issuanceDocument.requesterId,
         approvalLineId: replacementTemplate.id,
         apiKeyId: apiKey.id,
-        awsSecretName: "backoffice/developer-api",
+        awsSecretName: "access-governance/developer-api",
         awsSecretKey: "local-integration-key-next",
         content: "정기 교체 주기에 따라 API Key 교체를 요청합니다.",
         fieldValues: [],
-        approvalSteps: approvalStepsFromTemplate(
-          result.current,
-          replacementTemplate,
-          issuanceDocument.requesterId,
-          issuanceDocument.organizationId,
-          { serviceOwnerOrganizationId: service.ownerOrganizationId },
-        ),
+        approvalSteps: [],
         submission: "submitted",
       }),
     )
     expect(replacement.ok).toBe(true)
     if (!replacement.ok) return
-    expect(
-      await act(() =>
-        completeApprovalDocument(result.current, replacement.value.id),
-      ),
-    ).toMatchObject({ ok: true })
-
-    const registration = await act(() =>
-      result.current.registerApiKey({
-        approvalDocumentId: replacement.value.id,
-        registeredByUserId: administrator.id,
-      }),
-    )
-    expect(registration.ok).toBe(true)
-    if (
-      !registration.ok ||
-      registration.value.status !==
-        credentialRegistrationAttemptStatuses.succeeded
-    )
-      return
-    const registeredApiKey = registration.value.apiKey
-    expect(registeredApiKey).toMatchObject({
-      name: apiKey.name,
-      serviceId: apiKey.serviceId,
-      replacesApiKeyId: apiKey.id,
-      awsSecretName: "backoffice/developer-api",
-      awsSecretKey: "local-integration-key-next",
-      status: "active",
+    expect(replacement.value).toMatchObject({
+      approvalExecution: {
+        type: "groo",
+        draftDocumentId: "GROO-CREDENTIAL-REPLACEMENT-V1",
+      },
+      approvalSteps: [],
+      status: "submitted",
     })
     expect(
-      result.current.apiKeys.find((item) => item.id === apiKey.id)?.status,
-    ).toBe("inactive")
+      await act(() =>
+        result.current.registerApiKey({
+          approvalDocumentId: replacement.value.id,
+          registeredByUserId: administrator.id,
+        }),
+      ),
+    ).toEqual({ ok: false, error: "approval-document-not-approved" })
+    expect(
+      await act(() =>
+        result.current.createApprovalDocument({
+          documentKind: "api-key-lifecycle",
+          type: "api-key-dispose",
+          title: `API Key 폐기 요청: ${apiKey.name}`,
+          organizationId: issuanceDocument.organizationId,
+          requesterId: issuanceDocument.requesterId,
+          approvalLineId: disposalTemplate.id,
+          apiKeyId: apiKey.id,
+          content: "교체 요청과 동시에 폐기 요청을 생성하지 못해야 합니다.",
+          fieldValues: [],
+          approvalSteps: [],
+          submission: "submitted",
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      error: "approval-document-already-exists",
+    })
 
+    const { result: disposalResult } = renderHook(() => useBackoffice(), {
+      wrapper: FixtureWrapper,
+    })
     const disposal = await act(() =>
-      result.current.createApprovalDocument({
+      disposalResult.current.createApprovalDocument({
         documentKind: "api-key-lifecycle",
         type: "api-key-dispose",
-        title: `API Key 폐기 요청: ${registeredApiKey.name}`,
+        title: `API Key 폐기 요청: ${apiKey.name}`,
         organizationId: issuanceDocument.organizationId,
         requesterId: issuanceDocument.requesterId,
         approvalLineId: disposalTemplate.id,
-        apiKeyId: registeredApiKey.id,
+        apiKeyId: apiKey.id,
         content: "더 이상 사용하지 않는 API Key의 폐기를 요청합니다.",
         fieldValues: [],
-        approvalSteps: approvalStepsFromTemplate(
-          result.current,
-          disposalTemplate,
-          issuanceDocument.requesterId,
-          issuanceDocument.organizationId,
-          { serviceOwnerOrganizationId: service.ownerOrganizationId },
-        ),
+        approvalSteps: [],
         submission: "submitted",
       }),
     )
     expect(disposal.ok).toBe(true)
     if (!disposal.ok) return
-    expect(
-      await act(() =>
-        completeApprovalDocument(result.current, disposal.value.id),
-      ),
-    ).toMatchObject({ ok: true })
-    expect(
-      result.current.apiKeys.find((item) => item.id === registeredApiKey.id)
-        ?.status,
-    ).toBe("inactive")
-    expect(
-      result.current.accessPolicies.find(
-        (policy) => policy.id === registeredApiKey.accessPolicyId,
-      )?.status,
-    ).toBe("inactive")
+    expect(disposal.value).toMatchObject({
+      approvalExecution: {
+        type: "groo",
+        draftDocumentId: "GROO-CREDENTIAL-DISPOSAL-V1",
+      },
+      approvalSteps: [],
+      status: "submitted",
+    })
   })
 
   it("requires a manual key for EXTERNAL registration and never stores its value", async () => {
@@ -1765,7 +1761,7 @@ describe("BackofficeProvider", () => {
           serviceId: externalService.id,
           endpointIds: [],
           keyName: "collaboration-key",
-          awsSecretName: "backoffice/collaboration-saas",
+          awsSecretName: "access-governance/collaboration-saas",
           awsSecretKey: "api-key",
         },
       ],
@@ -1811,7 +1807,7 @@ describe("BackofficeProvider", () => {
       return
     expect(registration.value.secret).toBeNull()
     expect(registration.value.apiKey).toMatchObject({
-      awsSecretName: "backoffice/collaboration-saas",
+      awsSecretName: "access-governance/collaboration-saas",
       awsSecretKey: "api-key",
       accessPolicyId: null,
     })
@@ -1936,6 +1932,15 @@ describe("BackofficeProvider", () => {
     const requestOrganizationId = requester.organizationIds[0]
     if (!requestOrganizationId)
       throw new Error("Requester organization missing")
+    const targetUser = await act(() =>
+      result.current.createUser({
+        nickname: "policy-target",
+        email: "policy-target@example.com",
+        employmentStatus: "employed",
+        organizationIds: [requestOrganizationId],
+      }),
+    )
+    if (!targetUser.ok) throw new Error(targetUser.error)
 
     const missingPolicy = await act(() =>
       result.current.createApprovalDocument({
@@ -1944,6 +1949,8 @@ describe("BackofficeProvider", () => {
         type: "access-grant",
         organizationId: requestOrganizationId,
         requesterId: requester.id,
+        targetUserId: targetUser.value.id,
+        requestMode: "grant",
         approvalLineId: line.id,
         accessPolicyId: crypto.randomUUID(),
         expiresAt: "2027-08-15T00:00:00.000Z",
@@ -1970,6 +1977,8 @@ describe("BackofficeProvider", () => {
         type: "access-grant",
         organizationId: requestOrganizationId,
         requesterId: requester.id,
+        targetUserId: targetUser.value.id,
+        requestMode: "grant",
         approvalLineId: line.id,
         accessPolicyId: policy.id,
         expiresAt: "2027-08-15T00:00:00.000Z",
@@ -1990,24 +1999,23 @@ describe("BackofficeProvider", () => {
       documentKind: "general",
       type: "access-grant",
       accessPolicyId: policy.id,
+      targetUserId: targetUser.value.id,
+      requestMode: "grant",
     })
-    expect(
-      await act(() =>
-        completeApprovalDocument(result.current, document.value.id),
-      ),
-    ).toMatchObject({ ok: true })
     expect(
       await act(() =>
         result.current.createApprovalDocument({
           documentKind: "general",
-          title: "운영 모니터링 정책 재요청",
+          title: "운영 모니터링 정책 중복 요청",
           type: "access-grant",
           organizationId: requestOrganizationId,
           requesterId: requester.id,
+          targetUserId: targetUser.value.id,
+          requestMode: "grant",
           approvalLineId: line.id,
           accessPolicyId: policy.id,
           expiresAt: "2027-08-15T00:00:00.000Z",
-          content: "이미 보유한 운영 모니터링 정책을 다시 요청합니다.",
+          content: "같은 대상의 진행 중인 정책 부여 요청을 중복 생성합니다.",
           fieldValues: [],
           approvalSteps: approvalStepsFromTemplate(
             result.current,
@@ -2018,7 +2026,61 @@ describe("BackofficeProvider", () => {
           submission: "submitted",
         }),
       ),
-    ).toEqual({ ok: false, error: "access-policy-already-assigned" })
+    ).toEqual({
+      ok: false,
+      error: "approval-document-already-exists",
+    })
+    expect(
+      await act(() =>
+        completeApprovalDocument(result.current, document.value.id),
+      ),
+    ).toMatchObject({ ok: true })
+    expect(
+      result.current.accessPolicyAssignments.some(
+        (assignment) =>
+          assignment.accessPolicyId === policy.id &&
+          assignment.targetType === "user" &&
+          assignment.targetId === targetUser.value.id,
+      ),
+    ).toBe(true)
+    const renewal = await act(() =>
+      result.current.createApprovalDocument({
+        documentKind: "general",
+        title: "운영 모니터링 정책 재요청",
+        type: "access-grant",
+        organizationId: requestOrganizationId,
+        requesterId: requester.id,
+        targetUserId: targetUser.value.id,
+        requestMode: "renewal",
+        approvalLineId: line.id,
+        accessPolicyId: policy.id,
+        expiresAt: "2028-08-15T00:00:00.000Z",
+        content: "운영 모니터링 정책의 부여 만료 일시 갱신을 요청합니다.",
+        fieldValues: [],
+        approvalSteps: approvalStepsFromTemplate(
+          result.current,
+          line,
+          requester.id,
+          requestOrganizationId,
+        ),
+        submission: "submitted",
+      }),
+    )
+    expect(renewal).toMatchObject({ ok: true })
+    if (!renewal.ok) return
+    expect(
+      await act(() =>
+        completeApprovalDocument(result.current, renewal.value.id),
+      ),
+    ).toMatchObject({ ok: true })
+    expect(
+      result.current.accessPolicyAssignments.find(
+        (assignment) =>
+          assignment.accessPolicyId === policy.id &&
+          assignment.targetType === "user" &&
+          assignment.targetId === targetUser.value.id,
+      )?.expiresAt,
+    ).toBe("2028-08-15T00:00:00.000Z")
   })
 
   it("delegates credential issuance approval to Groo without internal steps", async () => {
@@ -2068,7 +2130,7 @@ describe("BackofficeProvider", () => {
           .filter((endpoint) => endpoint.serviceId === service.id)
           .map((endpoint) => endpoint.id),
         keyName: "missing-upper-approver",
-        awsSecretName: "backoffice/missing-upper-approver",
+        awsSecretName: "access-governance/missing-upper-approver",
         awsSecretKey: "api-key",
       }),
     )
@@ -2418,7 +2480,7 @@ describe("BackofficeProvider", () => {
     }
     const manifest: UiResourceManifest = {
       version: 1,
-      namespaceKey: "backoffice",
+      namespaceKey: "access-governance",
       resources: [
         ...uiResourceManifest.resources,
         {
@@ -2524,7 +2586,7 @@ describe("BackofficeProvider", () => {
           {
             manifest: {
               version: 1,
-              namespaceKey: "backoffice",
+              namespaceKey: "access-governance",
               resources: [
                 {
                   key: "unknown:submit",
@@ -2867,6 +2929,8 @@ describe("BackofficeProvider", () => {
         title: "운영 모니터링 접근 요청",
         organizationId,
         requesterId: requester.id,
+        targetUserId: requester.id,
+        requestMode: "grant",
         approvalLineId: template.id,
         accessPolicyId: policy.id,
         expiresAt: "2027-08-15T00:00:00.000Z",

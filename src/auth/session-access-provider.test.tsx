@@ -56,8 +56,8 @@ describe("SessionAccessProvider", () => {
     expect(result.current.currentUser?.nickname).toBe("Emma")
     expect(result.current.organizationNames).toEqual(["개발 2팀"])
     expect(result.current.effectiveRoles.map((role) => role.name)).toEqual([
-      "Backoffice 일반 사용자",
-      "Backoffice 서비스 운영자",
+      "Access Governance 일반 사용자",
+      "Access Governance 서비스 운영자",
     ])
     expect(result.current.assignedAccessPolicyIds.length).toBeGreaterThan(0)
     expect(result.current.accessibleMenuIds).toEqual([

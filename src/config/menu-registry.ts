@@ -2,6 +2,7 @@ import {
   uiResourceTypeValues,
   type UiResourceType,
 } from "../features/ui-resources/ui-resource-manifest.ts"
+import { applicationIdentity } from "./application-identity.ts"
 
 export type MenuSection =
   "common" | "directory" | "serviceCatalog" | "uiCatalog" | "systemManagement"
@@ -38,7 +39,7 @@ type UiResourceRegistryShape = Record<
 >
 
 /**
- * Backoffice UI 리소스의 단일 코드 원천입니다.
+ * Access Governance UI 리소스의 단일 코드 원천입니다.
  *
  * 객체의 lowerCamelCase 프로퍼티 경로가 UI 리소스 key가 되고, href는 URL
  * 규칙과 독립적으로 유지됩니다. 메뉴·화면·액션 목록과 manifest는 모두 이
@@ -135,7 +136,7 @@ export const uiResourceRegistry = {
     href: "/requests",
     defaultView: "list",
     section: "systemManagement",
-    name: "요청",
+    name: "결재",
     views: {
       list: { actions: {} },
     },
@@ -144,19 +145,19 @@ export const uiResourceRegistry = {
     href: "/approval-lines",
     defaultView: "list",
     section: "systemManagement",
-    name: "요청 템플릿",
+    name: "결재 템플릿",
     views: {
       list: {
         actions: {
-          createRequestTemplate: "요청 템플릿 생성",
-          changeRequestTemplateStatus: "요청 템플릿 상태 변경",
+          createRequestTemplate: "결재 템플릿 생성",
+          changeRequestTemplateStatus: "결재 템플릿 상태 변경",
         },
       },
       detail: {
         actions: {
-          updateRequestTemplate: "요청 템플릿 수정",
-          cloneRequestTemplate: "요청 템플릿 복제",
-          previewRequestTemplate: "요청 템플릿 테스트",
+          updateRequestTemplate: "결재 템플릿 수정",
+          cloneRequestTemplate: "결재 템플릿 복제",
+          previewRequestTemplate: "결재 템플릿 테스트",
         },
       },
       create: { actions: {} },
@@ -441,7 +442,7 @@ const uiResourceViewNames: Record<MenuView, string> = {
 
 export const uiResourceManifest = {
   version: 1,
-  namespaceKey: "backoffice",
+  namespaceKey: applicationIdentity.namespaceKey,
   resources: [
     ...entries(uiResourceRegistry).map(
       ([menuId, menu]): UiResourceRegistryEntry => ({

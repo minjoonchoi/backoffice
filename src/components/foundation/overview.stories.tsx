@@ -58,7 +58,7 @@ export const SystemOverview: Story = {
     <main className="mx-auto grid w-full max-w-6xl gap-8 p-6 sm:p-10">
       <header className="grid max-w-3xl gap-3">
         <div className="flex flex-wrap gap-2">
-          <Badge>Backoffice</Badge>
+          <Badge>Access Governance</Badge>
           <Badge variant="secondary">Blue point</Badge>
           <Badge variant="outline">v1 foundation</Badge>
         </div>

@@ -1,21 +1,21 @@
-# 요청 템플릿 메뉴 PRD
+# 결재 템플릿 메뉴 PRD
 
 ## 개요
 
 - 목표: 접근 정책·자격증명 요청별 입력 항목과 내부 결재선 또는 Groo 연동 기안 구성을 버전으로 관리한다.
 - routes: `/approval-lines`, `/approval-lines/new`, `/approval-lines/{id}`, `/approval-lines/{id}/edit`
-- 주 사용자: 시스템 관리자와 요청 템플릿 UI 정책을 부여받은 운영자
+- 주 사용자: 시스템 관리자와 결재 템플릿 UI 정책을 부여받은 운영자
 - 원본: UI `APL-001~020`, 서버 `TPL-S001~010`
 
 ## 대표 화면
 
 | 목록                                                   | 상세                                                     |
 | ------------------------------------------------------ | -------------------------------------------------------- |
-| ![요청 템플릿 목록](assets/request-templates-list.png) | ![요청 템플릿 상세](assets/request-templates-detail.png) |
+| ![결재 템플릿 목록](assets/request-templates-list.png) | ![결재 템플릿 상세](assets/request-templates-detail.png) |
 
 | 생성                                                     | 수정                                                     |
 | -------------------------------------------------------- | -------------------------------------------------------- |
-| ![요청 템플릿 생성](assets/request-templates-create.png) | ![요청 템플릿 수정](assets/request-templates-update.png) |
+| ![결재 템플릿 생성](assets/request-templates-create.png) | ![결재 템플릿 수정](assets/request-templates-update.png) |
 
 ## 사용자 시나리오
 

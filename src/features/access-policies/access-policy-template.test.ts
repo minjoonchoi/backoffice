@@ -10,7 +10,7 @@ describe("access policy request template", () => {
   it("resolves the single active template from the policy type", () => {
     const line = resolveAccessPolicyApprovalLine(localFixture, "access-grant")
 
-    expect(line.name).toBe("권한 부여 요청 템플릿")
+    expect(line.name).toBe("권한 부여 결재 템플릿")
   })
 
   it("rejects ambiguous active templates for the same policy type", () => {

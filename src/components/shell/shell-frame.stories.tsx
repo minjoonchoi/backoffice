@@ -11,7 +11,7 @@ const meta = {
   component: ShellFrame,
   parameters: { layout: "fullscreen" },
   args: {
-    displayName: "Backoffice",
+    displayName: "Access Governance",
     labels: {
       skipToContent: "Skip to content",
       home: "Home",
@@ -31,8 +31,8 @@ const meta = {
       roles: "Roles",
       applications: "Applications",
       namespaces: "Namespaces",
-      requests: "Requests",
-      approvalLines: "Request templates",
+      requests: "Approvals",
+      approvalLines: "Approval templates",
       approvalDocuments: "Policies",
       services: "Service catalog",
       serviceEndpoints: "Endpoints",
@@ -102,9 +102,7 @@ export const LocalAccess: Story = {
       ),
     ).toEqual(["IAM", "Service catalog", "UI catalog", "System management"])
     await expect(canvas.getByRole("link", { name: "Policies" })).toBeVisible()
-    await expect(
-      canvas.queryByText("Approvals", { exact: true }),
-    ).not.toBeInTheDocument()
+    await expect(canvas.getByRole("link", { name: "Approvals" })).toBeVisible()
     const organizationCount = canvas.getByRole("button", {
       name: "Organizations: 1",
     })
@@ -120,9 +118,9 @@ export const LocalAccess: Story = {
     await userEvent.hover(roleCount)
     await expect(
       await body.findByRole("tooltip", {
-        name: /Effective roles Backoffice 시스템 관리자/,
+        name: /Effective roles Access Governance 시스템 관리자/,
       }),
-    ).toHaveTextContent("Backoffice 시스템 관리자")
+    ).toHaveTextContent("Access Governance 시스템 관리자")
     await userEvent.unhover(roleCount)
 
     await userEvent.click(canvas.getByRole("button", { name: "User menu" }))
@@ -197,7 +195,7 @@ export const OrganizationLeaderAccess: Story = {
       canvas.queryByRole("link", { name: "Menus" }),
     ).not.toBeInTheDocument()
     await expect(
-      canvas.queryByRole("link", { name: "Request templates" }),
+      canvas.queryByRole("link", { name: "Approval templates" }),
     ).not.toBeInTheDocument()
   },
 }

@@ -7,9 +7,9 @@ import {
 import { localFixture } from "@/mocks/fixture"
 
 describe("request template analysis", () => {
-  it("resolves dynamic approvers for an internal template", () => {
+  it("resolves assignees for an internal template", () => {
     const template = localFixture.approvalLines.find(
-      (line) => line.type === "api-key-replace",
+      (line) => line.type === "access-grant",
     )
     const requester = localFixture.users.find(
       (user) => user.nickname === "David",
@@ -17,8 +17,8 @@ describe("request template analysis", () => {
     const requestOrganization = localFixture.organizations.find(
       (organization) => organization.name === "개발 1팀",
     )
-    const upperLeader = localFixture.users.find(
-      (user) => user.nickname === "Jhonny",
+    const fixedApprover = localFixture.users.find(
+      (user) => user.nickname === "Ethan",
     )
     const service = localFixture.services.find(
       (candidate) => candidate.type === "internal",
@@ -27,7 +27,7 @@ describe("request template analysis", () => {
       !template ||
       !requester ||
       !requestOrganization ||
-      !upperLeader ||
+      !fixedApprover ||
       !service
     ) {
       throw new Error("Request template preview fixture is missing")
@@ -47,18 +47,11 @@ describe("request template analysis", () => {
     expect(preview[1]).toMatchObject({
       kind: "approval",
       assigneeType: "user",
-      assigneeId: upperLeader.id,
+      assigneeId: fixedApprover.id,
     })
     expect(
-      preview.some(
-        (step) =>
-          step.assigneeType === "organization" &&
-          step.assigneeId === service.ownerOrganizationId,
-      ),
-    ).toBe(true)
-    expect(
       resolveRequestTemplateImpact(localFixture, template).serviceIds,
-    ).toContain(service.id)
+    ).toEqual([])
   })
 
   it("keeps Groo workflow stages outside the backoffice", () => {

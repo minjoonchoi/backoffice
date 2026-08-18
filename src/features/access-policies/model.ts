@@ -18,6 +18,10 @@ import {
 
 export const accessPolicyEffects = { allow: "allow", deny: "deny" } as const
 export const accessPolicyTypes = { accessGrant: "access-grant" } as const
+export const accessPolicyRequestModes = {
+  grant: "grant",
+  renewal: "renewal",
+} as const
 export const accessPolicyManagementTypes = {
   general: "general",
   system: "system",
@@ -91,6 +95,7 @@ export const approvalDocumentExecutionSchema = z.discriminatedUnion("type", [
 
 export const accessPolicyEffectSchema = z.enum(accessPolicyEffects)
 export const accessPolicyTypeSchema = z.enum(accessPolicyTypes)
+export const accessPolicyRequestModeSchema = z.enum(accessPolicyRequestModes)
 export const accessPolicyManagementTypeSchema = z.enum(
   accessPolicyManagementTypes,
 )
@@ -202,6 +207,8 @@ const generalApprovalDocumentInputSchema = z.discriminatedUnion("type", [
     documentKind: z.literal(approvalDocumentKinds.general),
     type: z.literal(accessPolicyTypes.accessGrant),
     accessPolicyId: entityIdSchema,
+    targetUserId: entityIdSchema,
+    requestMode: accessPolicyRequestModeSchema,
     expiresAt: z.iso.datetime(),
   }),
   approvalDocumentBaseSchema.extend({

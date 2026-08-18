@@ -70,7 +70,7 @@ describe("UI resource history analysis", () => {
     const comparison = compareManifestWithUiResources(
       {
         version: 1,
-        namespaceKey: "backoffice",
+        namespaceKey: "access-governance",
         resources: [
           {
             key: "codeOnly",

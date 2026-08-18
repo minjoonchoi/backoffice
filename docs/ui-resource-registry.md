@@ -2,7 +2,7 @@
 
 ## 목적과 원본
 
-`src/config/menu-registry.ts`의 `uiResourceRegistry`는 Backoffice 코드 소유 UI 리소스의 단일 원본(SSOT)이다. 다음 결과는 별도로 관리하지 않고 레지스트리에서 파생한다.
+`src/config/menu-registry.ts`의 `uiResourceRegistry`는 Access Governance 코드 소유 UI 리소스의 단일 원본(SSOT)이다. 다음 결과는 별도로 관리하지 않고 레지스트리에서 파생한다.
 
 - 권한 검사에 사용하는 `uiResourceKeys`
 - LSB 구성을 위한 `menuDefinitions`

@@ -29,7 +29,7 @@ function AdministratorSession({ children }: { children: React.ReactNode }) {
 }
 
 const meta = {
-  title: "Backoffice/IAM/Applications",
+  title: "Access Governance/IAM/Applications",
   parameters: { layout: "fullscreen" },
 } satisfies Meta
 

@@ -12,7 +12,7 @@ import { localDefaultUserId, localFixture } from "@/mocks/fixture"
 import { BackofficeProvider } from "@/application/state/provider"
 
 const meta = {
-  title: "Backoffice/Policy catalog",
+  title: "Access Governance/Policy catalog",
   component: ApprovalReviewPage,
   parameters: { layout: "fullscreen" },
   decorators: [
@@ -77,7 +77,7 @@ export const PolicyListUsesOwnershipStatus: Story = {
       within(policyRow).queryByText("Developer API"),
     ).not.toBeInTheDocument()
     const administratorPolicyRow = canvas.getByRole("row", {
-      name: /Backoffice 시스템 관리자 UI 접근/,
+      name: /Access Governance 시스템 관리자 UI 접근/,
     })
     await expect(
       within(administratorPolicyRow).queryByText("services:list:createService"),
@@ -107,7 +107,7 @@ export const PolicyListUsesOwnershipStatus: Story = {
   },
 }
 
-export const AssignedPolicyHidesRequestActions: Story = {
+export const AssignedPolicyAllowsAnotherTargetRequest: Story = {
   render: () => {
     const policy = localFixture.accessPolicies.find(
       (candidate) => candidate.name === "운영 모니터링 허용",
@@ -138,9 +138,7 @@ export const AssignedPolicyHidesRequestActions: Story = {
         selector: '[data-slot="badge"]',
       }),
     ).toBeVisible()
-    await expect(
-      canvas.queryByRole("button", { name: "요청하기" }),
-    ).not.toBeInTheDocument()
+    await expect(canvas.getByRole("button", { name: "요청하기" })).toBeVisible()
   },
 }
 
@@ -341,7 +339,7 @@ export const CreatePolicy: Story = {
       within(dialog).queryByRole("combobox", { name: "정책 유형" }),
     ).not.toBeInTheDocument()
     await expect(
-      within(dialog).queryByRole("combobox", { name: "요청 템플릿" }),
+      within(dialog).queryByRole("combobox", { name: "결재 템플릿" }),
     ).not.toBeInTheDocument()
     await userEvent.type(
       within(dialog).getByRole("textbox", { name: "정책 이름" }),
@@ -433,10 +431,10 @@ export const CreatePolicy: Story = {
       within(dialog).queryByText("정책 유형", { exact: true }),
     ).not.toBeInTheDocument()
     await expect(
-      within(dialog).queryByText("요청 템플릿", { exact: true }),
+      within(dialog).queryByText("결재 템플릿", { exact: true }),
     ).not.toBeInTheDocument()
     await expect(
-      within(dialog).queryByText("권한 부여 요청 템플릿"),
+      within(dialog).queryByText("권한 부여 결재 템플릿"),
     ).not.toBeInTheDocument()
     const createButton = within(dialog).getByRole("button", { name: "등록" })
     await waitFor(async () => {

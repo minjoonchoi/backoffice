@@ -4,7 +4,7 @@ import { expect, userEvent, waitFor, within } from "storybook/test"
 import { RelationshipRemoveAction } from "@/application/ui/relationship-remove-action"
 
 const meta = {
-  title: "Backoffice/RelationshipRemoveAction",
+  title: "Access Governance/RelationshipRemoveAction",
   component: RelationshipRemoveAction,
 } satisfies Meta<typeof RelationshipRemoveAction>
 
@@ -43,7 +43,7 @@ export const ConfirmRemoval: Story = {
 export const Protected: Story = {
   args: {
     subjectName: "사용자 관리",
-    targetName: "Backoffice 시스템 관리자",
+    targetName: "Access Governance 시스템 관리자",
     disabled: true,
     onRemove: () => Promise.resolve({ ok: true, value: undefined }),
   },
@@ -51,7 +51,7 @@ export const Protected: Story = {
     const canvas = within(canvasElement)
     await expect(
       canvas.getByRole("button", {
-        name: "Backoffice 시스템 관리자 연결 제거",
+        name: "Access Governance 시스템 관리자 연결 제거",
       }),
     ).toBeDisabled()
   },

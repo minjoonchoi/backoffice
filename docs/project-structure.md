@@ -2,7 +2,7 @@
 
 ## 원칙
 
-업무 도메인과 애플리케이션 조합 책임을 분리한다. `features`에는 독립적인 업무 개념을 두고, 여러 feature를 하나의 Backoffice 애플리케이션으로 연결하는 코드는 `application`에 둔다.
+업무 도메인과 애플리케이션 조합 책임을 분리한다. `features`에는 독립적인 업무 개념을 두고, 여러 feature를 하나의 Access Governance 애플리케이션으로 연결하는 코드는 `application`에 둔다.
 
 ## 디렉터리 책임
 
@@ -70,7 +70,7 @@ src/
 - `application/api/api-client.ts`에는 feature별 세부 메서드를 다시 정의하지 않고 계약을 조합한다.
 - mock 구현은 feature의 `local-api.ts`, 실제 구현은 규모에 따라 feature의 `http-api.ts`에 둔다.
 - app·auth·feature·UI runtime 코드는 `mocks` 또는 system fixture를 직접 import하지 않는다. fixture 선택과 로딩은 bootstrap API client 경계 안에서만 수행한다.
-- 전체 client 구현과 선택 흐름은 [Backoffice API client 경계](api-client-boundary.md)를 따른다.
+- 전체 client 구현과 선택 흐름은 [Access Governance API client 경계](api-client-boundary.md)를 따른다.
 
 ## 도메인 식별값과 문자열
 

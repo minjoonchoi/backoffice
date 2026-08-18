@@ -36,6 +36,7 @@ export const backofficeErrorCodes = {
   requestOrganizationLeaderUnavailable:
     "request-organization-leader-unavailable",
   approvalDocumentNotFound: "approval-document-not-found",
+  approvalDocumentAlreadyExists: "approval-document-already-exists",
   notificationNotFound: "notification-not-found",
   notificationOperationForbidden: "notification-operation-forbidden",
   approvalDocumentNotSubmitted: "approval-document-not-submitted",

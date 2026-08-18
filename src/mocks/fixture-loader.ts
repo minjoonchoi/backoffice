@@ -8,6 +8,7 @@ import {
   accessPolicyInputSchema,
   accessPolicyManagementTypeSchema,
   accessPolicyManagementTypes,
+  accessPolicyRequestModeSchema,
   accessPolicyAssignmentTargets,
   accessPolicyResourceTypes,
   approvalAssigneeTypes,
@@ -263,6 +264,8 @@ const approvalDocumentSchema = z.union([
       documentKind: z.literal("general"),
       type: z.literal("access-grant"),
       accessPolicyId: entityIdSchema,
+      targetUserId: entityIdSchema,
+      requestMode: accessPolicyRequestModeSchema,
       expiresAt: z.iso.datetime(),
     })
     .strict(),

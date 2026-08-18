@@ -22,7 +22,7 @@ function findUserId(nickname: string) {
 }
 
 const meta = {
-  title: "Backoffice/Service registration permissions",
+  title: "Access Governance/Service registration permissions",
   parameters: { layout: "fullscreen" },
 } satisfies Meta
 
@@ -103,7 +103,7 @@ export const OrganizationLeaderServices: Story = {
     )
     await expect(canvas.getByRole("button", { name: "다음" })).toBeEnabled()
     await expect(
-      canvas.queryByRole("combobox", { name: "API Key 발급 요청 템플릿" }),
+      canvas.queryByRole("combobox", { name: "API Key 발급 결재 템플릿" }),
     ).not.toBeInTheDocument()
   },
 }

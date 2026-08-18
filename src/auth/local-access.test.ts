@@ -159,8 +159,8 @@ describe("local backoffice access", () => {
     const policyId = crypto.randomUUID()
     state.accessPolicies.push({
       id: policyId,
-      name: "요청 템플릿 조회 UI 접근",
-      description: "요청 템플릿의 메뉴, 목록과 상세 화면을 함께 허용합니다.",
+      name: "결재 템플릿 조회 UI 접근",
+      description: "결재 템플릿의 메뉴, 목록과 상세 화면을 함께 허용합니다.",
       type: "access-grant",
       managementType: "general",
       effect: "allow",

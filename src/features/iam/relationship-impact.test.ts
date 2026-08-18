@@ -27,7 +27,7 @@ describe("organization membership removal impact", () => {
     const user = state.users.find((candidate) => candidate.nickname === "Owen")
     const organizationId = user?.organizationIds[0]
     const role = state.roles.find(
-      (candidate) => candidate.name === "Backoffice 정책 운영자",
+      (candidate) => candidate.name === "Access Governance 정책 운영자",
     )
     const secondOrganization = state.organizations.find(
       (organization) => organization.id !== organizationId,

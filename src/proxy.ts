@@ -9,14 +9,17 @@ export function isBackofficeAccessAllowed(
 
 export function proxy() {
   if (!isBackofficeAccessAllowed()) {
-    return new NextResponse("Backoffice authentication is not configured.", {
-      status: 503,
-      headers: {
-        "Cache-Control": "no-store",
-        "Content-Type": "text/plain; charset=utf-8",
-        "X-Robots-Tag": "noindex, nofollow",
+    return new NextResponse(
+      "Access Governance authentication is not configured.",
+      {
+        status: 503,
+        headers: {
+          "Cache-Control": "no-store",
+          "Content-Type": "text/plain; charset=utf-8",
+          "X-Robots-Tag": "noindex, nofollow",
+        },
       },
-    })
+    )
   }
 
   return NextResponse.next()

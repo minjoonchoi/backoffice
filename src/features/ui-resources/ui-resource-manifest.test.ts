@@ -40,14 +40,14 @@ describe("UI Resource manifest", () => {
     expect(
       uiResourceManifestSchema.safeParse({
         version: 1,
-        namespaceKey: "backoffice",
+        namespaceKey: "access-governance",
         resources: [{ ...resource, key: "ui-resources:read" }],
       }).success,
     ).toBe(false)
     expect(
       uiResourceManifestSchema.safeParse({
         version: 1,
-        namespaceKey: "backoffice",
+        namespaceKey: "access-governance",
         resources: [{ ...resource, endpointIds: [] }],
       }).success,
     ).toBe(false)

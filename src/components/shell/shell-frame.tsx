@@ -51,6 +51,7 @@ import {
   type MenuKey,
   type MenuSection,
 } from "@/config/menu-registry"
+import { applicationIdentity } from "@/config/application-identity"
 import type { Locale } from "@/i18n/config"
 import { cn } from "@/lib/utils"
 
@@ -295,12 +296,12 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
                 iconOnly ? "size-9 text-sm" : "size-7 text-xs",
               )}
             >
-              B
+              {applicationIdentity.monogram}
             </span>
             <span
               className={cn("truncate font-semibold", iconOnly && "lg:hidden")}
             >
-              Backoffice
+              {applicationIdentity.displayName}
             </span>
           </Link>
           <Button
@@ -509,7 +510,7 @@ export function ShellFrame({ children, labels, displayName }: ShellFrameProps) {
                 href={homeHref}
                 className="truncate rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
               >
-                Backoffice
+                {applicationIdentity.displayName}
               </Link>
               <ChevronRight
                 className="size-3.5 text-muted-foreground"

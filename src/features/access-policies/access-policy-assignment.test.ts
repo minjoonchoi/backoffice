@@ -90,10 +90,12 @@ describe("assigned access policy resolution", () => {
     const state = structuredClone(localFixture)
     const user = findUser("Daniel")
     const assignedPolicy = state.accessPolicies.find(
-      (policy) => policy.name === "Backoffice 일반 사용자 UI 접근",
+      (policy) => policy.name === "Access Governance 일반 사용자 UI 접근",
     )
     const missingResource = state.accessPolicies
-      .find((policy) => policy.name === "Backoffice 시스템 관리자 UI 접근")
+      .find(
+        (policy) => policy.name === "Access Governance 시스템 관리자 UI 접근",
+      )
       ?.resources.find(
         (resource) =>
           !assignedPolicy?.resources.some(
@@ -124,7 +126,7 @@ describe("assigned access policy resolution", () => {
     const state = structuredClone(localFixture)
     const user = findUser("Daniel")
     const assignedPolicy = state.accessPolicies.find(
-      (policy) => policy.name === "Backoffice 일반 사용자 UI 접근",
+      (policy) => policy.name === "Access Governance 일반 사용자 UI 접근",
     )
     const resource = assignedPolicy?.resources[0]
     if (!assignedPolicy || !resource) {
@@ -159,7 +161,8 @@ describe("assigned access policy resolution", () => {
     const state = structuredClone(localFixture)
     const user = findUser("David")
     const policy = state.accessPolicies.find(
-      (candidate) => candidate.name === "Backoffice 시스템 관리자 UI 접근",
+      (candidate) =>
+        candidate.name === "Access Governance 시스템 관리자 UI 접근",
     )
     const role = state.roles.find((candidate) =>
       candidate.userIds.includes(user.id),

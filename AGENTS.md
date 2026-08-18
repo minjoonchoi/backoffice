@@ -82,7 +82,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## 10. API client 경계
 
-- 데이터 조회·명령 또는 외부 API 연동을 변경하기 전에 [Backoffice API client 경계](docs/api-client-boundary.md)를 확인한다.
+- 데이터 조회·명령 또는 외부 API 연동을 변경하기 전에 [Access Governance API client 경계](docs/api-client-boundary.md)를 확인한다.
 - feature가 request·response 계약을 소유하고 전체 client 조합과 구현체 선택은 application 계층에서 관리한다.
 - UI가 mock fixture, local API, HTTP 구현이나 고정 시스템 ID를 직접 참조하지 않도록 한다.
 - mock과 실제 API는 같은 계약을 구현하며 구현체별 분기, 이중 처리와 실패 시 fallback을 두지 않는다.

@@ -5,6 +5,7 @@ import { SessionAccessProvider } from "@/auth/session-access-provider"
 import { getBackofficeServerAccess } from "@/auth/server-ui-resource-access"
 import { ShellFrame } from "@/components/shell/shell-frame"
 import { BackofficeProvider } from "@/application/state/provider"
+import { applicationIdentity } from "@/config/application-identity"
 import { AuditActorProvider } from "@/features/audit/audit-actor-provider"
 
 export default async function BackofficeLayout({
@@ -27,7 +28,10 @@ export default async function BackofficeLayout({
             : {})}
         >
           <ShellFrame
-            displayName={serverAccess.viewer?.displayName ?? "Backoffice"}
+            displayName={
+              serverAccess.viewer?.displayName ??
+              applicationIdentity.displayName
+            }
             labels={{
               skipToContent: t("skipToContent"),
               home: t("home"),

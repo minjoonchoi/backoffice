@@ -155,6 +155,35 @@ describe("DataTable", () => {
     ).toEqual(initialWidths)
   })
 
+  it("keeps the list area at least as tall as its empty state", () => {
+    const { container, rerender } = render(
+      <DataTable
+        caption="Users"
+        columns={columns}
+        data={[{ name: "Alice", status: "Employed" }]}
+        empty="No users"
+      />,
+    )
+
+    expect(
+      container.querySelector('[data-slot="table-container"]'),
+    ).toHaveClass("min-h-40")
+
+    rerender(
+      <DataTable
+        caption="Users"
+        columns={columns}
+        data={[]}
+        empty="No users"
+      />,
+    )
+
+    expect(
+      container.querySelector('[data-slot="table-container"]'),
+    ).toHaveClass("min-h-40")
+    expect(screen.getByText("No users").closest("td")).toHaveClass("h-32")
+  })
+
   it("keeps long header and cell text inside its assigned column", () => {
     const { container } = render(
       <DataTable

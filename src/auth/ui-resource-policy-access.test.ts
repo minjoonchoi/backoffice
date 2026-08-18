@@ -68,7 +68,7 @@ describe("UI resource policy access", () => {
   it("ignores inactive policies, inactive namespaces, and orphan resources", () => {
     const inactivePolicyState = structuredClone(localFixture)
     const generalUserPolicy = inactivePolicyState.accessPolicies.find(
-      (policy) => policy.name === "Backoffice 일반 사용자 UI 접근",
+      (policy) => policy.name === "Access Governance 일반 사용자 UI 접근",
     )
     if (!generalUserPolicy) {
       throw new Error("General user UI access policy is missing")

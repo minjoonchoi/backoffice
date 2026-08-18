@@ -154,7 +154,7 @@ test("keeps system management last and exposes the shared directory without IAM 
       .getByText("시스템 관리", { exact: true })
       .locator("..")
       .getByRole("link"),
-  ).toHaveText(["요청", "요청 템플릿", "감사"])
+  ).toHaveText(["결재", "결재 템플릿", "감사"])
 
   const header = page.locator("header")
   const organizationCount = header.getByRole("button", { name: "소속 조직: 1" })
@@ -166,7 +166,9 @@ test("keeps system management last and exposes the shared directory without IAM 
   const roleCount = header.getByRole("button", { name: "유효 역할: 4" })
   await roleCount.hover()
   await expect(
-    page.getByRole("tooltip", { name: /유효 역할 Backoffice 시스템 관리자/ }),
+    page.getByRole("tooltip", {
+      name: /유효 역할 Access Governance 시스템 관리자/,
+    }),
   ).toBeVisible()
 
   await page.locator("main").hover()
@@ -392,7 +394,12 @@ test("isolates YAML UI Resources by a system namespace", async ({ page }) => {
   await namespaceEditor
     .getByRole("textbox", { name: "설명" })
     .fill("통합 시스템 UI 리소스를 격리합니다.")
-  await choose(page, namespaceEditor, "관리 역할", "Backoffice 시스템 관리자")
+  await choose(
+    page,
+    namespaceEditor,
+    "관리 역할",
+    "Access Governance 시스템 관리자",
+  )
   await namespaceEditor.getByRole("button", { name: "다음" }).click()
   await namespaceEditor.getByRole("button", { name: "등록" }).click()
   await expect(page).toHaveURL(/\/namespaces\/[0-9a-f-]+$/)
@@ -711,7 +718,9 @@ test("starts access policy requests from the selected policy detail", async ({
     dialog.getByRole("radio", { name: /UI 기능 사용/ }),
   ).toBeChecked()
   await expect(dialog.getByRole("tab")).toHaveCount(2)
-  await dialog.getByRole("radio", { name: /Backoffice.*backoffice/ }).check()
+  await dialog
+    .getByRole("radio", { name: /Access Governance.*access-governance/ })
+    .check()
   await dialog
     .getByRole("searchbox", { name: "포함 UI 리소스 선택" })
     .fill("UI 리소스 동기화")
@@ -745,8 +754,8 @@ test("starts access policy requests from the selected policy detail", async ({
   ).toBeVisible()
   await expect(dialog.getByText("감사 이벤트 조회 허용")).toBeVisible()
   await expect(dialog.getByText("정책 유형", { exact: true })).toHaveCount(0)
-  await expect(dialog.getByText("요청 템플릿", { exact: true })).toHaveCount(0)
-  await expect(dialog.getByText("권한 부여 요청 템플릿")).toHaveCount(0)
+  await expect(dialog.getByText("결재 템플릿", { exact: true })).toHaveCount(0)
+  await expect(dialog.getByText("권한 부여 결재 템플릿")).toHaveCount(0)
   await dialog.getByRole("button", { name: "등록" }).click()
   await expect(page).toHaveURL(/\/approval-documents\/[0-9a-f-]+$/)
   await page.getByRole("link", { name: "정책", exact: true }).click()
@@ -1047,8 +1056,8 @@ test("creates and approves an API key issuance request", async ({ page }) => {
     await page.getByRole("link", { name: "엔드포인트", exact: true }).click()
   }
 
-  await page.getByRole("link", { name: "요청 템플릿" }).click()
-  await page.getByRole("button", { name: "요청 템플릿 추가" }).click()
+  await page.getByRole("link", { name: "결재 템플릿" }).click()
+  await page.getByRole("button", { name: "결재 템플릿 추가" }).click()
   await expect(page).toHaveURL(/\/approval-lines\/new$/)
   dialog = page.locator("main")
   await dialog
@@ -1106,7 +1115,7 @@ test("creates and approves an API key issuance request", async ({ page }) => {
   }
   await dialog.getByRole("button", { name: "다음" }).click()
   await expect(
-    dialog.getByRole("heading", { name: "요청 템플릿 구성을 검토하세요" }),
+    dialog.getByRole("heading", { name: "결재 템플릿 구성을 검토하세요" }),
   ).toBeVisible()
   await dialog.getByRole("button", { name: "템플릿 저장" }).click()
   await expect(page).toHaveURL(/\/approval-lines\/[0-9a-f-]+$/)
@@ -1116,7 +1125,7 @@ test("creates and approves an API key issuance request", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "입력 항목 구성" }),
   ).toBeVisible()
-  await page.getByRole("button", { name: "요청 템플릿 수정" }).click()
+  await page.getByRole("button", { name: "결재 템플릿 수정" }).click()
   await expect(page).toHaveURL(/\/approval-lines\/[0-9a-f-]+\/edit$/)
   dialog = page.locator("main")
   await dialog
@@ -1137,7 +1146,7 @@ test("creates and approves an API key issuance request", async ({ page }) => {
   await page.getByRole("button", { name: "서비스 수정" }).click()
   await expect(page).toHaveURL(/\/services\/[0-9a-f-]+\/edit$/)
   dialog = page.locator("main")
-  await choose(page, dialog, "API Key 발급 요청 템플릿", "파트너 자격증명 발급")
+  await choose(page, dialog, "API Key 발급 결재 템플릿", "파트너 자격증명 발급")
   await dialog.getByRole("button", { name: "다음" }).click()
   await dialog.getByRole("button", { name: "저장" }).click()
   await expect(page).toHaveURL(/\/services\/[0-9a-f-]+$/)
@@ -1161,7 +1170,7 @@ test("creates and approves an API key issuance request", async ({ page }) => {
     .fill("partner-integration")
   await dialog
     .getByRole("textbox", { name: "AWS ASM Secret name" })
-    .fill("backoffice/partner-api")
+    .fill("access-governance/partner-api")
   await dialog
     .getByRole("textbox", { name: "Secret value key" })
     .fill("partner-integration")
@@ -1243,41 +1252,30 @@ test("creates and approves an API key issuance request", async ({ page }) => {
   await dialog.getByRole("button", { name: "다음" }).click()
   await dialog.getByRole("button", { name: "요청 제출" }).click()
   await expect(page).toHaveURL(/\/approval-documents\/requests\/[0-9a-f-]+$/)
+  await expect(page.getByText("Groo 연동 기안", { exact: true })).toBeVisible()
+  await expect(page.getByText(/^groo-[0-9a-f-]+$/)).toBeVisible()
+  await expect(
+    page.getByText("내부에서 처리하지 않으며 Groo 완료 hook을 기다립니다."),
+  ).toBeVisible()
+  for (const action of ["승인", "합의"]) {
+    await expect(
+      page.getByRole("button", { name: action, exact: true }),
+    ).toHaveCount(0)
+  }
   await page.getByRole("link", { name: "자격증명", exact: true }).click()
   const replacementRequestRow = page
     .getByRole("row")
     .filter({ hasText: "API Key 교체 요청" })
     .filter({ hasText: "partner-integration" })
-  await processRequestStages(page, replacementRequestRow, [
-    { actor: "Jhonny", action: "승인" },
-    { actor: "Owen", action: "합의" },
-  ])
-  const approvedReplacementRequestRow = page
-    .getByRole("row")
-    .filter({ hasText: "API Key 교체 요청" })
-    .filter({ hasText: "partner-integration" })
-  await approvedReplacementRequestRow
-    .getByRole("button", { name: "자격증명 등록" })
-    .click()
-  dialog = page.getByRole("dialog", {
-    name: "내부 서비스 자격증명 자동 등록",
-  })
-  await dialog.getByRole("button", { name: "시스템 등록" }).click()
-  const replacementSecretDialog = page.getByRole("dialog", {
-    name: "발급된 자격증명",
-  })
-  await replacementSecretDialog.getByRole("button", { name: "확인" }).click()
+  await expect(replacementRequestRow).toContainText("승인 대기")
 
-  const activeReplacementRow = page
+  const existingKeyRow = page
     .getByRole("table", { name: "자격증명 목록" })
     .getByRole("row")
-    .filter({ hasText: "partner-integration" })
-    .filter({ has: page.getByRole("cell", { name: "활성", exact: true }) })
-  await activeReplacementRow
-    .getByRole("cell", { name: "partner-integration", exact: true })
+    .filter({ hasText: "local-integration-key" })
+  await existingKeyRow
+    .getByRole("cell", { name: "local-integration-key", exact: true })
     .click()
-  await expect(page).toHaveURL(/\/credentials\/[0-9a-f-]+$/)
-  const replacementDetailUrl = page.url()
   await page.getByRole("button", { name: "폐기 요청" }).click()
   await expect(page).toHaveURL(/\/credentials\/[0-9a-f-]+\/dispose$/)
   dialog = page.locator("main")
@@ -1288,36 +1286,22 @@ test("creates and approves an API key issuance request", async ({ page }) => {
   await dialog.getByRole("button", { name: "다음" }).click()
   await dialog.getByRole("button", { name: "요청 제출" }).click()
   await expect(page).toHaveURL(/\/approval-documents\/requests\/[0-9a-f-]+$/)
+  await expect(page.getByText("Groo 연동 기안", { exact: true })).toBeVisible()
+  await expect(page.getByText(/^groo-[0-9a-f-]+$/)).toBeVisible()
+  await expect(
+    page.getByText("내부에서 처리하지 않으며 Groo 완료 hook을 기다립니다."),
+  ).toBeVisible()
+  for (const action of ["승인", "합의"]) {
+    await expect(
+      page.getByRole("button", { name: action, exact: true }),
+    ).toHaveCount(0)
+  }
   await page.getByRole("link", { name: "자격증명", exact: true }).click()
   const disposalRequestRow = page
     .getByRole("row")
     .filter({ hasText: "API Key 폐기 요청" })
-    .filter({ hasText: "partner-integration" })
-  await processRequestStages(page, disposalRequestRow, [
-    { actor: "Jhonny", action: "승인" },
-    { actor: "Owen", action: "합의" },
-  ])
-  const approvedDisposalRequestRow = page
-    .getByRole("row")
-    .filter({ hasText: "API Key 폐기 요청" })
-    .filter({ hasText: "partner-integration" })
-  await expect(approvedDisposalRequestRow).toContainText("폐기 완료")
-
-  await page
-    .getByRole("table", { name: "자격증명 목록" })
-    .getByRole("row")
-    .filter({ hasText: "partner-integration" })
-    .first()
-    .getByRole("cell", { name: "partner-integration", exact: true })
-    .click()
-  await expect(page).toHaveURL(replacementDetailUrl)
-  await expect(
-    page.getByText("API Key 교체 요청: partner-integration"),
-  ).toBeVisible()
-  await expect(
-    page.getByText("API Key 폐기 요청: partner-integration"),
-  ).toBeVisible()
-  await expect(page.getByText("비활성", { exact: true })).toBeVisible()
+    .filter({ hasText: "local-integration-key" })
+  await expect(disposalRequestRow).toContainText("승인 대기")
 })
 
 test("registers an EXTERNAL API key through the manual owner flow", async ({
@@ -1343,7 +1327,7 @@ test("registers an EXTERNAL API key through the manual owner flow", async ({
     .fill("collaboration-e2e-key")
   await dialog
     .getByRole("textbox", { name: "AWS ASM Secret name" })
-    .fill("backoffice/collaboration-saas")
+    .fill("access-governance/collaboration-saas")
   await dialog
     .getByRole("textbox", { name: "Secret value key" })
     .fill("collaboration-e2e-key")
@@ -1388,7 +1372,9 @@ test("registers an EXTERNAL API key through the manual owner flow", async ({
     name: "외부 서비스 자격증명 수동 등록",
   })
   await expect(dialog.getByText("IT보안팀")).toBeVisible()
-  await expect(dialog.getByText("backoffice/collaboration-saas")).toBeVisible()
+  await expect(
+    dialog.getByText("access-governance/collaboration-saas"),
+  ).toBeVisible()
   await dialog.getByLabel("API Key 원문").fill("external-e2e-secret-value")
   await dialog.getByRole("button", { name: "수동 등록" }).click()
   await expect(dialog).toBeHidden()
@@ -1459,8 +1445,8 @@ test("manages organization hierarchy and multiple memberships", async ({
   await expect(page.getByRole("heading", { name: "부여된 역할" })).toBeVisible()
   await expect(page.getByText("부여된 역할이 없습니다.")).toBeVisible()
 
-  await page.getByRole("link", { name: "요청 템플릿" }).click()
-  await page.getByRole("button", { name: "요청 템플릿 추가" }).click()
+  await page.getByRole("link", { name: "결재 템플릿" }).click()
+  await page.getByRole("button", { name: "결재 템플릿 추가" }).click()
   dialog = page.locator("main")
   await dialog
     .getByRole("textbox", { name: "템플릿 이름" })
@@ -1476,7 +1462,7 @@ test("manages organization hierarchy and multiple memberships", async ({
   await dialog.getByRole("button", { name: "다음" }).click()
   await expect(
     dialog.getByRole("heading", {
-      name: "요청 템플릿 구성을 검토하세요",
+      name: "결재 템플릿 구성을 검토하세요",
     }),
   ).toBeVisible()
   await dialog.getByRole("button", { name: "템플릿 저장" }).click()
@@ -1490,7 +1476,7 @@ test("manages organization hierarchy and multiple memberships", async ({
     .getByRole("cell", { name: "기술 플랫폼 본부", exact: true })
     .click()
   await expect(
-    page.getByRole("heading", { name: "포함된 요청 템플릿" }),
+    page.getByRole("heading", { name: "포함된 결재 템플릿" }),
   ).toHaveCount(0)
 
   await page
@@ -1505,10 +1491,13 @@ test("manages organization hierarchy and multiple memberships", async ({
   ).toBeVisible()
   await expect(page.getByRole("heading", { name: "부여된 역할" })).toBeVisible()
   await expect(
-    page.getByRole("link", { name: "Backoffice 일반 사용자", exact: true }),
+    page.getByRole("link", {
+      name: "Access Governance 일반 사용자",
+      exact: true,
+    }),
   ).toBeVisible()
   await expect(
-    page.getByRole("heading", { name: "요청 템플릿 참여" }),
+    page.getByRole("heading", { name: "결재 템플릿 참여" }),
   ).toHaveCount(0)
 })
 
@@ -1676,7 +1665,7 @@ test("shows the complete request list only with its UI resource access", async (
   await page.goto("/requests")
   await waitForHydration(page)
 
-  const requestTable = page.getByRole("table", { name: "전체 요청 목록" })
+  const requestTable = page.getByRole("table", { name: "전체 결재 목록" })
   await expect(requestTable).toBeVisible()
   await expect(
     requestTable.getByText("접근 정책", { exact: true }),

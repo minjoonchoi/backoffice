@@ -77,7 +77,8 @@ describe("resolveAccessPolicyResourceGroups", () => {
 
   it("resolves UI resource policies with their namespace context", () => {
     const resourcePolicy = localFixture.accessPolicies.find(
-      (candidate) => candidate.name === "Backoffice UI 리소스 관리자 UI 접근",
+      (candidate) =>
+        candidate.name === "Access Governance UI 리소스 관리자 UI 접근",
     )
     if (!resourcePolicy)
       throw new Error("UI resource manager policy is missing")
@@ -86,7 +87,7 @@ describe("resolveAccessPolicyResourceGroups", () => {
       resolveAccessPolicyResourceGroups(localFixture, resourcePolicy).map(
         (group) => group.service.name,
       ),
-    ).toEqual(["Backoffice API"])
+    ).toEqual(["Access Governance API"])
     expect(
       resolveAccessPolicyUiResources(localFixture, resourcePolicy).map(
         ({ resource }) => resource.key,
@@ -104,7 +105,7 @@ describe("resolveAccessPolicyResourceGroups", () => {
       uiResourceKeys.uiResources.detail.actions.deleteUiResource,
     ])
     expect(accessPolicyResourceNames(localFixture, resourcePolicy)).toContain(
-      "Backoffice / UI 리소스 동기화",
+      "Access Governance / UI 리소스 동기화",
     )
   })
 })

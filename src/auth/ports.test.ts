@@ -14,7 +14,7 @@ describe("authentication ports", () => {
     expect(port).toBe(developmentAuthPort)
     expect(viewer).toEqual({
       id: "development-viewer",
-      displayName: "Backoffice",
+      displayName: "Access Governance",
       permissions: [],
     })
   })

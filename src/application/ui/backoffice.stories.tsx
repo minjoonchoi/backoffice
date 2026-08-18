@@ -88,12 +88,12 @@ export const ApiKeyCredentialRequest: Story = {
     )
     await userEvent.click(canvas.getByRole("radio", { name: /Audit API/ }))
     await expect(
-      canvas.queryByText("API Key 발급 요청 템플릿", {
+      canvas.queryByText("API Key 발급 결재 템플릿", {
         exact: true,
       }),
     ).not.toBeInTheDocument()
     await expect(
-      canvas.queryByRole("combobox", { name: "요청 템플릿" }),
+      canvas.queryByRole("combobox", { name: "결재 템플릿" }),
     ).not.toBeInTheDocument()
     await userEvent.click(
       canvas.getByRole("checkbox", { name: /GET \/v1\/audit-events/ }),
@@ -119,7 +119,7 @@ export const ApiKeyCredentialRequest: Story = {
     )
     await userEvent.type(
       canvas.getByRole("textbox", { name: "AWS ASM Secret name" }),
-      "backoffice/developer-api",
+      "access-governance/developer-api",
     )
     await userEvent.type(
       canvas.getByRole("textbox", { name: "Secret value key" }),

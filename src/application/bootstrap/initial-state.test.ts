@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest"
+
+import { applicationIdentity } from "@/config/application-identity"
 import { z } from "zod"
 
 import { resolveBackofficeAccess } from "@/auth/local-access"
@@ -59,33 +61,20 @@ describe("backoffice initial state", () => {
   })
 
   it.each(["api-key-replace", "api-key-dispose"] as const)(
-    "loads the %s template with the credential lifecycle approval line",
+    "loads the %s template as a Groo delegated draft",
     (type) => {
       const template = localFixture.approvalLines.find(
         (candidate) => candidate.type === type,
       )
 
-      expect(template?.steps).toMatchObject([
-        {
-          order: 1,
-          stage: 1,
-          kind: "request",
-          assigneeMode: "requester",
-        },
-        {
-          order: 2,
-          stage: 2,
-          kind: "approval",
-          assigneeMode: "request-organization-leader",
-        },
-        {
-          order: 3,
-          stage: 3,
-          kind: "agreement",
-          assigneeMode: "service-owner-organization",
-        },
-      ])
-      expect(template?.steps).toHaveLength(3)
+      expect(template?.approvalExecution).toMatchObject({
+        type: "groo",
+        draftDocumentId:
+          type === "api-key-replace"
+            ? "GROO-CREDENTIAL-REPLACEMENT-V1"
+            : "GROO-CREDENTIAL-DISPOSAL-V1",
+      })
+      expect(template?.steps).toEqual([])
     },
   )
 
@@ -174,9 +163,9 @@ describe("backoffice initial state", () => {
     ).toBe(true)
   })
 
-  it("exposes Backoffice menu operations through the service catalog", () => {
+  it("exposes Access Governance menu operations through the service catalog", () => {
     const backofficeService = localFixture.services.find(
-      (service) => service.serviceKey === "backoffice-api",
+      (service) => service.serviceKey === applicationIdentity.serviceKey,
     )
     const expectedMenuPaths = [
       "/v1/home/summary",
@@ -207,12 +196,12 @@ describe("backoffice initial state", () => {
 
   it("provides the system roles", () => {
     expect(localFixture.roles.map((role) => role.name)).toEqual([
-      "Backoffice 시스템 관리자",
-      "Backoffice 정책 운영자",
-      "Backoffice IAM 운영자",
-      "Backoffice 일반 사용자",
-      "Backoffice UI 리소스 관리자",
-      "Backoffice 서비스 운영자",
+      "Access Governance 시스템 관리자",
+      "Access Governance 정책 운영자",
+      "Access Governance IAM 운영자",
+      "Access Governance 일반 사용자",
+      "Access Governance UI 리소스 관리자",
+      "Access Governance 서비스 운영자",
     ])
     expect(
       localFixture.roles.find((role) => role.id === defaultGeneralUserRole.id)
@@ -291,12 +280,12 @@ describe("backoffice initial state", () => {
     expect(
       initialBackofficeState.accessPolicies.map((policy) => policy.name),
     ).toEqual([
-      "Backoffice 시스템 관리자 UI 접근",
-      "Backoffice 일반 사용자 UI 접근",
-      "Backoffice IAM 운영자 UI 접근",
-      "Backoffice 정책 운영자 UI 접근",
-      "Backoffice UI 리소스 관리자 UI 접근",
-      "Backoffice 서비스 운영자 UI 접근",
+      "Access Governance 시스템 관리자 UI 접근",
+      "Access Governance 일반 사용자 UI 접근",
+      "Access Governance IAM 운영자 UI 접근",
+      "Access Governance 정책 운영자 UI 접근",
+      "Access Governance UI 리소스 관리자 UI 접근",
+      "Access Governance 서비스 운영자 UI 접근",
     ])
     expect(
       initialBackofficeState.accessPolicies.some((policy) =>
@@ -306,7 +295,7 @@ describe("backoffice initial state", () => {
     expect(initialBackofficeState.accessPolicyAssignments).toHaveLength(6)
 
     const administratorPolicy = initialBackofficeState.accessPolicies.find(
-      (policy) => policy.name === "Backoffice 시스템 관리자 UI 접근",
+      (policy) => policy.name === "Access Governance 시스템 관리자 UI 접근",
     )
     expect(
       administratorPolicy?.resources.filter(
@@ -315,7 +304,7 @@ describe("backoffice initial state", () => {
     ).toHaveLength(initialBackofficeState.uiResources.length)
 
     const generalUserPolicy = initialBackofficeState.accessPolicies.find(
-      (policy) => policy.name === "Backoffice 일반 사용자 UI 접근",
+      (policy) => policy.name === "Access Governance 일반 사용자 UI 접근",
     )
     const generalUserResourceIds = new Set(
       generalUserPolicy?.resources.flatMap((resource) =>
@@ -355,7 +344,7 @@ describe("backoffice initial state", () => {
     ).toBe(true)
 
     const iamOperatorPolicy = initialBackofficeState.accessPolicies.find(
-      (policy) => policy.name === "Backoffice IAM 운영자 UI 접근",
+      (policy) => policy.name === "Access Governance IAM 운영자 UI 접근",
     )
     const iamOperatorResourceIds = new Set(
       iamOperatorPolicy?.resources.flatMap((resource) =>

@@ -663,8 +663,9 @@ export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
         description={t("detailDescription")}
         actions={
           <div className="flex flex-wrap gap-2">
-            {policy.managementType === accessPolicyManagementTypes.system ||
-            isAssigned ? null : canRequest && canOpenRequestPage ? (
+            {policy.managementType ===
+            accessPolicyManagementTypes.system ? null : canRequest &&
+              canOpenRequestPage ? (
               <Button
                 nativeButton={false}
                 render={

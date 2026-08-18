@@ -1,4 +1,4 @@
-# Backoffice 문서 안내
+# Access Governance 문서 안내
 
 ## 요구사항 문서
 

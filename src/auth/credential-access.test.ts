@@ -11,7 +11,7 @@ function findUserId(nickname: string) {
 }
 
 describe("credential visibility", () => {
-  it("lets a Backoffice administrator view every request and credential", () => {
+  it("lets a Access Governance administrator view every request and credential", () => {
     const visibility = resolveCredentialVisibility(
       localFixture,
       findUserId("David"),

@@ -27,7 +27,7 @@ function IamOperatorSession({ children }: { children: React.ReactNode }) {
 }
 
 const meta = {
-  title: "Backoffice/Role management",
+  title: "Access Governance/Role management",
   parameters: { layout: "fullscreen" },
 } satisfies Meta
 
@@ -46,7 +46,9 @@ export const IamOperatorList: Story = {
       canvas.getByRole("heading", { level: 1, name: "역할 관리" }),
     ).toBeVisible()
     await expect(
-      canvas.getByRole("row", { name: "Backoffice IAM 운영자 상세 보기" }),
+      canvas.getByRole("row", {
+        name: "Access Governance IAM 운영자 상세 보기",
+      }),
     ).toBeVisible()
     await expect(
       canvas.getByRole("button", { name: "역할 생성" }),
@@ -69,7 +71,7 @@ export const IamOperatorAssignments: Story = {
     await expect(
       canvas.getByRole("heading", {
         level: 1,
-        name: "Backoffice IAM 운영자",
+        name: "Access Governance IAM 운영자",
       }),
     ).toBeVisible()
     await expect(
@@ -80,6 +82,6 @@ export const IamOperatorAssignments: Story = {
     ).toBeVisible()
     await expect(
       canvas.getByRole("table", { name: "부여된 정책" }),
-    ).toHaveTextContent("Backoffice IAM 운영자 UI 접근")
+    ).toHaveTextContent("Access Governance IAM 운영자 UI 접근")
   },
 }

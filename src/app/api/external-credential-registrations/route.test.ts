@@ -7,7 +7,7 @@ const validInput = {
   approvalDocumentId: "50000000-0000-4000-8000-000000000001",
   serviceId: "60000000-0000-4000-8000-000000000002",
   credentialName: "collaboration-key",
-  awsSecretName: "backoffice/collaboration-saas",
+  awsSecretName: "access-governance/collaboration-saas",
   awsSecretKey: "api-key",
   secret: "external-secret-value",
 }

@@ -244,7 +244,7 @@ describe("backoffice input schemas", () => {
   it("accepts fixed, dynamic, and parallel request-template steps", () => {
     expect(
       approvalLineInputSchema.safeParse({
-        name: "권한 부여 요청 템플릿",
+        name: "권한 부여 결재 템플릿",
         category: "permission",
         type: "access-grant",
         approvalExecution: { type: "internal" },
@@ -290,7 +290,7 @@ describe("backoffice input schemas", () => {
 
   it("validates request-template categories and unique system bindings", () => {
     const template = {
-      name: "API Key 발급 요청 템플릿",
+      name: "API Key 발급 결재 템플릿",
       category: "credential",
       type: "api-key",
       approvalExecution: { type: "internal" },
@@ -388,7 +388,7 @@ describe("backoffice input schemas", () => {
   it("rejects incomplete or non-contiguous template stages and absolute endpoint URLs", () => {
     expect(
       approvalLineInputSchema.safeParse({
-        name: "잘못된 요청 템플릿",
+        name: "잘못된 결재 템플릿",
         category: "permission",
         type: "access-grant",
         approvalExecution: { type: "internal" },

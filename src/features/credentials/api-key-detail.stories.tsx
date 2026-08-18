@@ -19,7 +19,7 @@ if (!replacementTemplate) {
 }
 
 const meta = {
-  title: "Backoffice/Credential detail",
+  title: "Access Governance/Credential detail",
   component: ApiKeyDetailPage,
   parameters: { layout: "fullscreen" },
   decorators: [
@@ -39,7 +39,7 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-function createMissingUpperApproverState(): {
+function createGrooLifecycleState(): {
   state: BackofficeState
   userId: string
 } {
@@ -52,7 +52,7 @@ function createMissingUpperApproverState(): {
     (document) => document.id === apiKeyApprovalDocumentId,
   )
   if (!user || !organization || !issuance) {
-    throw new Error("Missing upper approver story fixture is incomplete")
+    throw new Error("Groo lifecycle story fixture is incomplete")
   }
   issuance.requesterId = user.id
   issuance.organizationId = organization.id
@@ -82,10 +82,10 @@ export const LifecycleRequestHistory: Story = {
   },
 }
 
-export const MissingUpperOrganizationLeader: Story = {
+export const GrooLifecycleDelegation: Story = {
   args: { apiKeyId: apiKey.id },
   render: () => {
-    const { state, userId } = createMissingUpperApproverState()
+    const { state, userId } = createGrooLifecycleState()
     return (
       <BackofficeProvider initialState={state}>
         <SessionAccessProvider localSwitchingEnabled initialUserId={userId}>
@@ -106,15 +106,13 @@ export const MissingUpperOrganizationLeader: Story = {
     )
     await userEvent.click(canvas.getByRole("button", { name: "다음" }))
     await expect(
-      canvas.getByText(
-        "템플릿에서 만든 결재선을 이 요청에 한해 수정합니다. 요청 템플릿 원본에는 반영되지 않습니다.",
-      ),
+      canvas.getByRole("heading", { name: "Groo에서 결재를 진행합니다" }),
     ).toBeVisible()
     await expect(
-      canvas.getByText("모든 처리 단계의 담당 대상을 선택하세요."),
+      canvas.getByText(/제출 후 Groo 기안 요청 ID가 생성되며/),
     ).toBeVisible()
     await expect(
       canvas.getByRole("button", { name: "요청 제출" }),
-    ).toBeDisabled()
+    ).toBeEnabled()
   },
 }

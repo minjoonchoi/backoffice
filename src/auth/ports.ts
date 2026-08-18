@@ -1,8 +1,9 @@
 import type { AuthPort, Viewer } from "@/auth/types"
+import { applicationIdentity } from "@/config/application-identity"
 
 const developmentViewer: Viewer = Object.freeze({
   id: "development-viewer",
-  displayName: "Backoffice",
+  displayName: applicationIdentity.displayName,
   permissions: Object.freeze([]),
 })
 

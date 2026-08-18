@@ -12,7 +12,7 @@ test("allows only the explicit production override and keeps health public", asy
   const blocked = await request.get(`${blockedBaseUrl}/`)
   expect(blocked.status()).toBe(503)
   expect(await blocked.text()).toBe(
-    "Backoffice authentication is not configured.",
+    "Access Governance authentication is not configured.",
   )
   expect(blocked.headers()["x-robots-tag"]).toBe("noindex, nofollow")
 

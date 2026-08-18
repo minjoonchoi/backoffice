@@ -16,7 +16,7 @@ const requestTemplate = localFixture.approvalLines[0]
 if (!requestTemplate) throw new Error("Request template fixture is missing")
 
 const meta = {
-  title: "Backoffice/Access management details",
+  title: "Access Governance/Access management details",
   parameters: { layout: "fullscreen" },
 } satisfies Meta
 
@@ -43,7 +43,7 @@ export const RequestTemplateConfiguration: Story = {
     ).toBeVisible()
     await expect(canvas.getByText("자격증명 이름")).toBeVisible()
     await expect(
-      canvas.getByRole("button", { name: "요청 템플릿 수정" }),
+      canvas.getByRole("button", { name: "결재 템플릿 수정" }),
     ).toBeVisible()
   },
 }
@@ -63,7 +63,7 @@ export const RequestTemplateReadOnly: Story = {
     const canvas = within(canvasElement)
     await expect(canvas.getByText("Groo 연동 기안")).toBeVisible()
     await expect(
-      canvas.queryByRole("button", { name: "요청 템플릿 수정" }),
+      canvas.queryByRole("button", { name: "결재 템플릿 수정" }),
     ).not.toBeInTheDocument()
   },
 }

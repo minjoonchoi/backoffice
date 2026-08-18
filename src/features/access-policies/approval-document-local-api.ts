@@ -12,10 +12,11 @@ import { approvalDocumentKinds } from "@/features/access-policies/model"
 import { approvalAssigneeTypes } from "@/features/access-policies/model"
 import { serviceTypeValues } from "@/features/service-catalog/model"
 import { employmentStatusValues } from "@/features/iam/model"
-import { entityStatuses } from "@/domain/common"
+import { backofficeErrorCodes, entityStatuses } from "@/domain/common"
 import { hasEffectiveAccessPolicy } from "@/features/access-policies/access-policy-assignment"
 import {
   accessPolicyAssignmentTargets,
+  accessPolicyRequestModes,
   approvalDocumentActionInputSchema,
   approvalDocumentInputSchema,
   approvalDocumentTransitionInputSchema,
@@ -166,10 +167,19 @@ export function createLocalApprovalDocumentApi(
       const requestOrganization = state.organizations.find(
         (organization) => organization.id === parsed.data.organizationId,
       )
+      const targetUserId =
+        "targetUserId" in parsed.data ? parsed.data.targetUserId : null
+      const targetUser =
+        targetUserId === null
+          ? null
+          : state.users.find((user) => user.id === targetUserId)
       if (
         requester?.employmentStatus !== employmentStatusValues.employed ||
         !requestOrganization ||
-        !requester.organizationIds.includes(requestOrganization.id)
+        !requester.organizationIds.includes(requestOrganization.id) ||
+        (parsed.data.documentKind === approvalDocumentKinds.general &&
+          parsed.data.type === approvalTypeValues.accessGrant &&
+          targetUser?.employmentStatus !== employmentStatusValues.employed)
       ) {
         return { ok: false, error: "user-not-found" }
       }
@@ -188,6 +198,15 @@ export function createLocalApprovalDocumentApi(
       const accessPolicy = state.accessPolicies.find(
         (policy) => policy.id === accessPolicyId,
       )
+      const directTargetAssignment =
+        accessPolicyId !== null && targetUser
+          ? state.accessPolicyAssignments.find(
+              (assignment) =>
+                assignment.accessPolicyId === accessPolicyId &&
+                assignment.targetType === accessPolicyAssignmentTargets.user &&
+                assignment.targetId === targetUser.id,
+            )
+          : undefined
       if (
         parsed.data.documentKind === approvalDocumentKinds.general &&
         parsed.data.type === approvalTypeValues.accessGrant &&
@@ -199,11 +218,30 @@ export function createLocalApprovalDocumentApi(
         return { ok: false, error: "approval-reference-mismatch" }
       }
       if (
-        accessPolicyId !== null &&
+        parsed.data.documentKind === approvalDocumentKinds.general &&
+        parsed.data.type === approvalTypeValues.accessGrant &&
         accessPolicy &&
-        hasEffectiveAccessPolicy(state, requester.id, accessPolicy)
+        targetUser
       ) {
-        return { ok: false, error: "access-policy-already-assigned" }
+        const requestsRenewal =
+          parsed.data.requestMode === accessPolicyRequestModes.renewal
+        const renewable =
+          directTargetAssignment?.expiresAt !== null &&
+          directTargetAssignment?.expiresAt !== undefined &&
+          new Date(parsed.data.expiresAt).getTime() >
+            new Date(directTargetAssignment.expiresAt).getTime()
+        const grantable =
+          directTargetAssignment === undefined &&
+          !hasEffectiveAccessPolicy(state, targetUser.id, accessPolicy)
+        if (
+          (requestsRenewal && !renewable) ||
+          (!requestsRenewal && !grantable)
+        ) {
+          return {
+            ok: false,
+            error: backofficeErrorCodes.accessPolicyAlreadyAssigned,
+          }
+        }
       }
       const customFields = line.fields.filter(
         (field) => field.binding === requestTemplateFieldBindingValues.custom,
@@ -234,18 +272,6 @@ export function createLocalApprovalDocumentApi(
       if (
         parsed.data.documentKind === approvalDocumentKinds.apiKeyLifecycle &&
         lifecycleApiKey?.status !== entityStatuses.active
-      ) {
-        return { ok: false, error: "api-key-request-invalid" }
-      }
-      if (
-        parsed.data.documentKind === approvalDocumentKinds.apiKeyLifecycle &&
-        state.approvalDocuments.some(
-          (document) =>
-            document.documentKind === approvalDocumentKinds.apiKeyLifecycle &&
-            document.apiKeyId === lifecycleApiKeyId &&
-            document.type === parsed.data.type &&
-            document.status === approvalDocumentStatuses.submitted,
-        )
       ) {
         return { ok: false, error: "api-key-request-invalid" }
       }
@@ -285,6 +311,45 @@ export function createLocalApprovalDocumentApi(
             parsed.data.endpointIds.length > 0)
         ) {
           return { ok: false, error: "api-key-request-invalid" }
+        }
+      }
+      const duplicateInProgress = state.approvalDocuments.some((document) => {
+        const inProgress =
+          document.status === approvalDocumentStatuses.draft ||
+          document.status === approvalDocumentStatuses.submitted
+        if (!inProgress) return false
+        if (
+          parsed.data.documentKind === approvalDocumentKinds.general &&
+          parsed.data.type === approvalTypeValues.accessGrant
+        ) {
+          return (
+            document.documentKind === approvalDocumentKinds.general &&
+            document.type === approvalTypeValues.accessGrant &&
+            document.accessPolicyId === parsed.data.accessPolicyId &&
+            document.targetUserId === parsed.data.targetUserId
+          )
+        }
+        if (parsed.data.documentKind === approvalDocumentKinds.apiKeyIssuance) {
+          return (
+            document.documentKind === approvalDocumentKinds.apiKeyIssuance &&
+            document.applicationId === parsed.data.applicationId &&
+            document.serviceId === parsed.data.serviceId
+          )
+        }
+        if (
+          parsed.data.documentKind === approvalDocumentKinds.apiKeyLifecycle
+        ) {
+          return (
+            document.documentKind === approvalDocumentKinds.apiKeyLifecycle &&
+            document.apiKeyId === parsed.data.apiKeyId
+          )
+        }
+        return false
+      })
+      if (duplicateInProgress) {
+        return {
+          ok: false,
+          error: backofficeErrorCodes.approvalDocumentAlreadyExists,
         }
       }
       if (parsed.data.documentKind === approvalDocumentKinds.apiKeyIssuance) {
@@ -449,6 +514,8 @@ export function createLocalApprovalDocumentApi(
                     documentKind: parsed.data.documentKind,
                     type: parsed.data.type,
                     accessPolicyId: parsed.data.accessPolicyId,
+                    targetUserId: parsed.data.targetUserId,
+                    requestMode: parsed.data.requestMode,
                     expiresAt: parsed.data.expiresAt,
                   }
                 : {
@@ -663,7 +730,7 @@ export function createLocalApprovalDocumentApi(
           ...createRecordBase(),
           accessPolicyId: policy.id,
           targetType: accessPolicyAssignmentTargets.user,
-          targetId: document.requesterId,
+          targetId: document.targetUserId,
           expiresAt: document.expiresAt,
         }
         const alreadyAssigned = state.accessPolicyAssignments.some(
@@ -672,11 +739,15 @@ export function createLocalApprovalDocumentApi(
             item.targetType === assignment.targetType &&
             item.targetId === assignment.targetId,
         )
-        const notification = createUserNotification(
-          document.requesterId,
-          userNotificationTargetTypeValues.approvalDocument,
-          document.id,
-          approvalCompletionEvent(document),
+        const notifications = [
+          ...new Set([document.requesterId, document.targetUserId]),
+        ].map((userId) =>
+          createUserNotification(
+            userId,
+            userNotificationTargetTypeValues.approvalDocument,
+            document.id,
+            approvalCompletionEvent(document),
+          ),
         )
         updateState((current) => ({
           ...current,
@@ -692,7 +763,7 @@ export function createLocalApprovalDocumentApi(
                   : item,
               )
             : [...current.accessPolicyAssignments, assignment],
-          notifications: [...current.notifications, notification],
+          notifications: [...current.notifications, ...notifications],
         }))
         return { ok: true, value: { document: nextDocument } }
       }

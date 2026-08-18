@@ -1,4 +1,4 @@
-# Backoffice 메뉴별 PRD
+# Access Governance 메뉴별 PRD
 
 현재 구현된 메뉴를 사용자 시나리오, 실제 화면, UI 요구사항과 필요한 서버 기능으로 연결한다. 상세 규칙의 원본은 [UI 기능 요구사항](../ui-functional-requirements.md)과 [서버 기능 요구사항](../server-functional-requirements.md)이며, 작성·캡처 절차는 [PRD 작성·갱신 가이드](../prd-authoring-guide.md)를 따른다.
 
@@ -10,7 +10,7 @@
 | IAM             | [사용자](users.md), [조직](organizations.md), [역할](roles.md), [어플리케이션](applications.md) | 모든 사용자(사용자·조직 조회, 어플리케이션), IAM 운영자, 시스템 관리자 |
 | 서비스 카탈로그 | [서비스](services.md), [엔드포인트](service-endpoints.md)                                       | 서비스 운영자, 조직장, 시스템 관리자                                   |
 | UI 카탈로그     | [네임스페이스](namespaces.md), [UI 리소스](ui-resources.md)                                     | 일반 사용자(네임스페이스 조회), UI 리소스 관리자, 시스템 관리자        |
-| 시스템 관리     | [요청](requests.md), [요청 템플릿](request-templates.md), [감사](audit.md)                      | 시스템 관리자, 부여된 전문 운영자                                      |
+| 시스템 관리     | [결재](requests.md), [결재 템플릿](request-templates.md), [감사](audit.md)                      | 시스템 관리자, 부여된 전문 운영자                                      |
 
 ## 공통 권한 시나리오
 

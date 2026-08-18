@@ -8,7 +8,7 @@ import { NamespaceEditorPage } from "@/features/ui-resources/namespace-editor-pa
 import { BackofficeProvider } from "@/application/state/provider"
 
 const meta = {
-  title: "Backoffice/Namespace management",
+  title: "Access Governance/Namespace management",
   parameters: { layout: "fullscreen" },
   render: () => (
     <BackofficeProvider initialState={localFixture}>
@@ -57,14 +57,18 @@ export const CreateNamespace: Story = {
     await userEvent.click(canvas.getByRole("combobox", { name: "관리 역할" }))
     const body = within(canvasElement.ownerDocument.body)
     await userEvent.click(
-      await body.findByRole("option", { name: "Backoffice 시스템 관리자" }),
+      await body.findByRole("option", {
+        name: "Access Governance 시스템 관리자",
+      }),
     )
     await userEvent.click(canvas.getByRole("button", { name: "다음" }))
     await expect(
       canvas.getByRole("heading", { name: "입력 내용을 검토하세요" }),
     ).toBeVisible()
     await expect(canvas.getByText("customer-console")).toBeVisible()
-    await expect(canvas.getByText("Backoffice 시스템 관리자")).toBeVisible()
+    await expect(
+      canvas.getByText("Access Governance 시스템 관리자"),
+    ).toBeVisible()
     await expect(canvas.getByRole("button", { name: "등록" })).toBeEnabled()
   },
 }

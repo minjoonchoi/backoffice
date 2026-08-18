@@ -4,6 +4,7 @@ import { requestTemplateFieldControlValues } from "@/features/request-templates/
 import { requestTemplateFieldBindingValues } from "@/features/request-templates/model"
 import { requestCategoryValues } from "@/features/request-templates/model"
 import { approvalTypeValues } from "@/features/request-templates/model"
+import { approvalExecutionTypeValues } from "@/features/request-templates/model"
 import { entityStatuses } from "@/domain/common"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -186,6 +187,8 @@ function CredentialLifecycleRequestForm({
     approvalSteps,
     requester?.id,
   )
+  const usesGroo =
+    template.approvalExecution.type === approvalExecutionTypeValues.groo
 
   function resetApprovalSteps(nextOrganizationId: string | null) {
     setApprovalSteps(
@@ -369,7 +372,7 @@ function CredentialLifecycleRequestForm({
           fieldId: field.id,
           value: customValues[field.id] ?? "",
         })),
-      approvalSteps: toRequestApprovalStepInputs(approvalSteps),
+      approvalSteps: usesGroo ? [] : toRequestApprovalStepInputs(approvalSteps),
       submission: approvalDocumentSubmissions.submitted,
     }
     const parsed = approvalDocumentInputSchema.safeParse(
@@ -412,7 +415,9 @@ function CredentialLifecycleRequestForm({
       {...(step === 2 ? { previousLabel: common("previous") } : {})}
       submitLabel={step === 1 ? common("next") : t("lifecycleSubmit")}
       submitDisabled={
-        !requester || !fieldsComplete || (step === 2 && !approvalLineComplete)
+        !requester ||
+        !fieldsComplete ||
+        (step === 2 && !usesGroo && !approvalLineComplete)
       }
       onPrevious={() => {
         setStep(1)
@@ -501,13 +506,20 @@ function CredentialLifecycleRequestForm({
                 </div>
               ))}
           </dl>
-          <RequestApprovalLineEditor
-            steps={approvalSteps}
-            onChange={setApprovalSteps}
-            users={backoffice.users}
-            organizations={backoffice.organizations}
-            requesterId={requester?.id}
-          />
+          {usesGroo ? (
+            <section className="grid gap-1 rounded-card border border-info-foreground/20 bg-info p-3 text-info-foreground">
+              <h4 className="font-semibold">{t("grooApprovalTitle")}</h4>
+              <p className="text-sm">{t("grooApprovalDescription")}</p>
+            </section>
+          ) : (
+            <RequestApprovalLineEditor
+              steps={approvalSteps}
+              onChange={setApprovalSteps}
+              users={backoffice.users}
+              organizations={backoffice.organizations}
+              requesterId={requester?.id}
+            />
+          )}
         </section>
       )}
       <CommandErrorMessage error={error} />

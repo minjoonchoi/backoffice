@@ -13,7 +13,7 @@ function findUserId(nickname: string) {
 }
 
 const meta = {
-  title: "Backoffice/Home dashboard",
+  title: "Access Governance/Home dashboard",
   component: HomeDashboard,
   parameters: {
     layout: "fullscreen",

@@ -12,7 +12,7 @@ import type { BackofficeState } from "@/application/state/model"
 import { BackofficeProvider } from "@/application/state/provider"
 
 const meta = {
-  title: "Backoffice/API key issuance",
+  title: "Access Governance/API key issuance",
   component: ApiKeyPage,
   parameters: { layout: "fullscreen" },
   decorators: [
@@ -70,7 +70,7 @@ function createRegistrationState(): BackofficeState {
         .filter((endpoint) => endpoint.serviceId === internalService.id)
         .map((endpoint) => endpoint.id),
       keyName: "internal-registration-key",
-      awsSecretName: "backoffice/internal-registration",
+      awsSecretName: "access-governance/internal-registration",
       awsSecretKey: "api-key",
     },
     {
@@ -84,7 +84,7 @@ function createRegistrationState(): BackofficeState {
       serviceId: externalService.id,
       endpointIds: [],
       keyName: "external-registration-key",
-      awsSecretName: "backoffice/external-registration",
+      awsSecretName: "access-governance/external-registration",
       awsSecretKey: "api-key",
     },
   )
@@ -127,7 +127,7 @@ export const SeparateFromPermissionRequests: Story = {
       canvas.getByRole("button", { name: "자격증명 요청" }),
     ).toBeVisible()
     await expect(
-      canvas.queryByText("API Key 발급 요청 템플릿"),
+      canvas.queryByText("API Key 발급 결재 템플릿"),
     ).not.toBeInTheDocument()
     await expect(
       canvas.getByRole("heading", { name: "자격 증명 요청 내역" }),
@@ -256,7 +256,7 @@ export const RegistrationByServiceType: Story = {
       within(dialog).queryByLabelText("API Key 원문"),
     ).not.toBeInTheDocument()
     await expect(
-      within(dialog).getByText("backoffice/internal-registration"),
+      within(dialog).getByText("access-governance/internal-registration"),
     ).toBeVisible()
     await userEvent.keyboard("{Escape}")
     await waitFor(async () => {
@@ -278,7 +278,7 @@ export const RegistrationByServiceType: Story = {
     })
     await expect(within(dialog).getByLabelText("API Key 원문")).toBeVisible()
     await expect(
-      within(dialog).getByText("backoffice/external-registration"),
+      within(dialog).getByText("access-governance/external-registration"),
     ).toBeVisible()
   },
 }

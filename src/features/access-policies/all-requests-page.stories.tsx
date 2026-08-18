@@ -7,7 +7,7 @@ import { AllRequestsPage } from "@/features/access-policies/all-requests-page"
 import { localDefaultUserId, localFixture } from "@/mocks/fixture"
 
 const meta = {
-  title: "Backoffice/System requests",
+  title: "Access Governance/System requests",
   component: AllRequestsPage,
   parameters: { layout: "fullscreen" },
   decorators: [
@@ -33,9 +33,9 @@ export const AllRequestTypes: Story = {
     const screen = within(canvasElement.ownerDocument.body)
 
     await expect(
-      canvas.getByRole("heading", { level: 1, name: "요청" }),
+      canvas.getByRole("heading", { level: 1, name: "결재" }),
     ).toBeVisible()
-    const table = canvas.getByRole("table", { name: "전체 요청 목록" })
+    const table = canvas.getByRole("table", { name: "전체 결재 목록" })
     await expect(within(table).getByText("접근 정책")).toBeVisible()
     await expect(within(table).getAllByText("자격증명")).toHaveLength(3)
     await expect(

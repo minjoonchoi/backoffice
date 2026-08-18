@@ -192,7 +192,11 @@ export function DataTable<Row>({
           </div>
         </FilterBar>
       ) : null}
-      <Table className="table-fixed" style={{ minWidth: table.getTotalSize() }}>
+      <Table
+        className="table-fixed"
+        containerClassName="min-h-40"
+        style={{ minWidth: table.getTotalSize() }}
+      >
         <TableCaption className="sr-only">{caption}</TableCaption>
         <colgroup>
           {table.getVisibleLeafColumns().map((column) => (

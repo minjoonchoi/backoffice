@@ -1,4 +1,4 @@
-# Backoffice API client 경계
+# Access Governance API client 경계
 
 ## 목적
 
@@ -20,7 +20,7 @@
 - `createBackofficeCommands`는 위치·본문·요청자 식별자를 명시한 request DTO로 변환하며 업무 규칙을 구현하지 않는다.
 - 인증 주체가 필요한 command에서 화면이 요청자 식별자를 생략하면 facade가 현재 세션 사용자를 DTO에 채운다. 로컬 API는 식별자가 없거나 해당 UI 리소스 권한이 없으면 허용하지 않는다.
 - `BackofficeProvider`는 client 수명주기, 성공 후 snapshot 재조회와 React 상태 반영만 담당한다.
-- `BackofficeApiClient`는 조회와 IAM, 요청 템플릿, 정책, 요청 문서, 자격증명, 서비스 카탈로그, UI 리소스 API 계약을 묶는 교체 경계다.
+- `BackofficeApiClient`는 조회와 IAM, 결재 템플릿, 정책, 요청 문서, 자격증명, 서비스 카탈로그, UI 리소스 API 계약을 묶는 교체 경계다.
 - 성공한 command 뒤에는 client의 snapshot response를 다시 읽는다. 화면은 응답 엔티티를 추측해 별도로 보정하지 않는다.
 
 ### 조회

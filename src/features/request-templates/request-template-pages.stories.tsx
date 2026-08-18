@@ -14,7 +14,7 @@ if (!credentialTemplate) {
 }
 
 const meta = {
-  title: "Backoffice/Request templates/Detail",
+  title: "Access Governance/Approval templates/Detail",
   component: ApprovalLineDetailPage,
   args: { approvalLineId: credentialTemplate.id },
   parameters: { layout: "fullscreen" },

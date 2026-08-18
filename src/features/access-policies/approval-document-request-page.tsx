@@ -31,12 +31,17 @@ import {
   resolveAccessPolicyResourceGroups,
   resolveAccessPolicyUiResources,
 } from "@/features/access-policies/access-policy-resources"
-import { resolveMissingAccessPolicyResources } from "@/features/access-policies/access-policy-assignment"
+import {
+  hasEffectiveAccessPolicy,
+  resolveMissingAccessPolicyResources,
+} from "@/features/access-policies/access-policy-assignment"
 import { resolveAccessPolicyApprovalLine } from "@/features/access-policies/access-policy-template"
 import { approvalDocumentInputSchema } from "@/features/access-policies/model"
 import { FormSelect } from "@/components/patterns/form-select"
 import {
   accessPolicyManagementTypes,
+  accessPolicyRequestModes,
+  accessPolicyAssignmentTargets,
   type AccessPolicy,
 } from "@/features/access-policies/model"
 import type { ApprovalLine } from "@/features/request-templates/model"
@@ -129,6 +134,9 @@ function ApprovalDocumentRequestForm({
   const [requesterId, setRequesterId] = useState<string | null>(
     initialRequesterId,
   )
+  const [targetUserId, setTargetUserId] = useState<string | null>(
+    initialRequesterId,
+  )
   const [requestOrganizationId, setRequestOrganizationId] = useState<
     string | null
   >(initialOrganizationId)
@@ -157,14 +165,26 @@ function ApprovalDocumentRequestForm({
     policy,
   )
   const policyUiResources = resolveAccessPolicyUiResources(backoffice, policy)
-  const missingResourceCount = sessionAccess.currentUser
-    ? resolveMissingAccessPolicyResources(
-        backoffice,
-        sessionAccess.currentUser.id,
-        policy,
-      ).length
+  const missingResourceCount = targetUserId
+    ? resolveMissingAccessPolicyResources(backoffice, targetUserId, policy)
+        .length
     : policy.resources.length
   const requester = backoffice.users.find((item) => item.id === requesterId)
+  const targetUser = backoffice.users.find((item) => item.id === targetUserId)
+  const directTargetAssignment = backoffice.accessPolicyAssignments.find(
+    (assignment) =>
+      assignment.accessPolicyId === policy.id &&
+      assignment.targetType === accessPolicyAssignmentTargets.user &&
+      assignment.targetId === targetUserId,
+  )
+  const requestMode = directTargetAssignment?.expiresAt
+    ? accessPolicyRequestModes.renewal
+    : accessPolicyRequestModes.grant
+  const targetAlreadyHasPolicy = targetUserId
+    ? hasEffectiveAccessPolicy(backoffice, targetUserId, policy)
+    : false
+  const targetRequestEligible =
+    requestMode === accessPolicyRequestModes.renewal || !targetAlreadyHasPolicy
   const requestOrganization = backoffice.organizations.find(
     (item) => item.id === requestOrganizationId,
   )
@@ -194,6 +214,8 @@ function ApprovalDocumentRequestForm({
       requesterId,
       approvalLineId: approvalLine.id,
       accessPolicyId: policy.id,
+      targetUserId,
+      requestMode,
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
       content,
       fieldValues: [],
@@ -242,12 +264,20 @@ function ApprovalDocumentRequestForm({
     await persistRequest("draft")
   }
 
-  const targetComplete = Boolean(requesterId && requestOrganizationId)
+  const targetComplete = Boolean(
+    requesterId && requestOrganizationId && targetUserId,
+  )
   const expirationComplete =
     expiresAt.length > 0 &&
-    new Date(expiresAt).getTime() > minimumExpirationTime
+    new Date(expiresAt).getTime() > minimumExpirationTime &&
+    (requestMode !== accessPolicyRequestModes.renewal ||
+      (directTargetAssignment?.expiresAt !== null &&
+        directTargetAssignment !== undefined &&
+        new Date(expiresAt).getTime() >
+          new Date(directTargetAssignment.expiresAt).getTime()))
   const reasonComplete = content.trim().length >= 10 && expirationComplete
-  const inputComplete = targetComplete && reasonComplete
+  const inputComplete =
+    targetComplete && targetRequestEligible && reasonComplete
   const submitDisabled =
     !inputComplete || (requestStep === 2 && !approvalLineComplete)
 
@@ -343,6 +373,7 @@ function ApprovalDocumentRequestForm({
                 value={requesterId}
                 onValueChange={(value) => {
                   setRequesterId(value)
+                  setTargetUserId(value)
                   const selected = backoffice.users.find(
                     (user) => user.id === value,
                   )
@@ -358,6 +389,32 @@ function ApprovalDocumentRequestForm({
                   )
                   .map((user) => ({ value: user.id, label: user.nickname }))}
               />
+              <FormSelect
+                label={documentsT("permissionTarget")}
+                value={targetUserId}
+                onValueChange={setTargetUserId}
+                options={backoffice.users
+                  .filter(
+                    (user) =>
+                      user.employmentStatus === employmentStatusValues.employed,
+                  )
+                  .map((user) => ({ value: user.id, label: user.nickname }))}
+              />
+              {targetUserId && !targetRequestEligible ? (
+                <p className="text-sm text-warning-foreground">
+                  {documentsT("permissionTargetAlreadyOwned")}
+                </p>
+              ) : requestMode === accessPolicyRequestModes.renewal &&
+                directTargetAssignment?.expiresAt ? (
+                <p className="text-sm text-info-foreground">
+                  {documentsT("permissionTargetRenewal", {
+                    expiresAt: new Intl.DateTimeFormat(undefined, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    }).format(new Date(directTargetAssignment.expiresAt)),
+                  })}
+                </p>
+              ) : null}
               <FormSelect
                 label={documentsT("requestOrganization")}
                 value={requestOrganizationId}
@@ -450,6 +507,20 @@ function ApprovalDocumentRequestForm({
                 {documentsT("requestOrganization")}
               </dt>
               <dd className="font-medium">{requestOrganization?.name}</dd>
+            </div>
+            <div className="grid content-start gap-1 border-b p-4 sm:col-span-2">
+              <dt className="text-xs text-muted-foreground">
+                {documentsT("permissionTarget")}
+              </dt>
+              <dd className="font-medium">{targetUser?.nickname}</dd>
+            </div>
+            <div className="grid content-start gap-1 border-b p-4 sm:col-span-2">
+              <dt className="text-xs text-muted-foreground">
+                {documentsT("accessRequestMode")}
+              </dt>
+              <dd className="font-medium">
+                {documentsT(`accessRequestModes.${requestMode}`)}
+              </dd>
             </div>
             <div className="grid content-start gap-1 p-4 sm:col-span-2">
               <dt className="text-xs text-muted-foreground">

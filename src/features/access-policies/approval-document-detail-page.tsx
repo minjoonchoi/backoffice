@@ -100,6 +100,18 @@ export function ApprovalDocumentDetailPage({
     throw new Error(`Request reference not found: ${document.id}`)
   }
   const documentId = document.id
+  const permissionTarget =
+    document.documentKind === approvalDocumentKinds.general &&
+    document.type === approvalTypeValues.accessGrant
+      ? backoffice.users.find((user) => user.id === document.targetUserId)
+      : null
+  if (
+    document.documentKind === approvalDocumentKinds.general &&
+    document.type === approvalTypeValues.accessGrant &&
+    !permissionTarget
+  ) {
+    throw new Error(`Permission target not found: ${document.id}`)
+  }
 
   const relatedTarget =
     document.documentKind === approvalDocumentKinds.general &&
@@ -261,6 +273,22 @@ export function ApprovalDocumentDetailPage({
                 {organization.name}
               </UiResourceLink>
             </DetailItem>
+            {permissionTarget ? (
+              <DetailItem label={t("permissionTarget")}>
+                <UiResourceLink
+                  resourceKey={uiResourceKeys.users.detail.key}
+                  href={`/users/${permissionTarget.id}`}
+                >
+                  {permissionTarget.nickname}
+                </UiResourceLink>
+              </DetailItem>
+            ) : null}
+            {document.documentKind === approvalDocumentKinds.general &&
+            document.type === approvalTypeValues.accessGrant ? (
+              <DetailItem label={t("accessRequestMode")}>
+                {t(`accessRequestModes.${document.requestMode}`)}
+              </DetailItem>
+            ) : null}
             <DetailItem label={t("approvalLine")}>{template.name}</DetailItem>
             <DetailItem label={t("approvalExecution")}>
               {t(`approvalExecutions.${document.approvalExecution.type}`)}

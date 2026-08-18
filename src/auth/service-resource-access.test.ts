@@ -28,7 +28,7 @@ function findService(name: string) {
 }
 
 describe("service resource access", () => {
-  it("lets a Backoffice administrator manage every organization", () => {
+  it("lets a Access Governance administrator manage every organization", () => {
     const access = resolveServiceResourceAccess(
       localFixture,
       findUserId("David"),

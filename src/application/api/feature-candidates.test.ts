@@ -76,7 +76,7 @@ describe("candidate management API flows", () => {
     )
     const sourcePolicy = requiredFixture(
       localFixture.accessPolicies.find(
-        (policy) => !policy.name.startsWith("Backoffice 시스템 관리자"),
+        (policy) => !policy.name.startsWith("Access Governance 시스템 관리자"),
       ),
       "Source policy",
     )
@@ -111,7 +111,7 @@ describe("candidate management API flows", () => {
     )
     const clonedTemplate = await client.requestTemplates.cloneApprovalLine({
       sourceApprovalLineId: sourceTemplate.id,
-      name: "후보 기능 검증 요청 템플릿",
+      name: "후보 기능 검증 결재 템플릿",
       requesterId: administrator.id,
     })
     expect(clonedTemplate.ok && clonedTemplate.value.version).toBe(1)

@@ -49,7 +49,7 @@ function UserDetailStory({
 }
 
 const meta = {
-  title: "Backoffice/User management/User details",
+  title: "Access Governance/User management/User details",
   parameters: { layout: "fullscreen" },
 } satisfies Meta
 
@@ -79,7 +79,7 @@ export const IamOperatorAssignments: Story = {
     const canvas = within(canvasElement)
     await expect(canvas.getByRole("link", { name: "개발 1팀" })).toBeVisible()
     await expect(
-      canvas.getByRole("link", { name: "Backoffice 시스템 관리자" }),
+      canvas.getByRole("link", { name: "Access Governance 시스템 관리자" }),
     ).toBeVisible()
     await expect(
       canvas.getByRole("button", { name: "조직 추가" }),
@@ -94,7 +94,7 @@ export const IamOperatorAssignments: Story = {
       canvas.queryByRole("heading", { name: "요청 이력" }),
     ).not.toBeInTheDocument()
     await expect(
-      canvas.queryByRole("heading", { name: "요청 템플릿 참여" }),
+      canvas.queryByRole("heading", { name: "결재 템플릿 참여" }),
     ).not.toBeInTheDocument()
   },
 }
@@ -182,7 +182,7 @@ export const IamOperatorOrganizationManagement: Story = {
       canvas.queryByRole("heading", { name: "조직 관계 변경 영향" }),
     ).not.toBeInTheDocument()
     await expect(
-      canvas.queryByRole("heading", { name: "포함된 요청 템플릿" }),
+      canvas.queryByRole("heading", { name: "포함된 결재 템플릿" }),
     ).not.toBeInTheDocument()
   },
 }

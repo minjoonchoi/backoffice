@@ -15,10 +15,10 @@ const storyBackoffice = structuredClone(localFixture)
 const storyNamespaceId = "99000000-0000-4000-8000-000000000001"
 const storyManagerPolicyId = "99000000-0000-4000-8000-000000000002"
 const backofficeNamespace = storyBackoffice.namespaces.find(
-  (namespace) => namespace.key === "backoffice",
+  (namespace) => namespace.key === "access-governance",
 )
 if (!backofficeNamespace) {
-  throw new Error("Story Backoffice namespace fixture is missing")
+  throw new Error("Story Access Governance namespace fixture is missing")
 }
 backofficeNamespace.managerRoleId = defaultBackofficeAdminRole.id
 const storyManagementResource = storyBackoffice.uiResources[0]
@@ -57,7 +57,7 @@ storyBackoffice.accessPolicyAssignments.push({
 })
 
 const meta = {
-  title: "Backoffice/UI Resource catalog",
+  title: "Access Governance/UI Resource catalog",
   parameters: { layout: "fullscreen" },
   render: () => (
     <BackofficeProvider initialState={storyBackoffice}>
@@ -99,7 +99,9 @@ export const ImportYamlManifest: Story = {
       name: "네임스페이스",
     })
     await waitFor(() =>
-      expect(namespaceSelect).toHaveTextContent("Backoffice (backoffice)"),
+      expect(namespaceSelect).toHaveTextContent(
+        "Access Governance (access-governance)",
+      ),
     )
     await userEvent.click(namespaceSelect)
     await userEvent.click(
@@ -138,7 +140,7 @@ export const ImportYamlManifest: Story = {
     await expect(canvas.getByText("추가 예정 3건")).toBeVisible()
     await expect(
       canvas.getByRole("checkbox", {
-        name: /Backoffice 시스템 관리자에 동기화 대상 전체 접근 권한 부여/,
+        name: /Access Governance 시스템 관리자에 동기화 대상 전체 접근 권한 부여/,
       }),
     ).toBeChecked()
     const selectionList = canvas

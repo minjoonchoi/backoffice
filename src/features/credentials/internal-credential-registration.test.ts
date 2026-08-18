@@ -14,7 +14,7 @@ const input: InternalCredentialRegistrationRequest = {
   approvalDocumentId: "50000000-0000-4000-8000-000000000001",
   serviceId: "60000000-0000-4000-8000-000000000001",
   credentialName: "developer-api-key",
-  awsSecretName: "backoffice/developer-api",
+  awsSecretName: "access-governance/developer-api",
   awsSecretKey: "api-key",
 }
 
