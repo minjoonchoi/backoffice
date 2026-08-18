@@ -19,14 +19,11 @@ import {
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 
 import { useSessionAccess } from "@/auth/session-access-provider"
 import { UiResourceLink } from "@/auth/ui-resource-link"
-import {
-  canManageService,
-  resolveServiceResourceAccess,
-} from "@/auth/service-resource-access"
+import { canManageService } from "@/auth/service-resource-access"
 import { ConfirmAction } from "@/components/patterns/confirm-action"
 import { EmptyState } from "@/components/patterns/content-state"
 import {
@@ -34,22 +31,10 @@ import {
   type DataTableFilter,
 } from "@/components/patterns/data-table"
 import { DetailGrid, DetailItem } from "@/components/patterns/detail-grid"
-import {
-  FormDialog,
-  FormDialogContent,
-} from "@/components/patterns/form-dialog"
 import { MetricCard } from "@/components/patterns/metric-card"
 import { PageHeader } from "@/components/patterns/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import {
   Card,
   CardContent,
@@ -57,105 +42,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
 import { snackbar } from "@/components/ui/snackbar"
-import { Textarea } from "@/components/ui/textarea"
 import {
   endpointFieldLocationValues,
   endpointLifecycleValues,
-  endpointVersionInputPattern,
-  httpMethods,
   isEndpointRequestParameterLocation,
-  serviceTypes,
-  type HttpMethod,
   type ManagedService,
   type ServiceEndpoint,
   type ServiceEndpointField,
-  type ServiceEndpointFieldInput,
   type ServiceEndpointRevision,
-  type ServiceType,
-} from "@/features/service-catalog/model"
-import type { BackofficeErrorCode } from "@/domain/common"
-import { FormSelect } from "@/components/patterns/form-select"
-import {
-  serviceEndpointInputSchema,
-  serviceInputSchema,
 } from "@/features/service-catalog/model"
 import { useBackoffice } from "@/application/state/provider"
+import { useServiceResourceAccess } from "@/features/service-catalog/use-service-resource-access"
 import {
   ServiceTypeBadge,
   StatusBadge,
-  CommandErrorMessage,
   useBackofficeLabels,
 } from "@/application/ui/backoffice-ui"
-import {
-  resolveEndpointChangeImpact,
-  type EndpointChangeImpact,
-} from "@/features/service-catalog/endpoint-impact"
-
-function useServiceResourceAccess() {
-  const backoffice = useBackoffice()
-  const sessionAccess = useSessionAccess()
-  return resolveServiceResourceAccess(
-    backoffice,
-    sessionAccess.currentUser?.id ?? null,
-  )
-}
-
-function parseJsonArrayFormField(
-  value: FormDataEntryValue | null,
-): unknown[] | null {
-  if (typeof value !== "string") return null
-  const source = value.trim()
-  if (!source) return []
-  try {
-    const parsed: unknown = JSON.parse(source)
-    return Array.isArray(parsed) ? parsed : null
-  } catch {
-    return null
-  }
-}
-
-function setEndpointFieldLocation(
-  field: unknown,
-  location:
-    | typeof endpointFieldLocationValues.requestBody
-    | typeof endpointFieldLocationValues.responseBody,
-): unknown {
-  if (typeof field !== "object" || field === null || Array.isArray(field)) {
-    return field
-  }
-  return { ...field, location }
-}
-
-function parseEndpointFields(data: FormData): unknown {
-  const parameters = parseJsonArrayFormField(data.get("requestParameters"))
-  const requestBody = parseJsonArrayFormField(data.get("requestBodyFields"))
-  const responseBody = parseJsonArrayFormField(data.get("responseBodyFields"))
-  if (!parameters || !requestBody || !responseBody) return null
-  return [
-    ...parameters,
-    ...requestBody.map((field) =>
-      setEndpointFieldLocation(field, endpointFieldLocationValues.requestBody),
-    ),
-    ...responseBody.map((field) =>
-      setEndpointFieldLocation(field, endpointFieldLocationValues.responseBody),
-    ),
-  ]
-}
-
-function toEndpointFieldInput(
-  field: ServiceEndpointField,
-): ServiceEndpointFieldInput {
-  return {
-    location: field.location,
-    fieldPath: field.fieldPath,
-    valueType: field.valueType,
-    required: field.required,
-    description: field.description,
-  }
-}
 
 function EndpointFieldsTable({
   fields,
@@ -234,201 +137,6 @@ function EndpointFieldsTable({
       empty={empty}
       getRowId={(field) => field.id}
     />
-  )
-}
-
-function ServiceEditDialog({ service }: { service: ManagedService }) {
-  const backoffice = useBackoffice()
-  const sessionAccess = useSessionAccess()
-  const access = useServiceResourceAccess()
-  const t = useTranslations("backoffice.services")
-  const common = useTranslations("backoffice.common")
-  const labels = useBackofficeLabels()
-  const [open, setOpen] = useState(false)
-  const [type, setType] = useState<ServiceType | null>(service.type)
-  const [organizationId, setOrganizationId] = useState<string | null>(
-    service.ownerOrganizationId,
-  )
-  const [credentialTemplateIds, setCredentialTemplateIds] = useState(
-    service.credentialTemplateIds,
-  )
-  const [error, setError] = useState<BackofficeErrorCode>()
-  const hasEndpoints = backoffice.serviceEndpoints.some(
-    (endpoint) => endpoint.serviceId === service.id,
-  )
-  const organizations = backoffice.organizations.filter((organization) =>
-    access.manageableOrganizationIds.includes(organization.id),
-  )
-  const formId = `service-${service.id}-form`
-
-  function changeOpen(nextOpen: boolean) {
-    setOpen(nextOpen)
-    setType(service.type)
-    setOrganizationId(service.ownerOrganizationId)
-    setCredentialTemplateIds(service.credentialTemplateIds)
-    setError(undefined)
-  }
-
-  async function submit(form: HTMLFormElement) {
-    const data = new FormData(form)
-    const parsed = serviceInputSchema.safeParse({
-      name: data.get("name"),
-      slug: data.get("slug"),
-      host: data.get("host"),
-      type,
-      ownerOrganizationId: organizationId,
-      credentialTemplateIds,
-    })
-    if (!parsed.success) {
-      setError("invalid-input")
-      return
-    }
-    const result = await backoffice.updateService(
-      service.id,
-      parsed.data,
-      sessionAccess.currentUser?.id ?? "",
-    )
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    snackbar.success(t("updated"))
-    setOpen(false)
-  }
-
-  return (
-    <FormDialog open={open} onOpenChange={changeOpen}>
-      <DialogTrigger render={<Button variant="outline" />}>
-        <Pencil />
-        {t("edit")}
-      </DialogTrigger>
-      <FormDialogContent>
-        <DialogHeader>
-          <DialogTitle>{t("edit")}</DialogTitle>
-          <DialogDescription>{t("editDescription")}</DialogDescription>
-        </DialogHeader>
-        <form
-          id={formId}
-          className="grid gap-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void submit(event.currentTarget)
-          }}
-        >
-          <Field>
-            <FieldLabel htmlFor={`${formId}-name`}>{common("name")}</FieldLabel>
-            <Input
-              id={`${formId}-name`}
-              name="name"
-              required
-              minLength={2}
-              maxLength={100}
-              defaultValue={service.name}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${formId}-slug`}>{t("slug")}</FieldLabel>
-            <Input
-              id={`${formId}-slug`}
-              aria-describedby={`${formId}-slug-description`}
-              name="slug"
-              required
-              minLength={2}
-              maxLength={32}
-              pattern="[a-z]+(?:-[a-z]+)*"
-              autoCapitalize="none"
-              spellCheck={false}
-              defaultValue={service.slug}
-              readOnly
-            />
-            <FieldDescription id={`${formId}-slug-description`}>
-              {t("slugDescription")}
-            </FieldDescription>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${formId}-host`}>{t("host")}</FieldLabel>
-            <Input
-              id={`${formId}-host`}
-              name="host"
-              type="url"
-              required
-              maxLength={2048}
-              defaultValue={service.host}
-            />
-          </Field>
-          <FormSelect
-            label={t("type")}
-            value={type}
-            onValueChange={setType}
-            options={serviceTypes
-              .filter(
-                (item) => item === serviceTypeValues.internal || !hasEndpoints,
-              )
-              .map((item) => ({
-                value: item,
-                label: labels.serviceType(item),
-              }))}
-          />
-          <FormSelect
-            label={t("owner")}
-            value={organizationId}
-            onValueChange={setOrganizationId}
-            options={organizations.map((organization) => ({
-              value: organization.id,
-              label: organization.name,
-            }))}
-          />
-          {(
-            [
-              ["issuance", "api-key", "credentialIssuanceTemplate"],
-              [
-                "replacement",
-                "api-key-replace",
-                "credentialReplacementTemplate",
-              ],
-              ["disposal", "api-key-dispose", "credentialDisposalTemplate"],
-            ] as const
-          ).map(([key, requestType, label]) => (
-            <FormSelect
-              key={key}
-              label={t(label)}
-              value={credentialTemplateIds[key]}
-              onValueChange={(value) => {
-                setCredentialTemplateIds((current) => ({
-                  ...current,
-                  [key]: value,
-                }))
-              }}
-              options={backoffice.approvalLines
-                .filter(
-                  (template) =>
-                    (template.status === entityStatuses.active ||
-                      template.id === service.credentialTemplateIds[key]) &&
-                    template.category === requestCategoryValues.credential &&
-                    template.type === requestType,
-                )
-                .map((template) => ({
-                  value: template.id,
-                  label: template.name,
-                }))}
-            />
-          ))}
-          <CommandErrorMessage error={error} />
-        </form>
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>
-            {common("cancel")}
-          </DialogClose>
-          <Button
-            type="submit"
-            form={formId}
-            disabled={!type || !organizationId}
-          >
-            {common("save")}
-          </Button>
-        </DialogFooter>
-      </FormDialogContent>
-    </FormDialog>
   )
 }
 
@@ -534,183 +242,6 @@ function ServicesTable({
   )
 }
 
-function ServiceCreationDialog() {
-  const backoffice = useBackoffice()
-  const sessionAccess = useSessionAccess()
-  const access = useServiceResourceAccess()
-  const t = useTranslations("backoffice.services")
-  const common = useTranslations("backoffice.common")
-  const labels = useBackofficeLabels()
-  const [open, setOpen] = useState(false)
-  const [type, setType] = useState<ServiceType | null>(null)
-  const [organizationId, setOrganizationId] = useState<string | null>(null)
-  const credentialTemplates = backoffice.approvalLines.filter(
-    (template) =>
-      template.category === requestCategoryValues.credential &&
-      template.status === entityStatuses.active,
-  )
-  function firstCredentialTemplateId(
-    requestType: "api-key" | "api-key-replace" | "api-key-dispose",
-  ) {
-    return (
-      credentialTemplates.find((template) => template.type === requestType)
-        ?.id ?? null
-    )
-  }
-  const credentialTemplateIds = {
-    issuance: firstCredentialTemplateId("api-key"),
-    replacement: firstCredentialTemplateId("api-key-replace"),
-    disposal: firstCredentialTemplateId("api-key-dispose"),
-  }
-  const [error, setError] = useState<BackofficeErrorCode>()
-  const organizations = backoffice.organizations.filter((organization) =>
-    access.manageableOrganizationIds.includes(organization.id),
-  )
-  const ownerOrganizationId = access.isAdministrator
-    ? organizationId
-    : (organizations[0]?.id ?? null)
-  const formId = "service-create-form"
-
-  function changeOpen(nextOpen: boolean) {
-    setOpen(nextOpen)
-    setType(null)
-    setOrganizationId(null)
-    setError(undefined)
-  }
-
-  async function submit(form: HTMLFormElement) {
-    const data = new FormData(form)
-    const parsed = serviceInputSchema.safeParse({
-      name: data.get("name"),
-      slug: data.get("slug"),
-      host: data.get("host"),
-      type,
-      ownerOrganizationId,
-      credentialTemplateIds,
-    })
-    if (!parsed.success) {
-      setError("invalid-input")
-      return
-    }
-    const result = await backoffice.createService(
-      parsed.data,
-      sessionAccess.currentUser?.id ?? "",
-    )
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    snackbar.success(t("created"))
-    setOpen(false)
-  }
-
-  return (
-    <FormDialog open={open} onOpenChange={changeOpen}>
-      <DialogTrigger render={<Button />}>
-        <Plus />
-        {t("add")}
-      </DialogTrigger>
-      <FormDialogContent>
-        <DialogHeader>
-          <DialogTitle>{t("add")}</DialogTitle>
-          <DialogDescription>{t("addDescription")}</DialogDescription>
-        </DialogHeader>
-        {organizations.length === 0 ? (
-          <EmptyState title={t("add")} description={t("prerequisite")} />
-        ) : (
-          <form
-            id={formId}
-            className="grid gap-4"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void submit(event.currentTarget)
-            }}
-          >
-            <Field>
-              <FieldLabel htmlFor="service-name">{common("name")}</FieldLabel>
-              <Input
-                id="service-name"
-                name="name"
-                required
-                minLength={2}
-                maxLength={100}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="service-slug">{t("slug")}</FieldLabel>
-              <Input
-                id="service-slug"
-                aria-describedby="service-slug-description"
-                name="slug"
-                required
-                minLength={2}
-                pattern="[a-z]+(?:-[a-z]+)*"
-                maxLength={32}
-                autoCapitalize="none"
-                spellCheck={false}
-              />
-              <FieldDescription id="service-slug-description">
-                {t("slugDescription")}
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="service-host">{t("host")}</FieldLabel>
-              <Input
-                id="service-host"
-                name="host"
-                type="url"
-                required
-                maxLength={2048}
-              />
-            </Field>
-            <FormSelect
-              label={t("type")}
-              value={type}
-              onValueChange={setType}
-              options={serviceTypes.map((item) => ({
-                value: item,
-                label: labels.serviceType(item),
-              }))}
-            />
-            {access.isAdministrator ? (
-              <FormSelect
-                label={t("owner")}
-                value={organizationId}
-                onValueChange={setOrganizationId}
-                options={organizations.map((item) => ({
-                  value: item.id,
-                  label: item.name,
-                }))}
-              />
-            ) : null}
-            <CommandErrorMessage error={error} />
-          </form>
-        )}
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>
-            {common("cancel")}
-          </DialogClose>
-          {organizations.length ? (
-            <Button
-              type="submit"
-              form={formId}
-              disabled={
-                !type ||
-                !ownerOrganizationId ||
-                !credentialTemplateIds.issuance ||
-                !credentialTemplateIds.replacement ||
-                !credentialTemplateIds.disposal
-              }
-            >
-              {common("create")}
-            </Button>
-          ) : null}
-        </DialogFooter>
-      </FormDialogContent>
-    </FormDialog>
-  )
-}
-
 export function ServicesPage() {
   const backoffice = useBackoffice()
   const sessionAccess = useSessionAccess()
@@ -731,7 +262,14 @@ export function ServicesPage() {
         eyebrow={t("eyebrow")}
         title={t("title")}
         description={t("description")}
-        actions={canRegister ? <ServiceCreationDialog /> : null}
+        actions={
+          canRegister ? (
+            <Button nativeButton={false} render={<Link href="/services/new" />}>
+              <Plus />
+              {t("add")}
+            </Button>
+          ) : null
+        }
       />
       <div className="grid gap-3 sm:grid-cols-3">
         <MetricCard
@@ -761,272 +299,6 @@ export function ServicesPage() {
       <ServicesTable data={backoffice.services} canViewDetail={canViewDetail} />
       <p className="text-xs text-muted-foreground">{common("sessionNotice")}</p>
     </div>
-  )
-}
-
-function EndpointEditDialog({ endpoint }: { endpoint: ServiceEndpoint }) {
-  const backoffice = useBackoffice()
-  const sessionAccess = useSessionAccess()
-  const access = useServiceResourceAccess()
-  const t = useTranslations("backoffice.endpoints")
-  const common = useTranslations("backoffice.common")
-  const [open, setOpen] = useState(false)
-  const [serviceId, setServiceId] = useState<string | null>(endpoint.serviceId)
-  const [method, setMethod] = useState<HttpMethod | null>(endpoint.method)
-  const [error, setError] = useState<BackofficeErrorCode>()
-  const [impact, setImpact] = useState<EndpointChangeImpact | null>(null)
-  const services = backoffice.services.filter(
-    (service) =>
-      service.status === entityStatuses.active &&
-      service.type === serviceTypeValues.internal &&
-      canManageService(access, service),
-  )
-  const formId = `endpoint-${endpoint.id}-form`
-  const endpointFields = backoffice.serviceEndpointFields.filter(
-    (field) => field.endpointId === endpoint.id,
-  )
-  const requestParameters = endpointFields.filter((field) =>
-    isEndpointRequestParameterLocation(field.location),
-  )
-  const requestBodyFields = endpointFields.filter(
-    (field) => field.location === endpointFieldLocationValues.requestBody,
-  )
-  const responseBodyFields = endpointFields.filter(
-    (field) => field.location === endpointFieldLocationValues.responseBody,
-  )
-
-  function changeOpen(nextOpen: boolean) {
-    setOpen(nextOpen)
-    setServiceId(endpoint.serviceId)
-    setMethod(endpoint.method)
-    setError(undefined)
-    setImpact(null)
-  }
-
-  async function submit(form: HTMLFormElement) {
-    const data = new FormData(form)
-    const parsed = serviceEndpointInputSchema.safeParse({
-      serviceId,
-      name: data.get("name"),
-      method,
-      path: data.get("path"),
-      version: data.get("version"),
-      lifecycle: endpoint.lifecycle,
-      fields: parseEndpointFields(data),
-    })
-    if (!parsed.success) {
-      setError("invalid-input")
-      return
-    }
-    const nextImpact = resolveEndpointChangeImpact(
-      backoffice,
-      endpoint.id,
-      parsed.data.fields,
-    )
-    const metadataChanged =
-      endpoint.name !== parsed.data.name ||
-      endpoint.method !== parsed.data.method ||
-      endpoint.path !== parsed.data.path ||
-      endpoint.version !== parsed.data.version
-    const hasFieldChanges =
-      nextImpact.addedFields.length > 0 ||
-      nextImpact.removedFields.length > 0 ||
-      nextImpact.changedFields.length > 0
-    if (!impact && (metadataChanged || hasFieldChanges)) {
-      setImpact(nextImpact)
-      return
-    }
-    const result = await backoffice.updateServiceEndpoint(
-      endpoint.id,
-      parsed.data,
-      sessionAccess.currentUser?.id ?? "",
-    )
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    snackbar.success(t("updated"))
-    setOpen(false)
-  }
-
-  return (
-    <FormDialog open={open} onOpenChange={changeOpen}>
-      <DialogTrigger render={<Button variant="outline" />}>
-        <Pencil />
-        {t("edit")}
-      </DialogTrigger>
-      <FormDialogContent>
-        <DialogHeader>
-          <DialogTitle>{t("edit")}</DialogTitle>
-          <DialogDescription>{t("editDescription")}</DialogDescription>
-        </DialogHeader>
-        <form
-          id={formId}
-          className="grid gap-4"
-          onChange={() => {
-            setImpact(null)
-          }}
-          onSubmit={(event) => {
-            event.preventDefault()
-            void submit(event.currentTarget)
-          }}
-        >
-          <FormSelect
-            label={t("service")}
-            value={serviceId}
-            onValueChange={setServiceId}
-            options={services.map((service) => ({
-              value: service.id,
-              label: service.name,
-            }))}
-          />
-          <Field>
-            <FieldLabel htmlFor={`${formId}-name`}>{common("name")}</FieldLabel>
-            <Input
-              id={`${formId}-name`}
-              name="name"
-              required
-              minLength={2}
-              maxLength={100}
-              defaultValue={endpoint.name}
-            />
-          </Field>
-          <FormSelect
-            label={t("method")}
-            value={method}
-            onValueChange={setMethod}
-            options={httpMethods.map((item) => ({
-              value: item,
-              label: item,
-            }))}
-          />
-          <Field>
-            <FieldLabel htmlFor={`${formId}-path`}>{t("path")}</FieldLabel>
-            <Input
-              id={`${formId}-path`}
-              name="path"
-              required
-              maxLength={500}
-              pattern="/.*"
-              defaultValue={endpoint.path}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${formId}-version`}>
-              {t("version")}
-            </FieldLabel>
-            <Input
-              id={`${formId}-version`}
-              name="version"
-              required
-              minLength={1}
-              maxLength={40}
-              pattern={endpointVersionInputPattern}
-              defaultValue={endpoint.version}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${formId}-request-parameters`}>
-              {t("requestParameters")}
-            </FieldLabel>
-            <Textarea
-              id={`${formId}-request-parameters`}
-              name="requestParameters"
-              required
-              rows={8}
-              className="font-mono text-xs"
-              defaultValue={JSON.stringify(
-                requestParameters.map(toEndpointFieldInput),
-                null,
-                2,
-              )}
-              aria-describedby={`${formId}-schema-description`}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${formId}-request-body-fields`}>
-              {t("requestBodyFields")}
-            </FieldLabel>
-            <Textarea
-              id={`${formId}-request-body-fields`}
-              name="requestBodyFields"
-              required
-              rows={8}
-              className="font-mono text-xs"
-              defaultValue={JSON.stringify(
-                requestBodyFields.map(toEndpointFieldInput),
-                null,
-                2,
-              )}
-              aria-describedby={`${formId}-schema-description`}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${formId}-response-body-fields`}>
-              {t("responseBodyFields")}
-            </FieldLabel>
-            <Textarea
-              id={`${formId}-response-body-fields`}
-              name="responseBodyFields"
-              required
-              rows={8}
-              className="font-mono text-xs"
-              defaultValue={JSON.stringify(
-                responseBodyFields.map(toEndpointFieldInput),
-                null,
-                2,
-              )}
-              aria-describedby={`${formId}-schema-description`}
-            />
-          </Field>
-          <FieldDescription id={`${formId}-schema-description`}>
-            {t("schemaInputDescription")}
-          </FieldDescription>
-          {impact ? (
-            <section className="grid gap-2 rounded-card border border-warning-foreground/30 bg-warning p-3">
-              <h3 className="font-semibold">{t("changeImpactTitle")}</h3>
-              <p className="text-sm text-warning-foreground">
-                {t("changeImpactDescription")}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="success">
-                  {t("addedFieldCount", { count: impact.addedFields.length })}
-                </Badge>
-                <Badge variant="destructive">
-                  {t("removedFieldCount", {
-                    count: impact.removedFields.length,
-                  })}
-                </Badge>
-                <Badge variant="warning">
-                  {t("changedFieldCount", {
-                    count: impact.changedFields.length,
-                  })}
-                </Badge>
-                <Badge variant="outline">
-                  {t("affectedPolicyCount", {
-                    count: impact.accessPolicyIds.length,
-                  })}
-                </Badge>
-                <Badge variant="outline">
-                  {t("affectedCredentialCount", {
-                    count: impact.apiKeyIds.length,
-                  })}
-                </Badge>
-              </div>
-            </section>
-          ) : null}
-          <CommandErrorMessage error={error} />
-        </form>
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>
-            {common("cancel")}
-          </DialogClose>
-          <Button type="submit" form={formId} disabled={!serviceId || !method}>
-            {impact ? common("save") : t("reviewImpact")}
-          </Button>
-        </DialogFooter>
-      </FormDialogContent>
-    </FormDialog>
   )
 }
 
@@ -1163,197 +435,6 @@ function EndpointsTable({
   )
 }
 
-function EndpointCreationDialog() {
-  const backoffice = useBackoffice()
-  const sessionAccess = useSessionAccess()
-  const access = useServiceResourceAccess()
-  const t = useTranslations("backoffice.endpoints")
-  const common = useTranslations("backoffice.common")
-  const [open, setOpen] = useState(false)
-  const [serviceId, setServiceId] = useState<string | null>(null)
-  const [method, setMethod] = useState<HttpMethod | null>(null)
-  const [error, setError] = useState<BackofficeErrorCode>()
-  const services = backoffice.services.filter(
-    (item) =>
-      item.status === entityStatuses.active &&
-      item.type === serviceTypeValues.internal &&
-      canManageService(access, item),
-  )
-  const formId = "endpoint-create-form"
-
-  function changeOpen(nextOpen: boolean) {
-    setOpen(nextOpen)
-    setServiceId(null)
-    setMethod(null)
-    setError(undefined)
-  }
-
-  async function submit(form: HTMLFormElement) {
-    const data = new FormData(form)
-    const parsed = serviceEndpointInputSchema.safeParse({
-      serviceId,
-      name: data.get("name"),
-      method,
-      path: data.get("path"),
-      version: data.get("version"),
-      lifecycle: endpointLifecycleValues.active,
-      fields: parseEndpointFields(data),
-    })
-    if (!parsed.success) {
-      setError("invalid-input")
-      return
-    }
-    const result = await backoffice.createServiceEndpoint(
-      parsed.data,
-      sessionAccess.currentUser?.id ?? "",
-    )
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    snackbar.success(t("created"))
-    setOpen(false)
-  }
-
-  return (
-    <FormDialog open={open} onOpenChange={changeOpen}>
-      <DialogTrigger render={<Button />}>
-        <Plus />
-        {t("add")}
-      </DialogTrigger>
-      <FormDialogContent>
-        <DialogHeader>
-          <DialogTitle>{t("add")}</DialogTitle>
-          <DialogDescription>{t("addDescription")}</DialogDescription>
-        </DialogHeader>
-        {services.length === 0 ? (
-          <EmptyState title={t("add")} description={t("prerequisite")} />
-        ) : (
-          <form
-            id={formId}
-            className="grid gap-4"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void submit(event.currentTarget)
-            }}
-          >
-            <FormSelect
-              label={t("service")}
-              value={serviceId}
-              onValueChange={setServiceId}
-              options={services.map((item) => ({
-                value: item.id,
-                label: item.name,
-              }))}
-            />
-            <Field>
-              <FieldLabel htmlFor="endpoint-name">{common("name")}</FieldLabel>
-              <Input
-                id="endpoint-name"
-                name="name"
-                required
-                minLength={2}
-                maxLength={100}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="endpoint-version">{t("version")}</FieldLabel>
-              <Input
-                id="endpoint-version"
-                name="version"
-                required
-                minLength={1}
-                maxLength={40}
-                pattern={endpointVersionInputPattern}
-                defaultValue="v1"
-              />
-            </Field>
-            <FormSelect
-              label={t("method")}
-              value={method}
-              onValueChange={setMethod}
-              options={httpMethods.map((item) => ({
-                value: item,
-                label: item,
-              }))}
-            />
-            <Field>
-              <FieldLabel htmlFor="endpoint-path">{t("path")}</FieldLabel>
-              <Input
-                id="endpoint-path"
-                name="path"
-                required
-                pattern="/.*"
-                maxLength={500}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="endpoint-request-parameters">
-                {t("requestParameters")}
-              </FieldLabel>
-              <Textarea
-                id="endpoint-request-parameters"
-                name="requestParameters"
-                required
-                rows={8}
-                className="font-mono text-xs"
-                defaultValue="[]"
-                aria-describedby="endpoint-schema-description"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="endpoint-request-body-fields">
-                {t("requestBodyFields")}
-              </FieldLabel>
-              <Textarea
-                id="endpoint-request-body-fields"
-                name="requestBodyFields"
-                required
-                rows={8}
-                className="font-mono text-xs"
-                defaultValue="[]"
-                aria-describedby="endpoint-schema-description"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="endpoint-response-body-fields">
-                {t("responseBodyFields")}
-              </FieldLabel>
-              <Textarea
-                id="endpoint-response-body-fields"
-                name="responseBodyFields"
-                required
-                rows={8}
-                className="font-mono text-xs"
-                defaultValue="[]"
-                aria-describedby="endpoint-schema-description"
-              />
-            </Field>
-            <FieldDescription id="endpoint-schema-description">
-              {t("schemaInputDescription")}
-            </FieldDescription>
-            <CommandErrorMessage error={error} />
-          </form>
-        )}
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>
-            {common("cancel")}
-          </DialogClose>
-          {services.length ? (
-            <Button
-              type="submit"
-              form={formId}
-              disabled={!serviceId || !method}
-            >
-              {common("create")}
-            </Button>
-          ) : null}
-        </DialogFooter>
-      </FormDialogContent>
-    </FormDialog>
-  )
-}
-
 export function ServiceEndpointsPage() {
   const backoffice = useBackoffice()
   const sessionAccess = useSessionAccess()
@@ -1397,7 +478,15 @@ export function ServiceEndpointsPage() {
                   {t("syncOpenApi")}
                 </Button>
               ) : null}
-              {canRegister ? <EndpointCreationDialog /> : null}
+              {canRegister ? (
+                <Button
+                  nativeButton={false}
+                  render={<Link href="/service-endpoints/new" />}
+                >
+                  <Plus />
+                  {t("add")}
+                </Button>
+              ) : null}
             </>
           ) : null
         }
@@ -1573,7 +662,18 @@ export function ServiceEndpointDetailPage({
         actions={
           canUpdate || canDelete || canChangeLifecycle ? (
             <>
-              {canUpdate ? <EndpointEditDialog endpoint={endpoint} /> : null}
+              {canUpdate ? (
+                <Button
+                  nativeButton={false}
+                  variant="outline"
+                  render={
+                    <Link href={`/service-endpoints/${endpoint.id}/edit`} />
+                  }
+                >
+                  <Pencil />
+                  {t("edit")}
+                </Button>
+              ) : null}
               {canChangeLifecycle ? (
                 <ConfirmAction
                   trigger={t(
@@ -1822,7 +922,16 @@ export function ServiceDetailPage({ serviceId }: { serviceId: string }) {
             )}
             {canUpdate || canDelete ? (
               <>
-                {canUpdate ? <ServiceEditDialog service={service} /> : null}
+                {canUpdate ? (
+                  <Button
+                    nativeButton={false}
+                    variant="outline"
+                    render={<Link href={`/services/${service.id}/edit`} />}
+                  >
+                    <Pencil />
+                    {t("edit")}
+                  </Button>
+                ) : null}
                 {canDelete ? (
                   <ConfirmAction
                     trigger={

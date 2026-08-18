@@ -4,21 +4,12 @@ import { requestCategoryValues } from "@/features/request-templates/model"
 import { approvalAssigneeTypes } from "@/features/access-policies/model"
 import type { ApprovalAssigneeType } from "@/features/access-policies/model"
 import { employmentStatusValues } from "@/features/iam/model"
-import { Copy, FlaskConical } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { FlaskConical } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useState } from "react"
 
 import { useBackoffice } from "@/application/state/provider"
-import { useSessionAccess } from "@/auth/session-access-provider"
-import {
-  CommandErrorMessage,
-  useBackofficeLabels,
-} from "@/application/ui/backoffice-ui"
-import {
-  FormDialog,
-  FormDialogContent,
-} from "@/components/patterns/form-dialog"
+import { useBackofficeLabels } from "@/application/ui/backoffice-ui"
 import { FormSelect } from "@/components/patterns/form-select"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -32,98 +23,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Field, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { snackbar } from "@/components/ui/snackbar"
-import type { BackofficeErrorCode } from "@/domain/common"
 import type { ApprovalLine } from "@/features/request-templates/model"
 import { previewRequestTemplate } from "@/features/request-templates/request-template-analysis"
-
-export function RequestTemplateCloneDialog({
-  template,
-}: {
-  template: ApprovalLine
-}) {
-  const backoffice = useBackoffice()
-  const sessionAccess = useSessionAccess()
-  const router = useRouter()
-  const common = useTranslations("backoffice.common")
-  const t = useTranslations("backoffice.approvalLines")
-  const [open, setOpen] = useState(false)
-  const [error, setError] = useState<BackofficeErrorCode>()
-
-  async function submit(form: HTMLFormElement) {
-    const name = new FormData(form).get("name")
-    if (typeof name !== "string") {
-      setError("invalid-input")
-      return
-    }
-    const result = await backoffice.cloneApprovalLine(
-      template.id,
-      name,
-      sessionAccess.currentUser?.id ?? "",
-    )
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    snackbar.success(t("cloned"))
-    setOpen(false)
-    router.push(`/approval-lines/${result.value.id}`)
-  }
-
-  return (
-    <FormDialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen)
-        setError(undefined)
-      }}
-    >
-      <DialogTrigger render={<Button variant="outline" />}>
-        <Copy />
-        {t("clone")}
-      </DialogTrigger>
-      <FormDialogContent>
-        <DialogHeader>
-          <DialogTitle>{t("cloneTitle")}</DialogTitle>
-          <DialogDescription>{t("cloneDescription")}</DialogDescription>
-        </DialogHeader>
-        <form
-          id="request-template-clone-form"
-          className="grid gap-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void submit(event.currentTarget)
-          }}
-        >
-          <Field>
-            <FieldLabel htmlFor="request-template-clone-name">
-              {common("name")}
-            </FieldLabel>
-            <Input
-              id="request-template-clone-name"
-              name="name"
-              defaultValue={`${template.name} ${t("copySuffix")}`}
-              required
-              minLength={2}
-              maxLength={100}
-            />
-          </Field>
-          <CommandErrorMessage error={error} />
-        </form>
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>
-            {common("cancel")}
-          </DialogClose>
-          <Button type="submit" form="request-template-clone-form">
-            {t("clone")}
-          </Button>
-        </DialogFooter>
-      </FormDialogContent>
-    </FormDialog>
-  )
-}
 
 export function RequestTemplatePreviewDialog({
   template,

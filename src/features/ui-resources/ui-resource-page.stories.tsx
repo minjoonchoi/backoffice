@@ -40,7 +40,7 @@ storyBackoffice.accessPolicies.push({
   name: "Story Console 시스템 관리자 UI 리소스 허용",
   description: "Story Console 시스템 관리자 권한을 검증합니다.",
   type: "access-grant",
-  managementType: "system-managed",
+  managementType: "system",
   effect: "allow",
   resources: [{ type: "ui-resource", id: storyManagementResource.id }],
   status: "active",

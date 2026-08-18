@@ -9,6 +9,10 @@ import {
   ServiceEndpointsPage,
   ServicesPage,
 } from "@/features/service-catalog/service-pages"
+import {
+  ServiceEditorPage,
+  ServiceEndpointEditorPage,
+} from "@/features/service-catalog/service-editor-pages"
 import { BackofficeProvider } from "@/application/state/provider"
 
 function findUserId(nickname: string) {
@@ -41,34 +45,15 @@ export const AdministratorServices: Story = {
     await expect(
       canvas.queryByRole("heading", { name: "서비스 등록" }),
     ).not.toBeInTheDocument()
-    await userEvent.click(canvas.getByRole("button", { name: "서비스 등록" }))
-    const body = within(canvasElement.ownerDocument.body)
-    const dialog = await body.findByRole("dialog")
-    await waitFor(() => expect(dialog).toBeVisible())
-    const modal = within(dialog)
     await expect(
-      modal.getByRole("heading", { name: "서비스 등록" }),
-    ).toBeVisible()
-    await expect(modal.getByRole("button", { name: "등록" })).toBeVisible()
+      canvas.getByRole("button", { name: "서비스 등록" }),
+    ).toHaveAttribute("href", "/services/new")
     await expect(
-      modal.queryByRole("combobox", { name: "환경" }),
+      canvas.queryByRole("combobox", { name: "환경" }),
     ).not.toBeInTheDocument()
     await expect(
-      modal.queryByRole("combobox", { name: "담당자" }),
+      canvas.queryByRole("combobox", { name: "담당자" }),
     ).not.toBeInTheDocument()
-    await expect(
-      modal.getByRole("combobox", { name: "소유 조직" }),
-    ).toBeVisible()
-    await expect(
-      modal.queryByRole("combobox", { name: "API Key 발급 요청 템플릿" }),
-    ).not.toBeInTheDocument()
-    await expect(
-      modal.queryByRole("combobox", { name: "API Key 교체 요청 템플릿" }),
-    ).not.toBeInTheDocument()
-    await expect(
-      modal.queryByRole("combobox", { name: "API Key 폐기 요청 템플릿" }),
-    ).not.toBeInTheDocument()
-    await userEvent.keyboard("{Escape}")
     await expect(
       canvas.getAllByText("내부 서비스", { selector: '[data-slot="badge"]' }),
     ).toHaveLength(3)
@@ -86,43 +71,40 @@ export const OrganizationLeaderServices: Story = {
         localSwitchingEnabled
         initialUserId={findUserId("Emma")}
       >
-        <ServicesPage />
+        <ServiceEditorPage />
       </SessionAccessProvider>
     </BackofficeProvider>
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(
-      canvas.getByRole("heading", { level: 1, name: "서비스" }),
+      canvas.getByRole("heading", { level: 1, name: "서비스 등록" }),
     ).toBeVisible()
     await expect(
-      canvas.getByRole("button", { name: "서비스 등록" }),
-    ).toBeVisible()
-    await userEvent.click(canvas.getByRole("button", { name: "서비스 등록" }))
-    const body = within(canvasElement.ownerDocument.body)
-    const dialog = await body.findByRole("dialog")
-    await waitFor(() => expect(dialog).toBeVisible())
-    const modal = within(dialog)
-    await expect(
-      modal.queryByRole("combobox", { name: "소유 조직" }),
+      canvas.queryByRole("combobox", { name: "소유 조직" }),
     ).not.toBeInTheDocument()
-    await userEvent.type(modal.getByRole("textbox", { name: "이름" }), "팀 API")
+    await expect(canvas.getByText("개발 2팀")).toBeVisible()
     await userEvent.type(
-      modal.getByRole("textbox", { name: "Slug" }),
+      canvas.getByRole("textbox", { name: "이름" }),
+      "팀 API",
+    )
+    await userEvent.type(
+      canvas.getByRole("textbox", { name: "Slug" }),
       "team-api",
     )
     await userEvent.type(
-      modal.getByRole("textbox", { name: "호스트" }),
+      canvas.getByRole("textbox", { name: "호스트" }),
       "https://team-api.example.com",
     )
-    await userEvent.click(modal.getByRole("combobox", { name: "서비스 유형" }))
+    await userEvent.click(canvas.getByRole("combobox", { name: "서비스 유형" }))
+    const body = within(canvasElement.ownerDocument.body)
     await userEvent.click(
       await body.findByRole("option", { name: "내부 서비스" }),
     )
-    await userEvent.click(modal.getByRole("button", { name: "등록" }))
-    await waitFor(() => expect(dialog).not.toBeVisible())
-    const createdRow = canvas.getByRole("row", { name: "팀 API 상세 보기" })
-    await expect(within(createdRow).getByText("개발 2팀")).toBeVisible()
+    await expect(canvas.getByRole("button", { name: "다음" })).toBeEnabled()
+    await expect(
+      canvas.queryByRole("combobox", { name: "API Key 발급 요청 템플릿" }),
+    ).not.toBeInTheDocument()
   },
 }
 
@@ -159,32 +141,12 @@ export const AdministratorEndpoints: Story = {
     await expect(
       canvas.getByRole("button", { name: "엔드포인트 등록" }),
     ).toBeVisible()
-    await userEvent.click(
+    await expect(
       canvas.getByRole("button", { name: "엔드포인트 등록" }),
-    )
-    const body = within(canvasElement.ownerDocument.body)
-    const dialog = await body.findByRole("dialog")
-    await waitFor(() => expect(dialog).toBeVisible())
-    const modal = within(dialog)
+    ).toHaveAttribute("href", "/service-endpoints/new")
     await expect(
-      modal.getByRole("heading", { name: "엔드포인트 등록" }),
-    ).toBeVisible()
-    await expect(modal.getByRole("button", { name: "등록" })).toBeVisible()
-    await expect(
-      modal.queryByRole("combobox", { name: "환경" }),
+      canvas.queryByRole("combobox", { name: "환경" }),
     ).not.toBeInTheDocument()
-    const serviceSelect = modal.getByRole("combobox", { name: "서비스" })
-    serviceSelect.focus()
-    await userEvent.keyboard("{Enter}")
-    await body.findByRole("listbox")
-    await expect(
-      body.getByRole("option", { name: "Developer API" }),
-    ).toBeInTheDocument()
-    await expect(
-      body.queryByRole("option", { name: "협업 SaaS" }),
-    ).not.toBeInTheDocument()
-    await userEvent.keyboard("{Escape}")
-    await userEvent.keyboard("{Escape}")
     const pathLink = canvas.getByRole("link", { name: "/health" })
     await expect(pathLink).toHaveAttribute(
       "href",
@@ -225,7 +187,7 @@ export const OrganizationLeaderEndpoints: Story = {
         localSwitchingEnabled
         initialUserId={findUserId("Emma")}
       >
-        <ServiceEndpointsPage />
+        <ServiceEndpointEditorPage />
       </SessionAccessProvider>
     </BackofficeProvider>
   ),
@@ -234,20 +196,12 @@ export const OrganizationLeaderEndpoints: Story = {
     await expect(
       canvas.getByRole("heading", {
         level: 1,
-        name: "엔드포인트",
+        name: "엔드포인트 등록",
       }),
     ).toBeVisible()
-    await expect(
-      canvas.getByRole("button", { name: "엔드포인트 등록" }),
-    ).toBeVisible()
-    await userEvent.click(
-      canvas.getByRole("button", { name: "엔드포인트 등록" }),
-    )
+    await expect(canvas.getByRole("button", { name: "다음" })).toBeDisabled()
     const body = within(canvasElement.ownerDocument.body)
-    const dialog = await body.findByRole("dialog")
-    await waitFor(() => expect(dialog).toBeVisible())
-    const modal = within(dialog)
-    const serviceSelect = modal.getByRole("combobox", { name: "서비스" })
+    const serviceSelect = canvas.getByRole("combobox", { name: "서비스" })
     serviceSelect.focus()
     await userEvent.keyboard("{Enter}")
     await body.findByRole("listbox")
@@ -258,16 +212,6 @@ export const OrganizationLeaderEndpoints: Story = {
       body.queryByRole("option", { name: "협업 SaaS" }),
     ).not.toBeInTheDocument()
     await userEvent.keyboard("{Escape}")
-    await userEvent.keyboard("{Escape}")
-    await expect(
-      canvas.queryByRole("columnheader", { name: "작업" }),
-    ).not.toBeInTheDocument()
-    await expect(
-      canvas.queryByRole("button", { name: "수정" }),
-    ).not.toBeInTheDocument()
-    await expect(
-      canvas.queryByRole("button", { name: "삭제" }),
-    ).not.toBeInTheDocument()
   },
 }
 
@@ -380,13 +324,12 @@ export const OrganizationLeaderDetail: Story = {
     await expect(
       canvas.getByRole("button", { name: "서비스 수정" }),
     ).toBeVisible()
-    await userEvent.click(canvas.getByRole("button", { name: "서비스 수정" }))
-    const body = within(canvasElement.ownerDocument.body)
-    const dialog = await body.findByRole("dialog")
-    const form = dialog.querySelector("form")
-    await expect(form).toHaveClass("grid")
-    await expect(form).not.toHaveClass("sm:grid-cols-2")
-    await userEvent.keyboard("{Escape}")
+    await expect(
+      canvas.getByRole("button", { name: "서비스 수정" }),
+    ).toHaveAttribute(
+      "href",
+      "/services/60000000-0000-4000-8000-000000000001/edit",
+    )
     await expect(
       canvas.queryByRole("columnheader", { name: "작업" }),
     ).not.toBeInTheDocument()
@@ -433,13 +376,10 @@ export const AdministratorEndpointDetail: Story = {
     await expect(canvas.getByRole("button", { name: "수정" })).toBeVisible()
     await expect(canvas.getByRole("button", { name: "삭제" })).toBeVisible()
 
-    await userEvent.click(canvas.getByRole("button", { name: "수정" }))
     const body = within(canvasElement.ownerDocument.body)
-    const editDialog = await body.findByRole("dialog")
-    const editForm = editDialog.querySelector("form")
-    await expect(editForm).toHaveClass("grid")
-    await expect(editForm).not.toHaveClass("sm:grid-cols-2")
-    await userEvent.keyboard("{Escape}")
+    await expect(
+      canvas.getByRole("button", { name: "수정" }).getAttribute("href"),
+    ).toMatch(/^\/service-endpoints\/.+\/edit$/)
 
     await userEvent.click(canvas.getByRole("button", { name: "삭제" }))
     const deleteHeading = await body.findByRole("heading", {

@@ -71,7 +71,7 @@ export function AccessPolicyAssignmentCard({
   const assignedPolicyIds = new Set(rows.map(({ policy }) => policy.id))
   const candidates = backoffice.accessPolicies.filter(
     (policy) =>
-      policy.managementType === accessPolicyManagementTypes.operatorManaged &&
+      policy.managementType === accessPolicyManagementTypes.general &&
       isAccessPolicyEffective(policy) &&
       !assignedPolicyIds.has(policy.id),
   )

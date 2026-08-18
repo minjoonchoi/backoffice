@@ -143,8 +143,7 @@ export function ApprovalReviewPage() {
       cell: ({ row }) => (
         <Badge
           variant={
-            row.original.managementType ===
-            accessPolicyManagementTypes.systemManaged
+            row.original.managementType === accessPolicyManagementTypes.system
               ? "info"
               : "outline"
           }

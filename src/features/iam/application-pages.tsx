@@ -6,211 +6,24 @@ import { AppWindow, Pencil, Plus, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 
 import { useSessionAccess } from "@/auth/session-access-provider"
 import { useBackoffice } from "@/application/state/provider"
-import {
-  CommandErrorMessage,
-  useBackofficeLabels,
-} from "@/application/ui/backoffice-ui"
+import { useBackofficeLabels } from "@/application/ui/backoffice-ui"
 import { ConfirmAction } from "@/components/patterns/confirm-action"
 import { DataTable } from "@/components/patterns/data-table"
 import { DetailGrid, DetailItem } from "@/components/patterns/detail-grid"
 import { EmptyState } from "@/components/patterns/content-state"
-import {
-  FormDialog,
-  FormDialogContent,
-} from "@/components/patterns/form-dialog"
 import { MetricCard } from "@/components/patterns/metric-card"
 import { PageHeader } from "@/components/patterns/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { snackbar } from "@/components/ui/snackbar"
-import { Textarea } from "@/components/ui/textarea"
 import { uiResourceKeys } from "@/config/menu-registry"
-import type { BackofficeErrorCode } from "@/domain/common"
-import { applicationInputSchema, type Application } from "@/features/iam/model"
+import type { Application } from "@/features/iam/model"
 import type { ApiKey } from "@/features/credentials/model"
 import { accessPolicyAssignmentTargets } from "@/features/access-policies/model"
-
-function ApplicationFormDialog({ application }: { application?: Application }) {
-  const backoffice = useBackoffice()
-  const sessionAccess = useSessionAccess()
-  const common = useTranslations("backoffice.common")
-  const t = useTranslations("backoffice.applications")
-  const [open, setOpen] = useState(false)
-  const [ownerOrganizationId, setOwnerOrganizationId] = useState(
-    application?.ownerOrganizationId ?? backoffice.organizations[0]?.id ?? "",
-  )
-  const [error, setError] = useState<BackofficeErrorCode>()
-  const formId = application
-    ? "application-update-form"
-    : "application-create-form"
-
-  async function submit(form: HTMLFormElement) {
-    const data = new FormData(form)
-    const parsed = applicationInputSchema.safeParse({
-      name: data.get("name"),
-      slug: data.get("slug"),
-      description: data.get("description"),
-      ownerOrganizationId,
-    })
-    if (!parsed.success) {
-      setError("invalid-input")
-      return
-    }
-    const requesterId = sessionAccess.currentUser?.id ?? ""
-    const result = application
-      ? await backoffice.updateApplication(
-          application.id,
-          parsed.data,
-          requesterId,
-        )
-      : await backoffice.createApplication(parsed.data, requesterId)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    snackbar.success(t(application ? "updated" : "created"))
-    setError(undefined)
-    setOpen(false)
-  }
-
-  return (
-    <FormDialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen)
-        if (nextOpen) {
-          setOwnerOrganizationId(
-            application?.ownerOrganizationId ??
-              backoffice.organizations[0]?.id ??
-              "",
-          )
-        }
-        setError(undefined)
-      }}
-    >
-      <DialogTrigger
-        render={<Button variant={application ? "outline" : "default"} />}
-      >
-        {application ? <Pencil /> : <Plus />}
-        {t(application ? "edit" : "add")}
-      </DialogTrigger>
-      <FormDialogContent>
-        <DialogHeader>
-          <DialogTitle>{t(application ? "edit" : "add")}</DialogTitle>
-          <DialogDescription>
-            {t(application ? "editDescription" : "addDescription")}
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          id={formId}
-          className="grid gap-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void submit(event.currentTarget)
-          }}
-        >
-          <Field>
-            <FieldLabel htmlFor={`${formId}-name`}>{t("name")}</FieldLabel>
-            <Input
-              id={`${formId}-name`}
-              name="name"
-              defaultValue={application?.name}
-              required
-              minLength={2}
-              maxLength={100}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${formId}-slug`}>{t("slug")}</FieldLabel>
-            <Input
-              id={`${formId}-slug`}
-              name="slug"
-              defaultValue={application?.slug}
-              required
-              minLength={2}
-              maxLength={64}
-              pattern="[a-z][a-z0-9]*(?:_[a-z0-9]+)*"
-              autoCapitalize="none"
-              spellCheck={false}
-              readOnly={Boolean(application)}
-            />
-            <FieldDescription>{t("slugDescription")}</FieldDescription>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${formId}-description`}>
-              {t("applicationDescription")}
-            </FieldLabel>
-            <Textarea
-              id={`${formId}-description`}
-              name="description"
-              defaultValue={application?.description}
-              required
-              minLength={2}
-              maxLength={500}
-              rows={4}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${formId}-owner`}>
-              {t("ownerOrganization")}
-            </FieldLabel>
-            <Select
-              value={ownerOrganizationId}
-              items={backoffice.organizations.map((organization) => ({
-                value: organization.id,
-                label: organization.name,
-              }))}
-              onValueChange={(value) => {
-                if (value) setOwnerOrganizationId(value)
-              }}
-            >
-              <SelectTrigger id={`${formId}-owner`} className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {backoffice.organizations.map((organization) => (
-                  <SelectItem key={organization.id} value={organization.id}>
-                    {organization.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <CommandErrorMessage error={error} />
-        </form>
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>
-            {common("cancel")}
-          </DialogClose>
-          <Button type="submit" form={formId}>
-            {application ? common("save") : common("create")}
-          </Button>
-        </DialogFooter>
-      </FormDialogContent>
-    </FormDialog>
-  )
-}
 
 export function ApplicationsPage() {
   const backoffice = useBackoffice()
@@ -253,7 +66,17 @@ export function ApplicationsPage() {
         eyebrow={t("eyebrow")}
         title={t("title")}
         description={t("description")}
-        actions={canCreate ? <ApplicationFormDialog /> : undefined}
+        actions={
+          canCreate ? (
+            <Button
+              nativeButton={false}
+              render={<Link href="/applications/new" />}
+            >
+              <Plus />
+              {t("add")}
+            </Button>
+          ) : undefined
+        }
       />
       <MetricCard
         icon={AppWindow}
@@ -373,7 +196,14 @@ export function ApplicationDetailPage({
             {sessionAccess.canAccessUiResource(
               uiResourceKeys.applications.detail.actions.updateApplication,
             ) ? (
-              <ApplicationFormDialog application={application} />
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href={`/applications/${application.id}/edit`} />}
+              >
+                <Pencil />
+                {t("edit")}
+              </Button>
             ) : null}
             {sessionAccess.canAccessUiResource(
               uiResourceKeys.applications.detail.actions.deleteApplication,

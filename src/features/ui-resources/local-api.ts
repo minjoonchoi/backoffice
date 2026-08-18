@@ -395,7 +395,7 @@ export function createLocalUiResourceApi(
         name: `${namespace.name} UI 리소스 관리 접근`,
         description: `${namespace.name} 관리 역할에 UI 리소스 관리 액션과 동기화 API 접근을 허용하고 동기화 시 선택된 UI 리소스를 추가합니다.`,
         type: accessPolicyTypes.accessGrant,
-        managementType: accessPolicyManagementTypes.systemManaged,
+        managementType: accessPolicyManagementTypes.system,
         effect: accessPolicyEffects.allow,
         resources: managementResources,
         status: entityStatuses.active,

@@ -18,7 +18,7 @@ function policy(id: string, effect: "allow" | "deny"): AccessPolicy {
     name: `${effect} policy`,
     description: `${effect} policy description`,
     type: "access-grant",
-    managementType: "operator-managed",
+    managementType: "general",
     effect,
     resources: [resource],
     status: "active",

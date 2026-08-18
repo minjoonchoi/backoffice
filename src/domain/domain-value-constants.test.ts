@@ -86,6 +86,13 @@ function escapeRegExp(value: string) {
 }
 
 describe("domain value constants", () => {
+  it("uses general and system policy classifications", () => {
+    expect(Object.values(accessPolicyManagementTypes)).toEqual([
+      "general",
+      "system",
+    ])
+  })
+
   it("does not use raw domain values in production conditions or discriminators", () => {
     const sourceFiles = readdirSync(sourceRoot, { recursive: true })
       .filter(

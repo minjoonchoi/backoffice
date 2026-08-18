@@ -192,8 +192,7 @@ export function createLocalApprovalDocumentApi(
         parsed.data.documentKind === approvalDocumentKinds.general &&
         parsed.data.type === approvalTypeValues.accessGrant &&
         (accessPolicy?.status !== entityStatuses.active ||
-          accessPolicy.managementType ===
-            accessPolicyManagementTypes.systemManaged ||
+          accessPolicy.managementType === accessPolicyManagementTypes.system ||
           accessPolicy.type !== line.type ||
           new Date(parsed.data.expiresAt).getTime() <= Date.now())
       ) {

@@ -61,6 +61,7 @@ export const uiResourceRegistry = {
     name: "사용자",
     views: {
       list: { actions: { createUser: "사용자 등록" } },
+      create: { actions: {} },
       detail: {
         actions: {
           assignUserOrganization: "사용자 조직 연결",
@@ -77,6 +78,8 @@ export const uiResourceRegistry = {
     name: "조직",
     views: {
       list: { actions: { createOrganization: "조직 생성" } },
+      create: { actions: {} },
+      update: { actions: {} },
       detail: {
         actions: {
           updateOrganization: "조직 수정",
@@ -98,6 +101,8 @@ export const uiResourceRegistry = {
           compareRoles: "역할 권한 비교",
         },
       },
+      create: { actions: {} },
+      update: { actions: {} },
       detail: {
         actions: {
           assignRoleUser: "역할 사용자 추가",
@@ -116,6 +121,8 @@ export const uiResourceRegistry = {
     name: "어플리케이션",
     views: {
       list: { actions: { createApplication: "어플리케이션 등록" } },
+      create: { actions: {} },
+      update: { actions: {} },
       detail: {
         actions: {
           updateApplication: "어플리케이션 수정",
@@ -195,6 +202,8 @@ export const uiResourceRegistry = {
     name: "서비스",
     views: {
       list: { actions: { createService: "서비스 등록" } },
+      create: { actions: {} },
+      update: { actions: {} },
       detail: {
         actions: {
           updateService: "서비스 수정",
@@ -215,6 +224,8 @@ export const uiResourceRegistry = {
           syncEndpoints: "OpenAPI 엔드포인트 동기화",
         },
       },
+      create: { actions: {} },
+      update: { actions: {} },
       detail: {
         actions: {
           updateEndpoint: "엔드포인트 수정",
@@ -234,6 +245,8 @@ export const uiResourceRegistry = {
       list: {
         actions: { createNamespace: "네임스페이스 생성" },
       },
+      create: { actions: {} },
+      update: { actions: {} },
       detail: {
         actions: {
           changeNamespaceManager: "네임스페이스 관리 역할 변경",

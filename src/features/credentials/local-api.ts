@@ -228,7 +228,7 @@ export function createLocalCredentialApi(
               name: `${application.name} · ${service.name} 접근`,
               description: `${application.name} 자격증명이 ${service.name}에서 선택한 리소스에 접근하도록 시스템에서 관리합니다.`,
               type: approvalTypeValues.accessGrant,
-              managementType: accessPolicyManagementTypes.systemManaged,
+              managementType: accessPolicyManagementTypes.system,
               effect: accessPolicyEffects.allow,
               resources: endpointIds.map((id) => ({
                 type: accessPolicyResourceTypes.endpoint,

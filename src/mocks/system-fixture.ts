@@ -197,7 +197,7 @@ function createUiAccessPolicy(
       name,
       description,
       type: accessPolicyTypes.accessGrant,
-      managementType: accessPolicyManagementTypes.systemManaged,
+      managementType: accessPolicyManagementTypes.system,
       effect: accessPolicyEffects.allow,
       resources: [
         ...uiResourceReferences(resourceKeys),

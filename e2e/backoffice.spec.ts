@@ -28,14 +28,18 @@ async function waitForHydration(page: Page) {
 
 async function createUser(page: Page, nickname: string, email: string) {
   await page.getByRole("button", { name: "사용자 등록" }).click()
-  const dialog = page.getByRole("dialog")
-  await dialog.getByRole("textbox", { name: "닉네임" }).fill(nickname)
-  await dialog.getByRole("textbox", { name: "이메일" }).fill(email)
-  await choose(page, dialog, "재직 상태", "재직")
-  await expect(dialog.locator('[data-slot="select-value"]')).toHaveText("재직")
-  await dialog.getByRole("checkbox", { name: "개발 1팀" }).check()
-  await dialog.getByRole("button", { name: "등록" }).click()
-  await expect(dialog).toBeHidden()
+  await expect(page).toHaveURL(/\/users\/new$/)
+  const editor = page.locator("main")
+  await editor.getByRole("textbox", { name: "닉네임" }).fill(nickname)
+  await editor.getByRole("textbox", { name: "이메일" }).fill(email)
+  await choose(page, editor, "재직 상태", "재직")
+  await expect(editor.locator('[data-slot="select-value"]')).toHaveText("재직")
+  await editor.getByRole("checkbox", { name: "개발 1팀" }).check()
+  await editor.getByRole("button", { name: "다음" }).click()
+  await editor.getByRole("button", { name: "등록" }).click()
+  await expect(page).toHaveURL(/\/users\/[0-9a-f-]+$/)
+  await page.getByRole("link", { name: "사용자", exact: true }).click()
+  await expect(page).toHaveURL(/\/users$/)
 
   const nicknameSearch = page.getByRole("searchbox", { name: "닉네임" })
   await nicknameSearch.fill(nickname)
@@ -43,6 +47,38 @@ async function createUser(page: Page, nickname: string, email: string) {
     page.getByRole("cell", { name: nickname, exact: true }),
   ).toBeVisible()
   await nicknameSearch.clear()
+}
+
+async function createOrganization(
+  page: Page,
+  name: string,
+  leader: string,
+  parent?: string,
+) {
+  await page.getByRole("button", { name: "조직 등록" }).click()
+  await expect(page).toHaveURL(/\/organizations\/new$/)
+  const editor = page.locator("main")
+  await editor.getByRole("textbox", { name: "조직명" }).fill(name)
+  await choose(page, editor, "조직장", leader)
+  if (parent) await choose(page, editor, "상위 조직", parent)
+  await editor.getByRole("button", { name: "다음" }).click()
+  await editor.getByRole("button", { name: "등록" }).click()
+  await expect(page).toHaveURL(/\/organizations\/[0-9a-f-]+$/)
+  await page.getByRole("link", { name: "조직", exact: true }).click()
+  await expect(page).toHaveURL(/\/organizations$/)
+}
+
+async function createRole(page: Page, name: string, description: string) {
+  await page.getByRole("button", { name: "역할 생성" }).click()
+  await expect(page).toHaveURL(/\/roles\/new$/)
+  const editor = page.locator("main")
+  await editor.getByRole("textbox", { name: "역할 이름" }).fill(name)
+  await editor.getByRole("textbox", { name: "설명" }).fill(description)
+  await editor.getByRole("button", { name: "다음" }).click()
+  await editor.getByRole("button", { name: "등록" }).click()
+  await expect(page).toHaveURL(/\/roles\/[0-9a-f-]+$/)
+  await page.getByRole("link", { name: "역할", exact: true }).click()
+  await expect(page).toHaveURL(/\/roles$/)
 }
 
 async function switchSessionUser(page: Page, nickname: string) {
@@ -71,35 +107,21 @@ async function processRequestStages(
   await page.getByRole("link", { name: "자격증명", exact: true }).click()
 }
 
-test("warns before discarding a changed form dialog and resets its draft", async ({
+test("uses a dedicated page for entity creation and resets after navigation", async ({
   page,
 }) => {
   await page.goto("/services")
   await waitForHydration(page)
 
   await page.getByRole("button", { name: "서비스 등록" }).click()
-  let dialog = page.getByRole("dialog", { name: "서비스 등록" })
-  const serviceName = dialog.getByRole("textbox", { name: "이름" })
+  await expect(page).toHaveURL(/\/services\/new$/)
+  const serviceName = page.getByRole("textbox", { name: "이름" })
   await serviceName.fill("임시 서비스")
-  await dialog.getByRole("button", { name: "취소" }).click()
-
-  let confirmation = page.getByRole("alertdialog")
-  await expect(
-    confirmation.getByRole("heading", {
-      name: "작성 중인 내용을 취소할까요?",
-    }),
-  ).toBeVisible()
-  await confirmation.getByRole("button", { name: "계속 작성" }).click()
-  await expect(serviceName).toHaveValue("임시 서비스")
-
-  await dialog.getByRole("button", { name: "취소" }).click()
-  confirmation = page.getByRole("alertdialog")
-  await confirmation.getByRole("button", { name: "작성 취소" }).click()
-  await expect(dialog).toBeHidden()
+  await page.getByRole("button", { name: "취소" }).click()
+  await expect(page).toHaveURL(/\/services$/)
 
   await page.getByRole("button", { name: "서비스 등록" }).click()
-  dialog = page.getByRole("dialog", { name: "서비스 등록" })
-  await expect(dialog.getByRole("textbox", { name: "이름" })).toHaveValue("")
+  await expect(page.getByRole("textbox", { name: "이름" })).toHaveValue("")
 })
 
 test("keeps system management last and separates IAM from organization leaders", async ({
@@ -305,29 +327,27 @@ test("removes list row navigation when its detail view is inactive", async ({
   await expect(page).toHaveURL(/\/users$/)
 })
 
-test("isolates YAML UI Resources by a system-managed namespace", async ({
-  page,
-}) => {
+test("isolates YAML UI Resources by a system namespace", async ({ page }) => {
   await page.goto("/")
   await waitForHydration(page)
   await page.getByRole("link", { name: "네임스페이스", exact: true }).click()
   await expect(page).toHaveURL(/\/namespaces$/)
   await page.getByRole("button", { name: "네임스페이스 추가" }).click()
-  const namespaceDialog = page.getByRole("dialog", {
-    name: "네임스페이스 추가",
-  })
-  await namespaceDialog
+  await expect(page).toHaveURL(/\/namespaces\/new$/)
+  const namespaceEditor = page.locator("main")
+  await namespaceEditor
     .getByRole("textbox", { name: "네임스페이스 key" })
     .fill("integration-console")
-  await namespaceDialog
+  await namespaceEditor
     .getByRole("textbox", { name: "이름" })
     .fill("Integration Console")
-  await namespaceDialog
+  await namespaceEditor
     .getByRole("textbox", { name: "설명" })
     .fill("통합 시스템 UI 리소스를 격리합니다.")
-  await choose(page, namespaceDialog, "관리 역할", "Backoffice 시스템 관리자")
-  await namespaceDialog.getByRole("button", { name: "등록" }).click()
-  await expect(namespaceDialog).toBeHidden()
+  await choose(page, namespaceEditor, "관리 역할", "Backoffice 시스템 관리자")
+  await namespaceEditor.getByRole("button", { name: "다음" }).click()
+  await namespaceEditor.getByRole("button", { name: "등록" }).click()
+  await expect(page).toHaveURL(/\/namespaces\/[0-9a-f-]+$/)
 
   await page.getByRole("link", { name: "UI 리소스", exact: true }).click()
   await expect(page).toHaveURL(/\/ui-resources$/)
@@ -878,13 +898,15 @@ test("reviews assigned policy impact and applies an authorized change directly",
 })
 
 test("creates and approves an API key issuance request", async ({ page }) => {
+  test.setTimeout(60_000)
   await page.goto("/users")
   await waitForHydration(page)
   await createUser(page, "minjoon", "minjoon@example.com")
 
   await page.getByRole("link", { name: "어플리케이션" }).click()
   await page.getByRole("button", { name: "어플리케이션 등록" }).click()
-  let dialog = page.getByRole("dialog", { name: "어플리케이션 등록" })
+  await expect(page).toHaveURL(/\/applications\/new$/)
+  let dialog = page.locator("main")
   await dialog
     .getByRole("textbox", { name: "어플리케이션 이름" })
     .fill("Partner Integration")
@@ -895,22 +917,20 @@ test("creates and approves an API key issuance request", async ({ page }) => {
     .getByRole("textbox", { name: "설명" })
     .fill("파트너 API를 호출하는 테스트 어플리케이션입니다.")
   await choose(page, dialog, "소유 조직", "개발 1팀")
+  await dialog.getByRole("button", { name: "다음" }).click()
   await dialog.getByRole("button", { name: "등록" }).click()
-  await expect(dialog).toBeHidden()
+  await expect(page).toHaveURL(/\/applications\/[0-9a-f-]+$/)
 
   await page.getByRole("link", { name: "조직" }).click()
-  await page.getByRole("button", { name: "조직 등록" }).click()
-  dialog = page.getByRole("dialog")
-  await dialog.getByRole("textbox", { name: "조직명" }).fill("플랫폼 운영")
-  await choose(page, dialog, "조직장", "Owen")
-  await dialog.getByRole("button", { name: "저장" }).click()
+  await createOrganization(page, "플랫폼 운영", "Owen")
   await expect(
     page.getByRole("cell", { name: "플랫폼 운영", exact: true }),
   ).toBeVisible()
 
   await page.getByRole("link", { name: "서비스", exact: true }).click()
   await page.getByRole("button", { name: "서비스 등록" }).click()
-  dialog = page.getByRole("dialog")
+  await expect(page).toHaveURL(/\/services\/new$/)
+  dialog = page.locator("main")
   await dialog.getByRole("textbox", { name: "이름" }).fill("파트너 API")
   await dialog.getByRole("textbox", { name: "Slug" }).fill("partner-api")
   await dialog
@@ -918,10 +938,9 @@ test("creates and approves an API key issuance request", async ({ page }) => {
     .fill("https://partner.example.com")
   await choose(page, dialog, "서비스 유형", "내부 서비스")
   await choose(page, dialog, "소유 조직", "플랫폼 운영")
+  await dialog.getByRole("button", { name: "다음" }).click()
   await dialog.getByRole("button", { name: "등록" }).click()
-  await expect(
-    page.getByRole("cell", { name: "파트너 API", exact: true }),
-  ).toBeVisible()
+  await expect(page).toHaveURL(/\/services\/[0-9a-f-]+$/)
 
   await page.getByRole("link", { name: "엔드포인트", exact: true }).click()
   for (const endpoint of [
@@ -933,13 +952,16 @@ test("creates and approves an API key issuance request", async ({ page }) => {
     },
   ]) {
     await page.getByRole("button", { name: "엔드포인트 등록" }).click()
-    dialog = page.getByRole("dialog", { name: "엔드포인트 등록" })
+    await expect(page).toHaveURL(/\/service-endpoints\/new$/)
+    dialog = page.locator("main")
     await choose(page, dialog, "서비스", "파트너 API")
     await dialog.getByRole("textbox", { name: "이름" }).fill(endpoint.name)
     await choose(page, dialog, "메서드", endpoint.method)
     await dialog.getByRole("textbox", { name: "경로" }).fill(endpoint.path)
+    await dialog.getByRole("button", { name: "다음" }).click()
     await dialog.getByRole("button", { name: "등록" }).click()
-    await expect(dialog).toBeHidden()
+    await expect(page).toHaveURL(/\/service-endpoints\/[0-9a-f-]+$/)
+    await page.getByRole("link", { name: "엔드포인트", exact: true }).click()
   }
 
   await page.getByRole("link", { name: "요청 템플릿" }).click()
@@ -1030,10 +1052,12 @@ test("creates and approves an API key issuance request", async ({ page }) => {
     .getByRole("cell", { name: "파트너 API", exact: true })
     .click()
   await page.getByRole("button", { name: "서비스 수정" }).click()
-  dialog = page.getByRole("dialog")
+  await expect(page).toHaveURL(/\/services\/[0-9a-f-]+\/edit$/)
+  dialog = page.locator("main")
   await choose(page, dialog, "API Key 발급 요청 템플릿", "파트너 자격증명 발급")
+  await dialog.getByRole("button", { name: "다음" }).click()
   await dialog.getByRole("button", { name: "저장" }).click()
-  await expect(dialog).toBeHidden()
+  await expect(page).toHaveURL(/\/services\/[0-9a-f-]+$/)
 
   await page.getByRole("link", { name: "자격증명" }).click()
   await page.getByRole("button", { name: "자격증명 요청" }).click()
@@ -1311,18 +1335,8 @@ test("manages organization hierarchy and multiple memberships", async ({
   await expect(leaderRow.getByText("재직", { exact: true })).toBeVisible()
 
   await page.getByRole("link", { name: "조직" }).click()
-  await page.getByRole("button", { name: "조직 등록" }).click()
-  let dialog = page.getByRole("dialog")
-  await dialog.getByRole("textbox", { name: "조직명" }).fill("기술 본부")
-  await choose(page, dialog, "조직장", "leader")
-  await dialog.getByRole("button", { name: "저장" }).click()
-
-  await page.getByRole("button", { name: "조직 등록" }).click()
-  dialog = page.getByRole("dialog")
-  await dialog.getByRole("textbox", { name: "조직명" }).fill("플랫폼 팀")
-  await choose(page, dialog, "조직장", "member")
-  await choose(page, dialog, "상위 조직", "기술 본부")
-  await dialog.getByRole("button", { name: "저장" }).click()
+  await createOrganization(page, "기술 본부", "leader")
+  await createOrganization(page, "플랫폼 팀", "member", "기술 본부")
 
   await page
     .getByRole("row", { name: "기술 본부 상세 보기" })
@@ -1339,7 +1353,7 @@ test("manages organization hierarchy and multiple memberships", async ({
   ).toBeVisible()
 
   await page.getByRole("button", { name: "사용자 추가" }).click()
-  dialog = page.getByRole("dialog")
+  let dialog = page.getByRole("dialog")
   await dialog.getByRole("searchbox", { name: "닉네임 검색" }).fill("member")
   await dialog.getByRole("checkbox", { name: "member" }).click()
   await dialog.getByRole("button", { name: "사용자 추가" }).click()
@@ -1350,10 +1364,12 @@ test("manages organization hierarchy and multiple memberships", async ({
   ).toBeVisible()
 
   await page.getByRole("button", { name: "조직 수정" }).click()
-  dialog = page.getByRole("dialog")
+  await expect(page).toHaveURL(/\/organizations\/[0-9a-f-]+\/edit$/)
+  dialog = page.locator("main")
   await dialog.getByRole("textbox", { name: "조직명" }).fill("기술 플랫폼 본부")
+  await dialog.getByRole("button", { name: "다음" }).click()
   await dialog.getByRole("button", { name: "저장" }).click()
-  await expect(dialog).toBeHidden()
+  await expect(page).toHaveURL(/\/organizations\/[0-9a-f-]+$/)
   await expect(
     page.getByRole("heading", { name: "기술 플랫폼 본부" }),
   ).toBeVisible()
@@ -1429,18 +1445,14 @@ test("adds multiple unassigned users from paginated nickname results", async ({
   }
 
   await page.getByRole("link", { name: "조직" }).click()
-  await page.getByRole("button", { name: "조직 등록" }).click()
-  let dialog = page.getByRole("dialog")
-  await dialog.getByRole("textbox", { name: "조직명" }).fill("페이지 조직")
-  await choose(page, dialog, "조직장", "page-leader")
-  await dialog.getByRole("button", { name: "저장" }).click()
+  await createOrganization(page, "페이지 조직", "page-leader")
   await page
     .getByRole("row", { name: "페이지 조직 상세 보기" })
     .getByRole("cell", { name: "페이지 조직", exact: true })
     .click()
 
   await page.getByRole("button", { name: "사용자 추가" }).click()
-  dialog = page.getByRole("dialog")
+  let dialog = page.getByRole("dialog")
   await expect(
     dialog.getByRole("checkbox", { name: "page-leader" }),
   ).toHaveCount(0)
@@ -1478,11 +1490,7 @@ test("assigns users, organizations, and roles from each detail page", async ({
   await createUser(page, "access-member", "access-member@example.com")
 
   await page.getByRole("link", { name: "조직" }).click()
-  await page.getByRole("button", { name: "조직 등록" }).click()
-  let dialog = page.getByRole("dialog")
-  await dialog.getByRole("textbox", { name: "조직명" }).fill("접근 제어팀")
-  await choose(page, dialog, "조직장", "access-leader")
-  await dialog.getByRole("button", { name: "저장" }).click()
+  await createOrganization(page, "접근 제어팀", "access-leader")
 
   await page.getByRole("link", { name: "역할" }).click()
   const rolesToCreate: { name: string; description: string }[] = [
@@ -1490,12 +1498,7 @@ test("assigns users, organizations, and roles from each detail page", async ({
     { name: "접근 검토자", description: "접근 권한을 검토합니다." },
   ]
   for (const role of rolesToCreate) {
-    await page.getByRole("button", { name: "역할 생성" }).click()
-    dialog = page.getByRole("dialog")
-    await dialog.getByRole("textbox", { name: "역할 이름" }).fill(role.name)
-    await dialog.getByRole("textbox", { name: "설명" }).fill(role.description)
-    await dialog.getByRole("button", { name: "등록" }).click()
-    await expect(dialog).toBeHidden()
+    await createRole(page, role.name, role.description)
   }
   await page
     .getByRole("row", { name: "접근 관리자 상세 보기" })
@@ -1506,7 +1509,7 @@ test("assigns users, organizations, and roles from each detail page", async ({
     page.getByRole("heading", { name: "접근 관리자", exact: true }),
   ).toBeVisible()
   await page.getByRole("button", { name: "사용자 추가" }).click()
-  dialog = page.getByRole("dialog")
+  let dialog = page.getByRole("dialog")
   await dialog
     .getByRole("searchbox", { name: "닉네임 검색" })
     .fill("access-member")

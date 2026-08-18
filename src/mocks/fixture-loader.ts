@@ -144,7 +144,7 @@ const localAccessPolicySchema = z
     description: z.string().trim().min(2).max(500),
     type: accessPolicyTypeSchema,
     managementType: accessPolicyManagementTypeSchema.default(
-      accessPolicyManagementTypes.operatorManaged,
+      accessPolicyManagementTypes.general,
     ),
     effect: accessPolicyEffectSchema,
     resources: z.array(localAccessPolicyResourceSchema).min(1).max(2000),

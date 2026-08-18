@@ -360,7 +360,7 @@ export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
     : policy.resources
   const isAssigned = missingResources.length === 0
   const canUpdate =
-    policy.managementType === accessPolicyManagementTypes.operatorManaged &&
+    policy.managementType === accessPolicyManagementTypes.general &&
     policy.status === entityStatuses.active &&
     sessionAccess.canAccessUiResource(
       uiResourceKeys.approvalDocuments.detail.actions.updatePolicy,
@@ -369,13 +369,13 @@ export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
       uiResourceKeys.approvalDocuments.update.key,
     )
   const canDelete =
-    policy.managementType === accessPolicyManagementTypes.operatorManaged &&
+    policy.managementType === accessPolicyManagementTypes.general &&
     policy.status === entityStatuses.active &&
     sessionAccess.canAccessUiResource(
       uiResourceKeys.approvalDocuments.detail.actions.deletePolicy,
     )
   const canClone =
-    policy.managementType === accessPolicyManagementTypes.operatorManaged &&
+    policy.managementType === accessPolicyManagementTypes.general &&
     sessionAccess.canAccessUiResource(
       uiResourceKeys.approvalDocuments.detail.actions.clonePolicy,
     ) &&
@@ -411,8 +411,7 @@ export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
         description={t("detailDescription")}
         actions={
           <div className="flex flex-wrap gap-2">
-            {policy.managementType ===
-              accessPolicyManagementTypes.systemManaged ||
+            {policy.managementType === accessPolicyManagementTypes.system ||
             isAssigned ? null : canRequest && canOpenRequestPage ? (
               <Button
                 nativeButton={false}
@@ -484,8 +483,7 @@ export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
             <DetailItem label={t("managementType")}>
               <Badge
                 variant={
-                  policy.managementType ===
-                  accessPolicyManagementTypes.systemManaged
+                  policy.managementType === accessPolicyManagementTypes.system
                     ? "info"
                     : "outline"
                 }

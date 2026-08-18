@@ -1408,7 +1408,7 @@ describe("BackofficeProvider", () => {
       (policy) => policy.id === registration.value.apiKey.accessPolicyId,
     )
     expect(generatedPolicy).toMatchObject({
-      managementType: "system-managed",
+      managementType: "system",
       effect: "allow",
       status: "active",
       resources: credentialEndpointIds.map((id) => ({

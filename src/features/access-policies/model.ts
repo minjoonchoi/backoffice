@@ -19,8 +19,8 @@ import {
 export const accessPolicyEffects = { allow: "allow", deny: "deny" } as const
 export const accessPolicyTypes = { accessGrant: "access-grant" } as const
 export const accessPolicyManagementTypes = {
-  operatorManaged: "operator-managed",
-  systemManaged: "system-managed",
+  general: "general",
+  system: "system",
 } as const
 export const accessPolicyResourceTypes = {
   endpoint: "endpoint",

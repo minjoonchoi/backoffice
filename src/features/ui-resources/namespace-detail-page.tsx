@@ -6,13 +6,11 @@ import { Archive, History, ShieldCheck, TriangleAlert } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { useState } from "react"
 
 import { useSessionAccess } from "@/auth/session-access-provider"
 import { UiResourceLink } from "@/auth/ui-resource-link"
 import { useBackoffice } from "@/application/state/provider"
 import {
-  CommandErrorMessage,
   StatusBadge,
   useBackofficeLabels,
 } from "@/application/ui/backoffice-ui"
@@ -20,101 +18,13 @@ import { ConfirmAction } from "@/components/patterns/confirm-action"
 import { EmptyState } from "@/components/patterns/content-state"
 import { DataTable } from "@/components/patterns/data-table"
 import { DetailGrid, DetailItem } from "@/components/patterns/detail-grid"
-import {
-  FormDialog,
-  FormDialogContent,
-} from "@/components/patterns/form-dialog"
-import { FormSelect } from "@/components/patterns/form-select"
 import { MetricCard } from "@/components/patterns/metric-card"
 import { PageHeader } from "@/components/patterns/page-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { snackbar } from "@/components/ui/snackbar"
 import { uiResourceKeys } from "@/config/menu-registry"
-import type { BackofficeErrorCode } from "@/domain/common"
-import type {
-  Namespace,
-  UiResourceSyncHistory,
-} from "@/features/ui-resources/model"
-
-function NamespaceManagerDialog({ namespace }: { namespace: Namespace }) {
-  const backoffice = useBackoffice()
-  const sessionAccess = useSessionAccess()
-  const common = useTranslations("backoffice.common")
-  const t = useTranslations("backoffice.namespaces")
-  const [open, setOpen] = useState(false)
-  const [roleId, setRoleId] = useState<string | null>(namespace.managerRoleId)
-  const [error, setError] = useState<BackofficeErrorCode>()
-
-  async function submit() {
-    if (!roleId || !sessionAccess.currentUser) {
-      setError("invalid-input")
-      return
-    }
-    const result = await backoffice.updateNamespaceManager(
-      namespace.id,
-      roleId,
-      sessionAccess.currentUser.id,
-    )
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    snackbar.success(t("managerUpdated"))
-    setOpen(false)
-  }
-
-  return (
-    <FormDialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen)
-        setRoleId(namespace.managerRoleId)
-        setError(undefined)
-      }}
-    >
-      <DialogTrigger render={<Button variant="outline" />}>
-        <ShieldCheck />
-        {t("changeManager")}
-      </DialogTrigger>
-      <FormDialogContent>
-        <DialogHeader>
-          <DialogTitle>{t("changeManagerTitle")}</DialogTitle>
-          <DialogDescription>{t("changeManagerDescription")}</DialogDescription>
-        </DialogHeader>
-        <FormSelect
-          label={t("managerRole")}
-          value={roleId}
-          onValueChange={setRoleId}
-          options={backoffice.roles.map((role) => ({
-            value: role.id,
-            label: role.name,
-          }))}
-        />
-        <CommandErrorMessage error={error} />
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>
-            {common("cancel")}
-          </DialogClose>
-          <Button
-            onClick={() => void submit()}
-            disabled={!roleId || roleId === namespace.managerRoleId}
-          >
-            {common("save")}
-          </Button>
-        </DialogFooter>
-      </FormDialogContent>
-    </FormDialog>
-  )
-}
+import type { UiResourceSyncHistory } from "@/features/ui-resources/model"
 
 export function NamespaceDetailPage({ namespaceId }: { namespaceId: string }) {
   const backoffice = useBackoffice()
@@ -219,7 +129,13 @@ export function NamespaceDetailPage({ namespaceId }: { namespaceId: string }) {
           namespace.status === entityStatuses.active ? (
             <>
               {canChangeManager ? (
-                <NamespaceManagerDialog namespace={namespace} />
+                <Button
+                  nativeButton={false}
+                  variant="outline"
+                  render={<Link href={`/namespaces/${namespace.id}/edit`} />}
+                >
+                  {t("changeManager")}
+                </Button>
               ) : null}
               {canRetire &&
               namespace.id !==

@@ -74,6 +74,14 @@ type FieldDraft = {
   required: boolean
 }
 
+const requestTemplateEditorModes = {
+  create: "create",
+  update: "update",
+  clone: "clone",
+} as const
+type RequestTemplateEditorMode =
+  (typeof requestTemplateEditorModes)[keyof typeof requestTemplateEditorModes]
+
 const fieldBindings: RequestTemplateFieldBinding[] = [
   "service-id",
   "request-organization-id",
@@ -159,20 +167,24 @@ function createFieldDrafts(template?: ApprovalLine): FieldDraft[] {
 export function RequestTemplateEditorPage({
   template,
   templateId,
+  sourceTemplateId,
 }: {
   template?: ApprovalLine
   templateId?: string
+  sourceTemplateId?: string | undefined
 }) {
   const backoffice = useBackoffice()
   const t = useTranslations("backoffice.approvalLines")
   const common = useTranslations("backoffice.common")
   const resolvedTemplate =
     template ??
-    (templateId
-      ? backoffice.approvalLines.find((item) => item.id === templateId)
+    (templateId || sourceTemplateId
+      ? backoffice.approvalLines.find(
+          (item) => item.id === (templateId ?? sourceTemplateId),
+        )
       : undefined)
 
-  if (templateId && !resolvedTemplate) {
+  if ((templateId || sourceTemplateId) && !resolvedTemplate) {
     return (
       <EmptyState
         title={t("detailTitle")}
@@ -187,13 +199,26 @@ export function RequestTemplateEditorPage({
   }
 
   return resolvedTemplate ? (
-    <RequestTemplateEditorForm template={resolvedTemplate} />
+    <RequestTemplateEditorForm
+      template={resolvedTemplate}
+      mode={
+        sourceTemplateId
+          ? requestTemplateEditorModes.clone
+          : requestTemplateEditorModes.update
+      }
+    />
   ) : (
     <RequestTemplateEditorForm />
   )
 }
 
-function RequestTemplateEditorForm({ template }: { template?: ApprovalLine }) {
+function RequestTemplateEditorForm({
+  template,
+  mode = requestTemplateEditorModes.create,
+}: {
+  template?: ApprovalLine
+  mode?: RequestTemplateEditorMode
+}) {
   const backoffice = useBackoffice()
   const sessionAccess = useSessionAccess()
   const router = useRouter()
@@ -201,7 +226,11 @@ function RequestTemplateEditorForm({ template }: { template?: ApprovalLine }) {
   const common = useTranslations("backoffice.common")
   const labels = useBackofficeLabels()
   const [step, setStep] = useState<ReviewWorkflowStep>(1)
-  const [name, setName] = useState(template?.name ?? "")
+  const [name, setName] = useState(
+    template
+      ? `${template.name}${mode === requestTemplateEditorModes.clone ? ` ${t("copySuffix")}` : ""}`
+      : "",
+  )
   const [category, setCategory] = useState<RequestCategory | null>(
     template?.category ?? null,
   )
@@ -225,9 +254,10 @@ function RequestTemplateEditorForm({ template }: { template?: ApprovalLine }) {
   const employedUsers = backoffice.users.filter(
     (user) => user.employmentStatus === employmentStatusValues.employed,
   )
-  const impact = template
-    ? resolveRequestTemplateImpact(backoffice, template)
-    : null
+  const impact =
+    template && mode === requestTemplateEditorModes.update
+      ? resolveRequestTemplateImpact(backoffice, template)
+      : null
 
   function addStep() {
     if (steps.length >= 12) return
@@ -320,14 +350,22 @@ function RequestTemplateEditorForm({ template }: { template?: ApprovalLine }) {
       return
     }
     const requesterId = sessionAccess.currentUser?.id ?? ""
-    const result = await (template
+    const result = await (template && mode === requestTemplateEditorModes.update
       ? backoffice.updateApprovalLine(template.id, parsed.data, requesterId)
       : backoffice.createApprovalLine(parsed.data, requesterId))
     if (!result.ok) {
       setError(result.error)
       return
     }
-    snackbar.success(t(template ? "updated" : "created"))
+    snackbar.success(
+      t(
+        mode === requestTemplateEditorModes.update
+          ? "updated"
+          : mode === requestTemplateEditorModes.clone
+            ? "cloned"
+            : "created",
+      ),
+    )
     router.replace(`/approval-lines/${result.value.id}`)
   }
 
@@ -493,8 +531,18 @@ function RequestTemplateEditorForm({ template }: { template?: ApprovalLine }) {
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-6">
       <PageHeader
-        title={t(template ? "editTitle" : "builderTitle")}
-        description={t("builderDescription")}
+        title={t(
+          mode === requestTemplateEditorModes.update
+            ? "editTitle"
+            : mode === requestTemplateEditorModes.clone
+              ? "cloneTitle"
+              : "builderTitle",
+        )}
+        description={t(
+          mode === requestTemplateEditorModes.clone
+            ? "cloneDescription"
+            : "builderDescription",
+        )}
       />
       <Card>
         <CardContent className="grid gap-5">
@@ -982,7 +1030,13 @@ function RequestTemplateEditorForm({ template }: { template?: ApprovalLine }) {
               <Button type="submit" disabled={!inputValid}>
                 {step === 1
                   ? common("next")
-                  : t(template ? "saveChanges" : "create")}
+                  : t(
+                      mode === requestTemplateEditorModes.update
+                        ? "saveChanges"
+                        : mode === requestTemplateEditorModes.clone
+                          ? "clone"
+                          : "create",
+                    )}
               </Button>
             </div>
           </form>

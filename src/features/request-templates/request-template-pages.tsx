@@ -5,7 +5,7 @@ import { approvalAssigneeModeValues } from "@/features/request-templates/model"
 import { approvalExecutionTypeValues } from "@/features/request-templates/model"
 import { uiResourceKeys } from "@/config/menu-registry"
 import type { ColumnDef } from "@tanstack/react-table"
-import { History, Pencil, Plus } from "lucide-react"
+import { Copy, History, Pencil, Plus } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
 import { useMemo } from "react"
@@ -39,10 +39,7 @@ import {
   StatusSwitch,
   useBackofficeLabels,
 } from "@/application/ui/backoffice-ui"
-import {
-  RequestTemplateCloneDialog,
-  RequestTemplatePreviewDialog,
-} from "@/features/request-templates/request-template-tools"
+import { RequestTemplatePreviewDialog } from "@/features/request-templates/request-template-tools"
 import { resolveRequestTemplateImpact } from "@/features/request-templates/request-template-analysis"
 
 function useRequestTemplatePermissions() {
@@ -471,7 +468,18 @@ export function ApprovalLineDetailPage({
                 <RequestTemplatePreviewDialog template={template} />
               ) : null}
               {permissions.canClone ? (
-                <RequestTemplateCloneDialog template={template} />
+                <Button
+                  variant="outline"
+                  nativeButton={false}
+                  render={
+                    <Link
+                      href={`/approval-lines/new?sourceId=${template.id}`}
+                    />
+                  }
+                >
+                  <Copy />
+                  {t("clone")}
+                </Button>
               ) : null}
               {permissions.canEdit ? (
                 <Button

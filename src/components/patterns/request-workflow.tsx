@@ -13,8 +13,8 @@ type RequestWorkflowProps = {
   children: ReactNode
   cancelLabel: string
   cancelHref: string
-  previousLabel?: string
-  secondaryLabel?: string
+  previousLabel?: string | undefined
+  secondaryLabel?: string | undefined
   submitLabel: string
   submitDisabled?: boolean
   secondaryDisabled?: boolean

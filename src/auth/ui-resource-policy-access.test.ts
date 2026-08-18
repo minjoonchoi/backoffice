@@ -41,7 +41,7 @@ describe("UI resource policy access", () => {
       name: "서비스 UI 거부",
       description: "서비스 UI 전체를 거부합니다.",
       type: "access-grant",
-      managementType: "operator-managed",
+      managementType: "general",
       effect: "deny",
       resources: [{ type: "ui-resource", id: resourceId("services") }],
       status: "active",

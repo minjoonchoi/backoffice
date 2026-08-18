@@ -21,7 +21,7 @@ function policy(id: string, resourceId: string): AccessPolicy {
     name: id,
     description: `${id} description`,
     type: "access-grant",
-    managementType: "operator-managed",
+    managementType: "general",
     effect: "allow",
     resources: [{ type: "endpoint", id: resourceId }],
     status: "active",

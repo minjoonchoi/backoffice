@@ -195,6 +195,9 @@
       "next": "Next",
       "inputStep": "Input",
       "reviewStep": "Review",
+      "editorProgress": "Input and review steps",
+      "reviewTitle": "Review your changes",
+      "reviewDescription": "Confirm the entered information before creating or saving.",
       "pagination": "Pagination",
       "paginationStatus": "Page {current} of {total}",
       "status": "Status",
@@ -458,6 +461,7 @@
       "organizationsAdded": "Organizations added to the role.",
       "edit": "Edit role",
       "editDescription": "Change the role name and description.",
+      "systemRoleEditUnavailable": "System roles cannot be edited.",
       "updated": "Updated the role.",
       "deleted": "Deleted the role.",
       "deleteTitle": "Delete the {name} role?",
@@ -497,6 +501,8 @@
       "slug": "Slug",
       "applicationDescription": "Description",
       "ownerOrganization": "Owner organization",
+      "organizationRequired": "An owning organization is required to register an application.",
+      "createOrganization": "Create organization",
       "slugDescription": "Use lowercase letters, numbers, and underscores. The slug cannot be changed after registration.",
       "total": "Total applications",
       "tableCaption": "Application list",
@@ -505,7 +511,7 @@
       "updated": "Application updated.",
       "deleted": "Application deleted.",
       "detailTitle": "Application details",
-      "detailDescription": "Review the owner organization, system-managed policies, and credentials.",
+      "detailDescription": "Review the owner organization, system policies, and credentials.",
       "notFound": "Application not found.",
       "deleteTitle": "Delete the {name} application?",
       "deleteDescription": "Applications connected to credentials or policies cannot be deleted.",
@@ -514,10 +520,10 @@
       "policiesCaption": "Assigned policies",
       "policiesEmpty": "No policies are assigned to this application.",
       "policyName": "Policy name",
-      "managementType": "Management type",
+      "managementType": "Policy classification",
       "managementTypes": {
-        "operator-managed": "Operator-managed",
-        "system-managed": "System-managed"
+        "general": "General policy",
+        "system": "System policy"
       }
     },
     "approvalLines": {
@@ -635,10 +641,10 @@
       "eyebrow": "Access control",
       "title": "Policies",
       "description": "Search preconfigured access policies, request a selected policy, and review request history and approval status.",
-      "managementType": "Management type",
+      "managementType": "Policy classification",
       "managementTypes": {
-        "operator-managed": "Operator-managed",
-        "system-managed": "System-managed"
+        "general": "General policy",
+        "system": "System policy"
       },
       "createPolicy": "Create policy",
       "createPolicyDescription": "Set the policy type, details, access effect, and included resources.",
@@ -863,7 +869,7 @@
       "prerequisite": "An active request template is required.",
       "preview": "Request processing preview",
       "catalogTitle": "Access policies",
-      "catalogHelp": "Review policy names, effects, management type, and your ownership status. Open a policy to see its included resources.",
+      "catalogHelp": "Review policy names, effects, classification, and your ownership status. Open a policy to see its included resources.",
       "policyTableCaption": "Access policy list",
       "policyName": "Policy name",
       "effect": "Access effect",
@@ -947,7 +953,7 @@
     "services": {
       "eyebrow": "Service catalog",
       "title": "Services",
-      "description": "Manage hosts and owner organizations for internal and external services, and review their system-managed status.",
+      "description": "Manage hosts and owner organizations for internal and external services, and review their system status.",
       "add": "Add service",
       "addDescription": "Assign the host, service type, and owner organization.",
       "type": "Service type",
@@ -1253,6 +1259,8 @@
       "keyDescription": "Use lowercase letters, numbers, and hyphens (-) only.",
       "namespaceDescription": "Description",
       "managerRole": "Management role",
+      "roleRequired": "A management role is required for the namespace.",
+      "createRole": "Create role",
       "managerRoleDescription": "Creating a namespace automatically assigns this role a management policy containing management UI actions and the synchronization API. Multiple organizations can share management through the same role.",
       "managingOrganizations": "Managing organizations",
       "created": "Namespace added.",

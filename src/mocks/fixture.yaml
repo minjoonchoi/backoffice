@@ -397,7 +397,7 @@ accessPolicies:
     name: Developer Console · Developer API 접근
     description: Developer Console 자격증명이 사용하는 Developer API 엔드포인트 접근을 시스템에서 관리합니다.
     type: access-grant
-    managementType: system-managed
+    managementType: system
     effect: allow
     resources:
       - type: endpoint

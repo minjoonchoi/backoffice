@@ -189,8 +189,7 @@ export function createLocalAccessPolicyApi(
           state.accessPolicies.some(
             (policy) =>
               policy.id === id &&
-              policy.managementType ===
-                accessPolicyManagementTypes.systemManaged,
+              policy.managementType === accessPolicyManagementTypes.system,
           ),
         )
       ) {
@@ -201,8 +200,7 @@ export function createLocalAccessPolicyApi(
           state.accessPolicies.some(
             (policy) =>
               policy.id === id &&
-              policy.managementType ===
-                accessPolicyManagementTypes.operatorManaged &&
+              policy.managementType === accessPolicyManagementTypes.general &&
               isAccessPolicyEffective(policy),
           ),
         )
@@ -300,7 +298,7 @@ export function createLocalAccessPolicyApi(
       if (referenceError) return { ok: false, error: referenceError }
       const policy: AccessPolicy = {
         ...parsed.data,
-        managementType: accessPolicyManagementTypes.operatorManaged,
+        managementType: accessPolicyManagementTypes.general,
         ...createEntityBase(),
       }
       updateState((current) => ({
@@ -387,9 +385,7 @@ export function createLocalAccessPolicyApi(
       }
       const existing = state.accessPolicies.find((policy) => policy.id === id)
       if (!existing) return { ok: false, error: "policy-not-found" }
-      if (
-        existing.managementType === accessPolicyManagementTypes.systemManaged
-      ) {
+      if (existing.managementType === accessPolicyManagementTypes.system) {
         return { ok: false, error: "policy-operation-forbidden" }
       }
       const policy: AccessPolicy = {

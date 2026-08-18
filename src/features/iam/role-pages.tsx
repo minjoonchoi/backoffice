@@ -7,7 +7,7 @@ import { Pencil, ShieldCheck, Trash2, UserRoundX } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 
 import { useSessionAccess } from "@/auth/session-access-provider"
 import { UiResourceLink } from "@/auth/ui-resource-link"
@@ -17,10 +17,6 @@ import { DataTable } from "@/components/patterns/data-table"
 import { DetailGrid, DetailItem } from "@/components/patterns/detail-grid"
 import { MetricCard } from "@/components/patterns/metric-card"
 import { PageHeader } from "@/components/patterns/page-header"
-import {
-  FormDialog,
-  FormDialogContent,
-} from "@/components/patterns/form-dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -30,22 +26,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Field, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
 import { snackbar } from "@/components/ui/snackbar"
-import { Textarea } from "@/components/ui/textarea"
-import { roleInputSchema } from "@/features/iam/model"
 import { AssignmentDialog } from "@/application/ui/assignment-dialog"
 import { isSystemManagedRole, isSystemRole } from "@/domain/system-references"
-import type { BackofficeErrorCode } from "@/domain/common"
 import type { BackofficeUser, Organization, Role } from "@/features/iam/model"
 import { RelationshipRemoveAction } from "@/application/ui/relationship-remove-action"
 import { AccessPolicyAssignmentCard } from "@/application/ui/access-policy-assignment-card"
@@ -53,105 +36,10 @@ import { ConfirmAction } from "@/components/patterns/confirm-action"
 import { useBackoffice } from "@/application/state/provider"
 import {
   EmploymentStatusBadge,
-  CommandErrorMessage,
   useBackofficeLabels,
 } from "@/application/ui/backoffice-ui"
 import { isUnusedRole } from "@/features/iam/role-analysis"
 import { RoleComparisonDialog } from "@/features/iam/role-tools"
-
-function RoleCreationDialog() {
-  const backoffice = useBackoffice()
-  const sessionAccess = useSessionAccess()
-  const common = useTranslations("backoffice.common")
-  const t = useTranslations("backoffice.roles")
-  const [open, setOpen] = useState(false)
-  const [error, setError] = useState<BackofficeErrorCode>()
-
-  async function submit(form: HTMLFormElement) {
-    const data = new FormData(form)
-    const parsed = roleInputSchema.safeParse({
-      name: data.get("name"),
-      description: data.get("description"),
-    })
-    if (!parsed.success) {
-      setError("invalid-input")
-      return
-    }
-    const result = await backoffice.createRole(
-      parsed.data,
-      sessionAccess.currentUser?.id ?? "",
-    )
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    snackbar.success(t("created"))
-    setError(undefined)
-    setOpen(false)
-  }
-
-  return (
-    <FormDialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen)
-        setError(undefined)
-      }}
-    >
-      <DialogTrigger render={<Button />}>
-        <ShieldCheck />
-        {t("add")}
-      </DialogTrigger>
-      <FormDialogContent>
-        <DialogHeader>
-          <DialogTitle>{t("add")}</DialogTitle>
-          <DialogDescription>{t("addDescription")}</DialogDescription>
-        </DialogHeader>
-        <form
-          id="role-form"
-          className="grid gap-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void submit(event.currentTarget)
-          }}
-        >
-          <Field>
-            <FieldLabel htmlFor="role-name">{t("roleName")}</FieldLabel>
-            <Input
-              id="role-name"
-              name="name"
-              required
-              minLength={2}
-              maxLength={80}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="role-description">
-              {t("roleDescription")}
-            </FieldLabel>
-            <Textarea
-              id="role-description"
-              name="description"
-              required
-              minLength={2}
-              maxLength={500}
-              rows={5}
-            />
-          </Field>
-          <CommandErrorMessage error={error} />
-        </form>
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>
-            {common("cancel")}
-          </DialogClose>
-          <Button type="submit" form="role-form">
-            {common("create")}
-          </Button>
-        </DialogFooter>
-      </FormDialogContent>
-    </FormDialog>
-  )
-}
 
 function AddRoleUsersDialog({ role }: { role: Role }) {
   const backoffice = useBackoffice()
@@ -181,102 +69,6 @@ function AddRoleUsersDialog({ role }: { role: Role }) {
         )
       }
     />
-  )
-}
-
-function RoleUpdateDialog({ role }: { role: Role }) {
-  const backoffice = useBackoffice()
-  const sessionAccess = useSessionAccess()
-  const common = useTranslations("backoffice.common")
-  const t = useTranslations("backoffice.roles")
-  const [open, setOpen] = useState(false)
-  const [error, setError] = useState<BackofficeErrorCode>()
-
-  async function submit(form: HTMLFormElement) {
-    const data = new FormData(form)
-    const parsed = roleInputSchema.safeParse({
-      name: data.get("name"),
-      description: data.get("description"),
-    })
-    if (!parsed.success) {
-      setError("invalid-input")
-      return
-    }
-    const result = await backoffice.updateRole(
-      role.id,
-      parsed.data,
-      sessionAccess.currentUser?.id ?? "",
-    )
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    snackbar.success(t("updated"))
-    setOpen(false)
-  }
-
-  return (
-    <FormDialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen)
-        setError(undefined)
-      }}
-    >
-      <DialogTrigger render={<Button variant="outline" />}>
-        <Pencil />
-        {t("edit")}
-      </DialogTrigger>
-      <FormDialogContent>
-        <DialogHeader>
-          <DialogTitle>{t("edit")}</DialogTitle>
-          <DialogDescription>{t("editDescription")}</DialogDescription>
-        </DialogHeader>
-        <form
-          id="role-update-form"
-          className="grid gap-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void submit(event.currentTarget)
-          }}
-        >
-          <Field>
-            <FieldLabel htmlFor="role-update-name">{t("roleName")}</FieldLabel>
-            <Input
-              id="role-update-name"
-              name="name"
-              defaultValue={role.name}
-              required
-              minLength={2}
-              maxLength={80}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="role-update-description">
-              {t("roleDescription")}
-            </FieldLabel>
-            <Textarea
-              id="role-update-description"
-              name="description"
-              defaultValue={role.description}
-              required
-              minLength={2}
-              maxLength={500}
-              rows={5}
-            />
-          </Field>
-          <CommandErrorMessage error={error} />
-        </form>
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>
-            {common("cancel")}
-          </DialogClose>
-          <Button type="submit" form="role-update-form">
-            {common("save")}
-          </Button>
-        </DialogFooter>
-      </FormDialogContent>
-    </FormDialog>
   )
 }
 
@@ -360,7 +152,15 @@ export function RolesPage() {
           canCreate || canCompare ? (
             <>
               {canCompare ? <RoleComparisonDialog /> : null}
-              {canCreate ? <RoleCreationDialog /> : null}
+              {canCreate ? (
+                <Button
+                  nativeButton={false}
+                  render={<Link href="/roles/new" />}
+                >
+                  <ShieldCheck />
+                  {t("add")}
+                </Button>
+              ) : null}
             </>
           ) : undefined
         }
@@ -591,7 +391,16 @@ export function RoleDetailPage({ roleId }: { roleId: string }) {
         actions={
           !systemRole && (canUpdate || canDelete) ? (
             <>
-              {canUpdate ? <RoleUpdateDialog role={role} /> : null}
+              {canUpdate ? (
+                <Button
+                  variant="outline"
+                  nativeButton={false}
+                  render={<Link href={`/roles/${role.id}/edit`} />}
+                >
+                  <Pencil />
+                  {t("edit")}
+                </Button>
+              ) : null}
               {canDelete ? (
                 <ConfirmAction
                   trigger={

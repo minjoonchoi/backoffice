@@ -7,7 +7,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { Building2, Pencil, Users } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 
 import { useSessionAccess } from "@/auth/session-access-provider"
 import { UiResourceLink } from "@/auth/ui-resource-link"
@@ -15,10 +15,6 @@ import { resolveVisibleDirectoryUsers } from "@/auth/user-directory-access"
 import { EmptyState } from "@/components/patterns/content-state"
 import { DataTable } from "@/components/patterns/data-table"
 import { DetailGrid, DetailItem } from "@/components/patterns/detail-grid"
-import {
-  FormDialog,
-  FormDialogContent,
-} from "@/components/patterns/form-dialog"
 import { MetricCard } from "@/components/patterns/metric-card"
 import { PageHeader } from "@/components/patterns/page-header"
 import { Badge } from "@/components/ui/badge"
@@ -30,33 +26,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Field, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { snackbar } from "@/components/ui/snackbar"
-import { organizationInputSchema, userInputSchema } from "@/features/iam/model"
 import { isSystemManagedRole } from "@/domain/system-references"
-import type { BackofficeErrorCode } from "@/domain/common"
-import {
-  employmentStatuses,
-  type BackofficeUser,
-  type Organization,
-} from "@/features/iam/model"
+import { type BackofficeUser, type Organization } from "@/features/iam/model"
 import { AssignmentDialog } from "@/application/ui/assignment-dialog"
 import { AccessPolicyAssignmentCard } from "@/application/ui/access-policy-assignment-card"
 import { RelationshipRemoveAction } from "@/application/ui/relationship-remove-action"
@@ -67,7 +38,6 @@ import {
   EmploymentStatusSelect,
   ServiceTypeBadge,
   StatusBadge,
-  CommandErrorMessage,
   useBackofficeLabels,
 } from "@/application/ui/backoffice-ui"
 import {
@@ -78,331 +48,6 @@ import {
 import type { ApiKey } from "@/features/credentials/model"
 import { resolveOrganizationMembershipRemovalImpact } from "@/features/iam/relationship-impact"
 import type { ManagedService } from "@/features/service-catalog/model"
-
-const ROOT_ORGANIZATION_VALUE = "root"
-
-function isDescendant(
-  organizations: Organization[],
-  candidateId: string,
-  organizationId: string,
-) {
-  let current = organizations.find((item) => item.id === candidateId)
-  while (current?.parentId) {
-    if (current.parentId === organizationId) return true
-    current = organizations.find((item) => item.id === current?.parentId)
-  }
-  return false
-}
-
-function UserCreationDialog() {
-  const backoffice = useBackoffice()
-  const sessionAccess = useSessionAccess()
-  const common = useTranslations("backoffice.common")
-  const t = useTranslations("backoffice.users")
-  const employmentT = useTranslations("backoffice.employmentStatuses")
-  const [open, setOpen] = useState(false)
-  const [error, setError] = useState<BackofficeErrorCode>()
-
-  async function submit(form: HTMLFormElement) {
-    const data = new FormData(form)
-    const parsed = userInputSchema.safeParse({
-      nickname: data.get("nickname"),
-      email: data.get("email"),
-      employmentStatus: data.get("employmentStatus"),
-      organizationIds: data.getAll("organizationIds"),
-    })
-    if (!parsed.success) {
-      setError("invalid-input")
-      return
-    }
-    const result = await backoffice.createUser(
-      parsed.data,
-      sessionAccess.currentUser?.id ?? "",
-    )
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    snackbar.success(t("created"))
-    setError(undefined)
-    setOpen(false)
-  }
-
-  return (
-    <FormDialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen)
-        setError(undefined)
-      }}
-    >
-      <DialogTrigger render={<Button />}>{t("add")}</DialogTrigger>
-      <FormDialogContent>
-        <DialogHeader>
-          <DialogTitle>{t("add")}</DialogTitle>
-          <DialogDescription>{t("addDescription")}</DialogDescription>
-        </DialogHeader>
-        <form
-          id="user-form"
-          className="grid gap-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void submit(event.currentTarget)
-          }}
-        >
-          <Field>
-            <FieldLabel htmlFor="user-nickname">{t("nickname")}</FieldLabel>
-            <Input
-              id="user-nickname"
-              name="nickname"
-              required
-              minLength={2}
-              maxLength={40}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="user-email">{t("email")}</FieldLabel>
-            <Input
-              id="user-email"
-              name="email"
-              type="email"
-              required
-              maxLength={160}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="user-employment-status">
-              {t("employmentStatus")}
-            </FieldLabel>
-            <Select
-              name="employmentStatus"
-              defaultValue={employmentStatusValues.employed}
-              required
-              items={employmentStatuses.map((status) => ({
-                value: status,
-                label: employmentT(status),
-              }))}
-            >
-              <SelectTrigger id="user-employment-status" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {employmentStatuses.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {employmentT(status)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          {backoffice.organizations.length > 0 ? (
-            <fieldset className="grid gap-2 rounded-lg border p-3">
-              <legend className="px-1 text-sm font-medium">
-                {t("organizations")}
-              </legend>
-              {backoffice.organizations.map((organization) => (
-                <label
-                  key={organization.id}
-                  className="flex min-h-control items-center gap-2"
-                >
-                  <Checkbox
-                    name="organizationIds"
-                    value={organization.id}
-                    aria-label={organization.name}
-                  />
-                  <span>{organization.name}</span>
-                </label>
-              ))}
-            </fieldset>
-          ) : null}
-          <CommandErrorMessage error={error} />
-        </form>
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>
-            {common("cancel")}
-          </DialogClose>
-          <Button type="submit" form="user-form">
-            {common("create")}
-          </Button>
-        </DialogFooter>
-      </FormDialogContent>
-    </FormDialog>
-  )
-}
-
-function OrganizationFormDialog({
-  organization,
-}: {
-  organization?: Organization | undefined
-}) {
-  const backoffice = useBackoffice()
-  const sessionAccess = useSessionAccess()
-  const common = useTranslations("backoffice.common")
-  const t = useTranslations("backoffice.organizations")
-  const [open, setOpen] = useState(false)
-  const [name, setName] = useState(organization?.name ?? "")
-  const [leaderUserId, setLeaderUserId] = useState<string | null>(
-    organization?.leaderUserId ?? null,
-  )
-  const [parentId, setParentId] = useState<string | null>(
-    organization?.parentId ?? null,
-  )
-  const [error, setError] = useState<BackofficeErrorCode>()
-  const employedUsers = backoffice.users.filter(
-    (user) => user.employmentStatus === employmentStatusValues.employed,
-  )
-  const parentCandidates = backoffice.organizations.filter(
-    (candidate) =>
-      candidate.id !== organization?.id &&
-      (!organization ||
-        !isDescendant(backoffice.organizations, candidate.id, organization.id)),
-  )
-  const leaderOptions = employedUsers.map((user) => ({
-    value: user.id,
-    label: user.nickname,
-  }))
-  const parentOptions = [
-    { value: ROOT_ORGANIZATION_VALUE, label: t("noParent") },
-    ...parentCandidates.map((candidate) => ({
-      value: candidate.id,
-      label: candidate.name,
-    })),
-  ]
-  const formId = organization
-    ? `organization-${organization.id}-form`
-    : "organization-form"
-
-  function changeOpen(nextOpen: boolean) {
-    setOpen(nextOpen)
-    setName(organization?.name ?? "")
-    setLeaderUserId(organization?.leaderUserId ?? null)
-    setParentId(organization?.parentId ?? null)
-    setError(undefined)
-  }
-
-  async function submit() {
-    const parsed = organizationInputSchema.safeParse({
-      name,
-      leaderUserId,
-      ...(parentId ? { parentId } : {}),
-    })
-    if (!parsed.success) {
-      setError("invalid-input")
-      return
-    }
-    const requesterId = sessionAccess.currentUser?.id ?? ""
-    const result = await (organization
-      ? backoffice.updateOrganization(organization.id, parsed.data, requesterId)
-      : backoffice.createOrganization(parsed.data, requesterId))
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    snackbar.success(t(organization ? "updated" : "created"))
-    setError(undefined)
-    setOpen(false)
-  }
-
-  return (
-    <FormDialog open={open} onOpenChange={changeOpen}>
-      <DialogTrigger
-        render={
-          <Button
-            variant={organization ? "outline" : "default"}
-            disabled={!organization && employedUsers.length === 0}
-          />
-        }
-      >
-        {organization ? <Pencil /> : null}
-        {t(organization ? "edit" : "add")}
-      </DialogTrigger>
-      <FormDialogContent>
-        <DialogHeader>
-          <DialogTitle>{t(organization ? "edit" : "add")}</DialogTitle>
-          <DialogDescription>
-            {t(organization ? "editDescription" : "addDescription")}
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          key={open ? "open" : "closed"}
-          id={formId}
-          className="grid gap-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void submit()
-          }}
-        >
-          <Field>
-            <FieldLabel htmlFor={`${formId}-name`}>
-              {t("organizationName")}
-            </FieldLabel>
-            <Input
-              id={`${formId}-name`}
-              name="name"
-              required
-              minLength={2}
-              maxLength={80}
-              value={name}
-              onChange={(event) => {
-                setName(event.currentTarget.value)
-              }}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${formId}-leader`}>{t("leader")}</FieldLabel>
-            <Select
-              value={leaderUserId}
-              items={leaderOptions}
-              onValueChange={setLeaderUserId}
-              required
-            >
-              <SelectTrigger id={`${formId}-leader`} className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {leaderOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${formId}-parent`}>{t("parent")}</FieldLabel>
-            <Select
-              value={parentId ?? ROOT_ORGANIZATION_VALUE}
-              items={parentOptions}
-              onValueChange={(value) => {
-                setParentId(value === ROOT_ORGANIZATION_VALUE ? null : value)
-              }}
-            >
-              <SelectTrigger id={`${formId}-parent`} className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {parentOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <CommandErrorMessage error={error} />
-        </form>
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>
-            {common("cancel")}
-          </DialogClose>
-          <Button type="submit" form={formId} disabled={!leaderUserId}>
-            {common("save")}
-          </Button>
-        </DialogFooter>
-      </FormDialogContent>
-    </FormDialog>
-  )
-}
 
 function AddOrganizationUsersDialog({
   organization,
@@ -621,7 +266,16 @@ export function OrganizationsPage() {
         eyebrow={t("eyebrow")}
         title={t("title")}
         description={t("description")}
-        actions={canCreate ? <OrganizationFormDialog /> : undefined}
+        actions={
+          canCreate ? (
+            <Button
+              nativeButton={false}
+              render={<Link href="/organizations/new" />}
+            >
+              {t("add")}
+            </Button>
+          ) : undefined
+        }
       />
       {canCreate &&
       backoffice.users.every(
@@ -630,8 +284,8 @@ export function OrganizationsPage() {
         <p className="rounded-lg border border-warning-foreground/30 bg-warning p-3 text-sm text-warning-foreground">
           {t("userRequired")}{" "}
           <UiResourceLink
-            resourceKey={uiResourceKeys.users.list.key}
-            href="/users"
+            resourceKey={uiResourceKeys.users.create.key}
+            href="/users/new"
             className="font-medium underline"
           >
             {t("createUser")}
@@ -768,7 +422,9 @@ export function UsersPage() {
           sessionAccess.canAccessUiResource(
             uiResourceKeys.users.list.actions.createUser,
           ) ? (
-            <UserCreationDialog />
+            <Button nativeButton={false} render={<Link href="/users/new" />}>
+              {t("add")}
+            </Button>
           ) : undefined
         }
       />
@@ -1059,7 +715,14 @@ export function OrganizationDetailPage({
         description={t("detailDescription")}
         actions={
           canUpdate ? (
-            <OrganizationFormDialog organization={organization} />
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link href={`/organizations/${organization.id}/edit`} />}
+            >
+              <Pencil />
+              {t("edit")}
+            </Button>
           ) : undefined
         }
       />

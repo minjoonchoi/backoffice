@@ -81,8 +81,7 @@ export function ApprovalDocumentRequestPage({
 
   if (
     !resolvedPolicy ||
-    resolvedPolicy.managementType ===
-      accessPolicyManagementTypes.systemManaged ||
+    resolvedPolicy.managementType === accessPolicyManagementTypes.system ||
     !resolvedApprovalLine
   ) {
     return (
