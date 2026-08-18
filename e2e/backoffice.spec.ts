@@ -515,8 +515,17 @@ test("isolates YAML UI Resources by a system namespace", async ({ page }) => {
   await page
     .getByRole("searchbox", { name: "Resource key" })
     .fill("services:list:catalogToolbar")
+  const orphanedResourceRow = page
+    .getByRole("table", { name: "UI 리소스 목록" })
+    .locator("tbody tr")
+    .filter({
+      has: page.getByRole("cell", {
+        name: "services:list:catalogToolbar",
+        exact: true,
+      }),
+    })
   await expect(
-    page.getByRole("row", { name: /services:list:catalogToolbar.*고아/ }),
+    orphanedResourceRow.getByText("고아", { exact: true }),
   ).toBeVisible()
 
   await page.getByRole("button", { name: "UI 리소스 동기화" }).click()
@@ -543,14 +552,26 @@ test("isolates YAML UI Resources by a system namespace", async ({ page }) => {
   await page
     .getByRole("searchbox", { name: "Resource key" })
     .fill("services:list:catalogToolbar")
+  const restoredResourceRow = resourceTable.locator("tbody tr").filter({
+    has: page.getByRole("cell", {
+      name: "services:list:catalogToolbar",
+      exact: true,
+    }),
+  })
   await expect(
-    page.getByRole("row", { name: /services:list:catalogToolbar.*노출/ }),
+    restoredResourceRow.getByText("노출", { exact: true }),
   ).toBeVisible()
   await page
     .getByRole("searchbox", { name: "Resource key" })
     .fill("services:list:testResource18")
+  const newlyOrphanedResourceRow = resourceTable.locator("tbody tr").filter({
+    has: page.getByRole("cell", {
+      name: "services:list:testResource18",
+      exact: true,
+    }),
+  })
   await expect(
-    page.getByRole("row", { name: /services:list:testResource18.*고아/ }),
+    newlyOrphanedResourceRow.getByText("고아", { exact: true }),
   ).toBeVisible()
 
   await page.getByRole("button", { name: "고아 리소스 1건 정리" }).click()
@@ -604,7 +625,7 @@ test("opens endpoint details and keeps mutations out of endpoint tables", async 
   await expect(page.getByRole("button", { name: "수정" })).toBeVisible()
   await expect(page.getByRole("button", { name: "삭제" })).toBeVisible()
 
-  await page.getByRole("link", { name: "Developer API" }).click()
+  await page.getByRole("link", { name: "Developer API", exact: true }).click()
   const endpointTable = page.getByRole("table", {
     name: "서비스 엔드포인트 목록",
   })
@@ -1113,7 +1134,7 @@ test("creates and approves an API key issuance request", async ({ page }) => {
     .filter({ hasText: "파트너 API" })
   await expect(approvedRequestRow).toContainText("등록 대기")
   await approvedRequestRow
-    .getByRole("button", { name: "Credential 등록" })
+    .getByRole("button", { name: "자격증명 등록" })
     .click()
   dialog = page.getByRole("dialog", {
     name: "내부 서비스 자격증명 자동 등록",
@@ -1174,7 +1195,7 @@ test("creates and approves an API key issuance request", async ({ page }) => {
     .filter({ hasText: "API Key 교체 요청" })
     .filter({ hasText: "partner-integration" })
   await approvedReplacementRequestRow
-    .getByRole("button", { name: "Credential 등록" })
+    .getByRole("button", { name: "자격증명 등록" })
     .click()
   dialog = page.getByRole("dialog", {
     name: "내부 서비스 자격증명 자동 등록",
@@ -1298,7 +1319,7 @@ test("registers an EXTERNAL API key through the manual owner flow", async ({
     .filter({ hasText: "collaboration-ready-key" })
     .filter({ hasText: "협업 SaaS" })
   await approvedRequestRow
-    .getByRole("button", { name: "Credential 등록" })
+    .getByRole("button", { name: "자격증명 등록" })
     .click()
 
   dialog = page.getByRole("dialog", {
@@ -1599,8 +1620,11 @@ test("shows the complete request list only with its UI resource access", async (
     requestTable.getByText("접근 정책", { exact: true }),
   ).toBeVisible()
   await expect(requestTable.getByText("자격증명", { exact: true })).toHaveCount(
-    2,
+    3,
   )
+  await expect(
+    requestTable.getByText("협업 SaaS 자격증명 등록 재시도 예시"),
+  ).toBeVisible()
   await requestTable
     .getByRole("row", { name: /로컬 API Key 발급 요청/ })
     .getByRole("cell", { name: "로컬 API Key 발급 요청", exact: true })

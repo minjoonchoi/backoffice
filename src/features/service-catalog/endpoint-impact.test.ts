@@ -33,6 +33,10 @@ describe("resolveEndpointChangeImpact", () => {
 
     expect(impact.addedFields).toHaveLength(1)
     expect(impact.changedFields).toHaveLength(1)
+    expect(impact.changedFields[0]).toEqual({
+      before: retained,
+      after: { ...retained, description: `${retained.description} changed` },
+    })
     expect(impact.removedFields).toHaveLength(
       Math.max(currentFields.length - 1, 0),
     )

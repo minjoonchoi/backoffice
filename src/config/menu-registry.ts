@@ -188,6 +188,7 @@ export const uiResourceRegistry = {
           updatePolicy: "정책 수정",
           deletePolicy: "정책 삭제",
           clonePolicy: "정책 복제",
+          revokePolicyAssignment: "정책 부여 회수",
         },
       },
       create: { actions: {} },
@@ -294,6 +295,11 @@ export const uiResourceRegistry = {
           deleteUiResources: "고아 UI 리소스 삭제",
           compareUiResourceSyncs: "UI 리소스 동기화 비교",
           restoreUiResourceSync: "UI 리소스 동기화 복원",
+        },
+      },
+      detail: {
+        actions: {
+          deleteUiResource: "UI 리소스 삭제",
         },
       },
       sync: { actions: {} },

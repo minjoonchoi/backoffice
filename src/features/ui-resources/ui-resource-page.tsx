@@ -65,7 +65,7 @@ import {
 } from "@/features/ui-resources/ui-resource-visibility"
 import { UiResourceHistoryPanel } from "@/features/ui-resources/ui-resource-history-panel"
 
-function UiResourceTypeBadge({ type }: { type: UiResourceType }) {
+export function UiResourceTypeBadge({ type }: { type: UiResourceType }) {
   const t = useTranslations("backoffice.uiResources.types")
   return (
     <Badge
@@ -810,6 +810,9 @@ function UiResourcesTable({
   const t = useTranslations("backoffice.uiResources")
   const common = useTranslations("backoffice.common")
   const errorsT = useTranslations("backoffice.errors")
+  const canViewDetail = sessionAccess.canAccessUiResource(
+    uiResourceKeys.uiResources.detail.key,
+  )
   const visibilities = useMemo(
     () => resolveUiResourceVisibilities(data),
     [data],
@@ -939,6 +942,10 @@ function UiResourcesTable({
       columns={columns}
       data={data}
       getRowId={(row) => row.id}
+      getRowHref={(row) =>
+        canViewDetail ? `/ui-resources/${row.id}` : undefined
+      }
+      getRowLabel={(row) => `${row.name} ${common("details")}`}
       empty={t("empty")}
       filterLabel={common("search")}
       noResults={common("noResults")}

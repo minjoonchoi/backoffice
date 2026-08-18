@@ -188,6 +188,27 @@ describe("mock backoffice API client", () => {
       }),
     ).resolves.toMatchObject({ ok: true })
 
+    const policyOperator = snapshot.data.users.find(
+      (user) => user.nickname === "Owen",
+    )
+    const assignedSnapshot = await client.getSnapshot({})
+    const assignedRelationship =
+      assignedSnapshot.data.accessPolicyAssignments.find(
+        (assignment) =>
+          assignment.targetType === "role" &&
+          assignment.targetId === created.value.id &&
+          assignment.accessPolicyId === policy.id,
+      )
+    if (!policyOperator || !assignedRelationship) {
+      throw new Error("Policy operator revocation fixture is incomplete")
+    }
+    await expect(
+      client.accessPolicies.unassignAccessPolicyFromTarget({
+        assignmentId: assignedRelationship.id,
+        requesterId: policyOperator.id,
+      }),
+    ).resolves.toMatchObject({ ok: true })
+
     const namespace = snapshot.data.namespaces[0]
     if (!namespace) throw new Error("Namespace fixture is missing")
     const managerAssignment = snapshot.data.accessPolicyAssignments.find(

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
-import { expect, userEvent, waitFor, within } from "storybook/test"
+import { expect, fireEvent, userEvent, waitFor, within } from "storybook/test"
 
 import { SessionAccessProvider } from "@/auth/session-access-provider"
 import { localDefaultUserId, localFixture } from "@/mocks/fixture"
@@ -373,6 +373,12 @@ export const AdministratorEndpointDetail: Story = {
     ).toBeVisible()
     await expect(canvas.getByText(/eventType/)).toBeVisible()
     await expect(canvas.getByText(/accepted/)).toBeVisible()
+    await expect(
+      canvas.getByRole("heading", { name: "포함된 정책" }),
+    ).toBeVisible()
+    await expect(
+      canvas.getByText("Developer API 이벤트 발행 거부"),
+    ).toBeVisible()
     await expect(canvas.getByRole("button", { name: "수정" })).toBeVisible()
     await expect(canvas.getByRole("button", { name: "삭제" })).toBeVisible()
 
@@ -387,6 +393,44 @@ export const AdministratorEndpointDetail: Story = {
     })
     await waitFor(() => expect(deleteHeading).toBeVisible())
     await userEvent.keyboard("{Escape}")
+  },
+}
+
+export const EndpointEditReviewsFieldAndPolicyImpact: Story = {
+  render: () => {
+    const endpoint = localFixture.serviceEndpoints.find(
+      (item) => item.name === "이벤트 API",
+    )
+    if (!endpoint) throw new Error("Endpoint edit story requires an endpoint")
+    return (
+      <BackofficeProvider initialState={localFixture}>
+        <SessionAccessProvider
+          localSwitchingEnabled
+          initialUserId={localDefaultUserId}
+        >
+          <ServiceEndpointEditorPage endpointId={endpoint.id} />
+        </SessionAccessProvider>
+      </BackofficeProvider>
+    )
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await fireEvent.change(
+      canvas.getByRole("textbox", { name: "요청 본문 필드" }),
+      { target: { value: "[]" } },
+    )
+    await userEvent.click(canvas.getByRole("button", { name: "다음" }))
+
+    await expect(
+      canvas.getByRole("heading", { name: "엔드포인트 변경 영향" }),
+    ).toBeVisible()
+    await expect(
+      canvas.getByRole("table", { name: "필드별 변경 내용" }),
+    ).toBeVisible()
+    await expect(canvas.getAllByText("삭제").length).toBeGreaterThan(0)
+    await expect(
+      canvas.getByText("Developer API 이벤트 발행 거부"),
+    ).toBeVisible()
   },
 }
 

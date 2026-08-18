@@ -388,6 +388,24 @@ export function createAuditEvents(
       }),
     }),
     ...diffCollection(
+      before.credentialRegistrationAttempts,
+      after.credentialRegistrationAttempts,
+      {
+        resourceType: auditResourceTypeValues.credential,
+        name: (attempt) =>
+          `Credential registration attempt ${String(attempt.attemptNumber)}`,
+        snapshot: (attempt) => ({
+          approvalDocumentId: attempt.approvalDocumentId,
+          serviceId: attempt.serviceId,
+          registeredByUserId: attempt.registeredByUserId,
+          apiKeyId: attempt.apiKeyId,
+          attemptNumber: String(attempt.attemptNumber),
+          status: attempt.status,
+          errorCode: attempt.errorCode,
+        }),
+      },
+    ),
+    ...diffCollection(
       auditableCredentialLifecycleSettings(before),
       auditableCredentialLifecycleSettings(after),
       {

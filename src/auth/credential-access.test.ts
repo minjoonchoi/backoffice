@@ -17,7 +17,7 @@ describe("credential visibility", () => {
       findUserId("David"),
     )
 
-    expect(visibility.requests).toHaveLength(2)
+    expect(visibility.requests).toHaveLength(3)
     expect(visibility.credentials).toHaveLength(1)
     expect(visibility.credentials[0]?.scopes).toContain("administrator")
     expect(
@@ -31,7 +31,7 @@ describe("credential visibility", () => {
       findUserId("Amelia"),
     )
 
-    expect(visibility.requests).toHaveLength(2)
+    expect(visibility.requests).toHaveLength(3)
     expect(visibility.credentials[0]?.scopes).toEqual([
       "requester",
       "serviceOwnerOrganization",

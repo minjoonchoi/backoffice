@@ -8,6 +8,7 @@ import {
   UiResourceSyncPage,
   UiResourcesPage,
 } from "@/features/ui-resources/ui-resource-page"
+import { UiResourceDetailPage } from "@/features/ui-resources/ui-resource-detail-page"
 import { BackofficeProvider } from "@/application/state/provider"
 
 const storyBackoffice = structuredClone(localFixture)
@@ -231,5 +232,40 @@ export const InheritsInactiveAncestorVisibility: Story = {
     await expect(
       within(getResourceRow("services:list:createService")).getByText("노출"),
     ).toBeVisible()
+  },
+}
+
+export const DetailShowsPolicyReferencesAndDeletionImpact: Story = {
+  render: () => (
+    <BackofficeProvider initialState={storyBackoffice}>
+      <SessionAccessProvider
+        localSwitchingEnabled
+        initialUserId={localDefaultUserId}
+      >
+        <div className="p-6">
+          <UiResourceDetailPage uiResourceId={storyManagementResource.id} />
+        </div>
+      </SessionAccessProvider>
+    </BackofficeProvider>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+
+    await expect(
+      canvas.getByRole("heading", {
+        level: 1,
+        name: storyManagementResource.name,
+      }),
+    ).toBeVisible()
+    await expect(canvas.getByRole("table", { name: "참조 정책" })).toBeVisible()
+    await expect(
+      canvas.getByText("Story Console 시스템 관리자 UI 리소스 허용"),
+    ).toBeVisible()
+    await expect(
+      canvas.getByText(
+        "정상 상태인 UI 리소스는 삭제할 수 없습니다. 최신 manifest에서 제거해 고아 상태로 전환하세요.",
+      ),
+    ).toBeVisible()
+    await expect(canvas.getByRole("button", { name: "삭제" })).toBeDisabled()
   },
 }

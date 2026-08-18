@@ -40,6 +40,7 @@ import {
   resolveEndpointChangeImpact,
   type EndpointChangeImpact,
 } from "@/features/service-catalog/endpoint-impact"
+import { EndpointChangeImpactPanel } from "@/features/service-catalog/endpoint-impact-view"
 import {
   endpointFieldLocationValues,
   endpointLifecycleValues,
@@ -593,39 +594,7 @@ export function ServiceEndpointEditorPage({
               {parsed.success ? parsed.data.fields.length : 0}
             </DetailItem>
           </DetailGrid>
-          {impact ? (
-            <section className="grid gap-2 rounded-card border border-warning-foreground/30 bg-warning p-3">
-              <h3 className="font-semibold">{t("changeImpactTitle")}</h3>
-              <p className="text-sm text-warning-foreground">
-                {t("changeImpactDescription")}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="success">
-                  {t("addedFieldCount", { count: impact.addedFields.length })}
-                </Badge>
-                <Badge variant="destructive">
-                  {t("removedFieldCount", {
-                    count: impact.removedFields.length,
-                  })}
-                </Badge>
-                <Badge variant="warning">
-                  {t("changedFieldCount", {
-                    count: impact.changedFields.length,
-                  })}
-                </Badge>
-                <Badge variant="outline">
-                  {t("affectedPolicyCount", {
-                    count: impact.accessPolicyIds.length,
-                  })}
-                </Badge>
-                <Badge variant="outline">
-                  {t("affectedCredentialCount", {
-                    count: impact.apiKeyIds.length,
-                  })}
-                </Badge>
-              </div>
-            </section>
-          ) : null}
+          {impact ? <EndpointChangeImpactPanel impact={impact} /> : null}
           <CommandErrorMessage error={error} />
         </section>
       )}

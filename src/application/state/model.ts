@@ -5,6 +5,7 @@ import type {
 } from "@/features/access-policies/model"
 import type {
   ApiKey,
+  CredentialRegistrationAttempt,
   CredentialLifecycleSettings,
 } from "@/features/credentials/model"
 import type {
@@ -86,6 +87,7 @@ export type BackofficeState = {
   serviceEndpointFields: ServiceEndpointField[]
   serviceEndpointRevisions: ServiceEndpointRevision[]
   credentialLifecycleSettings: CredentialLifecycleSettings
+  credentialRegistrationAttempts: CredentialRegistrationAttempt[]
   apiKeys: ApiKey[]
   namespaces: Namespace[]
   uiResources: UiResource[]

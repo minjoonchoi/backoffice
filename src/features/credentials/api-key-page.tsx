@@ -11,6 +11,7 @@ import { uiResourceKeys } from "@/config/menu-registry"
 import type { ColumnDef } from "@tanstack/react-table"
 import {
   CalendarClock,
+  History,
   KeyRound,
   LoaderCircle,
   RefreshCw,
@@ -64,7 +65,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { snackbar } from "@/components/ui/snackbar"
 import type { ApprovalDocument } from "@/features/access-policies/model"
-import { apiKeySecretSchema, type ApiKey } from "@/features/credentials/model"
+import {
+  apiKeySecretSchema,
+  credentialRegistrationAttemptStatuses,
+  type ApiKey,
+  type CredentialRegistrationAttempt,
+} from "@/features/credentials/model"
 import { useBackoffice } from "@/application/state/provider"
 import {
   ApprovalStatusBadge,
@@ -77,6 +83,97 @@ import { CredentialEmergencyRevokeDialog } from "@/features/credentials/credenti
 type IssuedSecret = {
   keyName: string
   value: string
+}
+
+function CredentialRegistrationAttemptsTable({
+  attempts,
+}: {
+  attempts: CredentialRegistrationAttempt[]
+}) {
+  const backoffice = useBackoffice()
+  const t = useTranslations("backoffice.apiKeys")
+  const common = useTranslations("backoffice.common")
+  const errors = useTranslations("backoffice.errors")
+  const labels = useBackofficeLabels()
+  const columns = useMemo<ColumnDef<CredentialRegistrationAttempt>[]>(
+    () => [
+      {
+        accessorKey: "attemptNumber",
+        header: t("registrationAttemptNumber"),
+        size: 100,
+        cell: ({ row }) =>
+          t("registrationAttemptOrdinal", {
+            count: row.original.attemptNumber,
+          }),
+      },
+      {
+        accessorKey: "status",
+        header: common("status"),
+        size: 120,
+        cell: ({ row }) => (
+          <Badge
+            variant={
+              row.original.status ===
+              credentialRegistrationAttemptStatuses.succeeded
+                ? "success"
+                : "destructive"
+            }
+          >
+            {t(`registrationAttemptStatuses.${row.original.status}`)}
+          </Badge>
+        ),
+      },
+      {
+        id: "registrar",
+        header: t("registeredBy"),
+        size: 160,
+        cell: ({ row }) => {
+          const user = backoffice.users.find(
+            (candidate) => candidate.id === row.original.registeredByUserId,
+          )
+          if (!user) {
+            throw new Error(
+              `Credential registration user not found: ${row.original.id}`,
+            )
+          }
+          return (
+            <UiResourceLink
+              resourceKey={uiResourceKeys.users.detail.key}
+              href={`/users/${user.id}`}
+            >
+              {user.nickname}
+            </UiResourceLink>
+          )
+        },
+      },
+      {
+        id: "result",
+        header: t("registrationAttemptResult"),
+        size: 280,
+        cell: ({ row }) =>
+          row.original.errorCode
+            ? errors(row.original.errorCode)
+            : t("registrationAttemptSucceeded"),
+      },
+      {
+        accessorKey: "createdAt",
+        header: t("registrationAttemptedAt"),
+        size: 180,
+        cell: ({ row }) => labels.dateTime(row.original.createdAt),
+      },
+    ],
+    [backoffice.users, common, errors, labels, t],
+  )
+
+  return (
+    <DataTable
+      caption={t("registrationAttemptHistory")}
+      columns={columns}
+      data={attempts}
+      getRowId={(attempt) => attempt.id}
+      empty={t("registrationAttemptHistoryEmpty")}
+    />
+  )
 }
 
 export function ApiKeyPage() {
@@ -99,6 +196,8 @@ export function ApiKeyPage() {
   const [manualSecret, setManualSecret] = useState("")
   const [manualSecretInvalid, setManualSecretInvalid] = useState(false)
   const [registrationPending, setRegistrationPending] = useState(false)
+  const [attemptHistoryDocument, setAttemptHistoryDocument] =
+    useState<CredentialRequest>()
   function requestStatusLabel(document: ApprovalDocument) {
     switch (document.status) {
       case approvalDocumentStatuses.draft:
@@ -151,6 +250,15 @@ export function ApiKeyPage() {
       })
       if (!result.ok) {
         snackbar.error(errorsT(result.error))
+        return
+      }
+      if (
+        result.value.status === credentialRegistrationAttemptStatuses.failed
+      ) {
+        setRegistrationDocument(undefined)
+        setManualSecret("")
+        setManualSecretInvalid(false)
+        snackbar.error(errorsT(result.value.error))
         return
       }
       if (result.value.secret !== null) {
@@ -239,6 +347,11 @@ export function ApiKeyPage() {
         user.organizationIds.includes(service.ownerOrganizationId))
     )
   }
+  function registrationAttempts(documentId: string) {
+    return backoffice.credentialRegistrationAttempts
+      .filter((attempt) => attempt.approvalDocumentId === documentId)
+      .toSorted((left, right) => right.attemptNumber - left.attemptNumber)
+  }
   const registrationService = registrationDocument
     ? backoffice.services.find(
         (service) => service.id === requestServiceId(registrationDocument),
@@ -249,6 +362,9 @@ export function ApiKeyPage() {
         (organization) =>
           organization.id === registrationService.ownerOrganizationId,
       )
+    : undefined
+  const latestRegistrationAttempt = registrationDocument
+    ? registrationAttempts(registrationDocument.id)[0]
     : undefined
   const requestColumns: ColumnDef<CredentialRequest>[] = [
     {
@@ -320,6 +436,12 @@ export function ApiKeyPage() {
         if (registered) {
           return <Badge variant="success">{t("registeredStatus")}</Badge>
         }
+        const lastAttempt = registrationAttempts(row.original.id)[0]
+        if (
+          lastAttempt?.status === credentialRegistrationAttemptStatuses.failed
+        ) {
+          return <Badge variant="destructive">{t("registrationFailed")}</Badge>
+        }
         if (
           row.original.type === approvalTypeValues.apiKeyDispose &&
           row.original.status === approvalDocumentStatuses.approved
@@ -336,14 +458,38 @@ export function ApiKeyPage() {
       },
     },
     {
+      id: "registrationAttempts",
+      header: t("registrationAttempts"),
+      size: 110,
+      cell: ({ row }) => {
+        const attempts = registrationAttempts(row.original.id)
+        return attempts.length > 0 ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setAttemptHistoryDocument(row.original)
+            }}
+          >
+            <History aria-hidden="true" />
+            {t("attemptCount", { count: attempts.length })}
+          </Button>
+        ) : (
+          "—"
+        )
+      },
+    },
+    {
       id: "action",
       header: "",
-      cell: ({ row }) =>
-        row.original.status === approvalDocumentStatuses.approved &&
-        !credentials.some(
-          (apiKey) => apiKey.approvalDocumentId === row.original.id,
-        ) &&
-        canRegisterCredential(row.original) ? (
+      cell: ({ row }) => {
+        const attempts = registrationAttempts(row.original.id)
+        const lastAttempt = attempts[0]
+        return row.original.status === approvalDocumentStatuses.approved &&
+          !credentials.some(
+            (apiKey) => apiKey.approvalDocumentId === row.original.id,
+          ) &&
+          canRegisterCredential(row.original) ? (
           <Button
             size="sm"
             variant="outline"
@@ -351,9 +497,13 @@ export function ApiKeyPage() {
               setRegistrationDocument(row.original)
             }}
           >
-            {t("register")}
+            {lastAttempt?.status ===
+            credentialRegistrationAttemptStatuses.failed
+              ? t("retryRegistration")
+              : t("register")}
           </Button>
-        ) : null,
+        ) : null
+      },
     },
   ]
   const columns = useMemo<ColumnDef<ApiKey>[]>(
@@ -589,6 +739,17 @@ export function ApiKeyPage() {
           </DialogHeader>
           {registrationService ? (
             <div className="grid gap-4">
+              {latestRegistrationAttempt?.status ===
+              credentialRegistrationAttemptStatuses.failed ? (
+                <Alert variant="destructive">
+                  <AlertTitle>{t("previousRegistrationFailed")}</AlertTitle>
+                  <AlertDescription>
+                    {t("previousRegistrationFailedDescription", {
+                      count: latestRegistrationAttempt.attemptNumber,
+                    })}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
               <Alert variant="info">
                 <Server aria-hidden="true" />
                 <AlertTitle className="flex items-center gap-2">
@@ -663,14 +824,49 @@ export function ApiKeyPage() {
                 <LoaderCircle className="animate-spin" aria-hidden="true" />
               ) : null}
               {t(
-                registrationService?.type === serviceTypeValues.external
-                  ? "externalRegisterAction"
-                  : "internalRegisterAction",
+                latestRegistrationAttempt?.status ===
+                  credentialRegistrationAttemptStatuses.failed
+                  ? "retryRegistration"
+                  : registrationService?.type === serviceTypeValues.external
+                    ? "externalRegisterAction"
+                    : "internalRegisterAction",
               )}
             </Button>
           </DialogFooter>
         </FormDialogContent>
       </FormDialog>
+
+      <Dialog
+        open={Boolean(attemptHistoryDocument)}
+        onOpenChange={(open) => {
+          if (!open) setAttemptHistoryDocument(undefined)
+        }}
+      >
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{t("registrationAttemptHistory")}</DialogTitle>
+            <DialogDescription>
+              {t("registrationAttemptHistoryDescription", {
+                name: attemptHistoryDocument
+                  ? requestKeyName(attemptHistoryDocument)
+                  : "",
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <CredentialRegistrationAttemptsTable
+            attempts={
+              attemptHistoryDocument
+                ? registrationAttempts(attemptHistoryDocument.id)
+                : []
+            }
+          />
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              {common("close")}
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(issuedSecret)}
@@ -774,6 +970,10 @@ export function ApiKeyDetailPage({ apiKeyId }: { apiKeyId: string }) {
         (document.documentKind === approvalDocumentKinds.apiKeyLifecycle &&
           document.apiKeyId === visibleApiKey.id),
     )
+    .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))
+  const historyDocumentIds = new Set(history.map((document) => document.id))
+  const registrationAttempts = backoffice.credentialRegistrationAttempts
+    .filter((attempt) => historyDocumentIds.has(attempt.approvalDocumentId))
     .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))
   const replacementTemplate = backoffice.approvalLines.find(
     (template) =>
@@ -998,6 +1198,19 @@ export function ApiKeyDetailPage({ apiKeyId }: { apiKeyId: string }) {
               {labels.dateTime(visibleApiKey.createdAt)}
             </DetailItem>
           </DetailGrid>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("registrationAttemptHistory")}</CardTitle>
+          <CardDescription>
+            {t("credentialRegistrationAttemptHistoryDescription")}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CredentialRegistrationAttemptsTable
+            attempts={registrationAttempts}
+          />
         </CardContent>
       </Card>
       <Card>

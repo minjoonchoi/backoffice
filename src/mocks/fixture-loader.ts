@@ -41,6 +41,7 @@ import {
   serviceEndpointInputSchema,
   serviceInputSchema,
 } from "@/features/service-catalog/model"
+import { credentialRegistrationAttemptSchema } from "@/features/credentials/model"
 import { entityStatusSchema } from "@/domain/common"
 import {
   userNotificationEventSchema,
@@ -399,6 +400,9 @@ const fixtureSchema = z
         (value) => value.rotationIntervalDays < value.expirationPeriodDays,
         { path: ["rotationIntervalDays"] },
       ),
+    credentialRegistrationAttempts: z
+      .array(credentialRegistrationAttemptSchema)
+      .max(20000),
     apiKeys: z.array(apiKeySchema).max(10000),
   })
   .strict()
@@ -496,6 +500,7 @@ function validateFixtureReferences(
     ["services", state.services],
     ["service endpoints", state.serviceEndpoints],
     ["service endpoint fields", state.serviceEndpointFields],
+    ["credential registration attempts", state.credentialRegistrationAttempts],
     ["API keys", state.apiKeys],
     ["namespaces", state.namespaces],
     ["UI resources", state.uiResources],
@@ -811,6 +816,30 @@ function validateFixtureReferences(
       assertReference(userIds, apiKey.registeredByUserId, "API key registrar")
     }
   }
+  for (const attempt of state.credentialRegistrationAttempts) {
+    assertReference(
+      approvalDocumentIds,
+      attempt.approvalDocumentId,
+      "credential registration approval document",
+    )
+    assertReference(
+      serviceIds,
+      attempt.serviceId,
+      "credential registration service",
+    )
+    assertReference(
+      userIds,
+      attempt.registeredByUserId,
+      "credential registration user",
+    )
+    if (attempt.apiKeyId) {
+      assertReference(
+        apiKeyIds,
+        attempt.apiKeyId,
+        "credential registration API key",
+      )
+    }
+  }
   if (state.credentialLifecycleSettings.updatedByUserId) {
     assertReference(
       userIds,
@@ -845,6 +874,7 @@ export function loadFixture(source: string): LoadedFixture {
     serviceEndpointFields: definition.serviceEndpointFields,
     serviceEndpointRevisions: [],
     credentialLifecycleSettings: definition.credentialLifecycleSettings,
+    credentialRegistrationAttempts: definition.credentialRegistrationAttempts,
     apiKeys: definition.apiKeys,
     namespaces: structuredClone(initialBackofficeState.namespaces),
     uiResources: structuredClone(initialBackofficeState.uiResources),

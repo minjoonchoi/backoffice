@@ -3,7 +3,7 @@ import { approvalTypeValues } from "@/features/request-templates/model"
 import { approvalDocumentKinds } from "@/features/access-policies/model"
 import { serviceTypeValues } from "@/features/service-catalog/model"
 import { employmentStatusValues } from "@/features/iam/model"
-import { entityStatuses } from "@/domain/common"
+import { backofficeErrorCodes, entityStatuses } from "@/domain/common"
 import { resolveUiResourcePolicyAccess } from "@/auth/ui-resource-policy-access"
 import { uiResourceKeys } from "@/config/menu-registry"
 import type { CredentialApi } from "@/features/credentials/api"
@@ -32,8 +32,10 @@ import {
 import {
   apiKeyEmergencyRevokeInputSchema,
   apiKeyRegistrationInputSchema,
+  credentialRegistrationAttemptStatuses,
   credentialLifecycleSettingsInputSchema,
   type ApiKey,
+  type CredentialRegistrationAttempt,
 } from "@/features/credentials/model"
 
 function addDays(value: string, days: number) {
@@ -148,6 +150,9 @@ export function createLocalCredentialApi(
       ) {
         return { ok: false, error: "api-key-registration-forbidden" }
       }
+      const registrationDocument = document
+      const registrationService = service
+      const registrationUser = user
 
       const credentialName =
         document.documentKind === approvalDocumentKinds.apiKeyIssuance
@@ -178,42 +183,84 @@ export function createLocalCredentialApi(
         awsSecretName: document.awsSecretName,
         awsSecretKey: document.awsSecretKey,
       }
+      const attemptNumber =
+        state.credentialRegistrationAttempts.filter(
+          (attempt) => attempt.approvalDocumentId === registrationDocument.id,
+        ).length + 1
+      function createAttempt(
+        status: CredentialRegistrationAttempt["status"],
+        apiKeyId: string | null,
+        errorCode: CredentialRegistrationAttempt["errorCode"],
+      ): CredentialRegistrationAttempt {
+        return {
+          approvalDocumentId: registrationDocument.id,
+          serviceId: registrationService.id,
+          registeredByUserId: registrationUser.id,
+          apiKeyId,
+          attemptNumber,
+          status,
+          errorCode,
+          ...createRecordBase(),
+        }
+      }
+      function registrationFailure() {
+        const error = backofficeErrorCodes.internalCredentialRegistrationFailed
+        const attempt = createAttempt(
+          credentialRegistrationAttemptStatuses.failed,
+          null,
+          error,
+        )
+        updateState((current) => ({
+          ...current,
+          credentialRegistrationAttempts: [
+            ...current.credentialRegistrationAttempts,
+            attempt,
+          ],
+        }))
+        return {
+          ok: true as const,
+          value: {
+            status: credentialRegistrationAttemptStatuses.failed,
+            attempt,
+            apiKey: null,
+            secret: null,
+            error,
+          },
+        }
+      }
+      if (
+        (service.type === serviceTypeValues.internal &&
+          parsed.data.secret !== undefined) ||
+        (service.type === serviceTypeValues.external &&
+          parsed.data.secret === undefined)
+      ) {
+        return { ok: false, error: backofficeErrorCodes.invalidInput }
+      }
       let secret: string | null
       try {
         if (service.type === serviceTypeValues.internal) {
-          if (parsed.data.secret !== undefined) {
-            return { ok: false, error: "invalid-input" }
-          }
           const response =
             await internalCredentialRegistrar.register(registrationRequest)
           if (!credentialRegistrationMatches(response, registrationRequest)) {
-            return {
-              ok: false,
-              error: "internal-credential-registration-failed",
-            }
+            return registrationFailure()
           }
           secret = response.secret
         } else {
-          if (parsed.data.secret === undefined) {
-            return { ok: false, error: "invalid-input" }
+          const manualSecret = parsed.data.secret
+          if (manualSecret === undefined) {
+            return { ok: false, error: backofficeErrorCodes.invalidInput }
           }
           const response = await externalCredentialRegistrar.register({
             ...registrationRequest,
-            secret: parsed.data.secret,
+            secret: manualSecret,
           })
           if (!credentialRegistrationMatches(response, registrationRequest)) {
-            return {
-              ok: false,
-              error: "internal-credential-registration-failed",
-            }
+            return registrationFailure()
           }
           secret = null
         }
       } catch {
-        return {
-          ok: false,
-          error: "internal-credential-registration-failed",
-        }
+        return registrationFailure()
       }
 
       const createdAt = new Date().toISOString()
@@ -277,6 +324,11 @@ export function createLocalCredentialApi(
         status: entityStatuses.active,
         createdAt,
       }
+      const attempt = createAttempt(
+        credentialRegistrationAttemptStatuses.succeeded,
+        apiKey.id,
+        null,
+      )
       const notification = {
         userId: document.requesterId,
         targetType: userNotificationTargetTypeValues.approvalDocument,
@@ -301,11 +353,17 @@ export function createLocalCredentialApi(
           ),
           apiKey,
         ],
+        credentialRegistrationAttempts: [
+          ...current.credentialRegistrationAttempts,
+          attempt,
+        ],
         notifications: [...current.notifications, notification],
       }))
       return {
         ok: true,
         value: {
+          status: credentialRegistrationAttemptStatuses.succeeded,
+          attempt,
           apiKey,
           secret,
         },

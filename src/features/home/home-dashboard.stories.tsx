@@ -42,9 +42,7 @@ export const Default: Story = {
       canvas.getByRole("heading", { level: 1, name: "업무 홈" }),
     ).toBeVisible()
     await expect(canvas.getByText(/David님/)).toBeVisible()
-    await expect(
-      canvas.getByRole("heading", { name: "보유 정책" }),
-    ).toBeVisible()
+    await expect(canvas.getByRole("heading", { name: "정책" })).toBeVisible()
     const policyTable = canvas.getByRole("table", {
       name: "세션 사용자 보유 정책 목록",
     })
@@ -104,7 +102,7 @@ export const DefaultMenuAccessWithoutLocalSession: Story = {
     await expect(canvas.queryByText("활성 자격증명")).not.toBeInTheDocument()
     await expect(canvas.queryByText("재직 사용자")).not.toBeInTheDocument()
     await expect(
-      canvas.queryByRole("heading", { name: "보유 정책" }),
+      canvas.queryByRole("heading", { name: "정책" }),
     ).not.toBeInTheDocument()
     await expect(
       canvas.queryByRole("button", { name: "접근 정책 부여 요청 작성" }),
@@ -127,7 +125,7 @@ export const OrganizationLeader: Story = {
     const canvas = within(canvasElement)
     await expect(canvas.getByText(/Emma님/)).toBeVisible()
     await expect(
-      canvas.getByRole("heading", { name: "요청 및 소속 조직 자격증명" }),
+      canvas.getByRole("heading", { name: "자격증명" }),
     ).toBeVisible()
     const credentialTable = canvas.getByRole("table", {
       name: "세션 사용자 관련 자격증명 목록",
@@ -194,7 +192,7 @@ export const AccessRecipient: Story = {
     await expect(canvas.getByText(/Charlotte님/)).toBeVisible()
     await expect(
       canvas.getByRole("heading", {
-        name: "보유 정책",
+        name: "정책",
       }),
     ).toBeVisible()
     await expect(
@@ -235,9 +233,7 @@ export const InactiveUser: Story = {
     await waitFor(async () => {
       await expect(workDialog).not.toBeVisible()
     })
-    await expect(
-      canvas.getByRole("heading", { name: "보유 정책" }),
-    ).toBeVisible()
+    await expect(canvas.getByRole("heading", { name: "정책" })).toBeVisible()
     await expect(
       canvas.getByRole("table", { name: "세션 사용자 보유 정책 목록" }),
     ).toBeVisible()

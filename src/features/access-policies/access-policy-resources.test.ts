@@ -94,12 +94,14 @@ describe("resolveAccessPolicyResourceGroups", () => {
     ).toEqual([
       uiResourceKeys.uiResources.key,
       uiResourceKeys.uiResources.list.key,
+      uiResourceKeys.uiResources.detail.key,
       uiResourceKeys.uiResources.sync.key,
       uiResourceKeys.uiResources.list.actions.importUiResources,
       uiResourceKeys.uiResources.list.actions.changeUiResourceStatus,
       uiResourceKeys.uiResources.list.actions.deleteUiResources,
       uiResourceKeys.uiResources.list.actions.compareUiResourceSyncs,
       uiResourceKeys.uiResources.list.actions.restoreUiResourceSync,
+      uiResourceKeys.uiResources.detail.actions.deleteUiResource,
     ])
     expect(accessPolicyResourceNames(localFixture, resourcePolicy)).toContain(
       "Backoffice / UI 리소스 동기화",

@@ -8,11 +8,13 @@ import {
   uiResourceKeys,
   uiResourceManifest,
 } from "@/config/menu-registry"
+import { backofficeErrorCodes } from "@/domain/common"
 import { localDefaultUserId, localFixture } from "@/mocks/fixture"
 import type {
   ExternalCredentialRegistrar,
   InternalCredentialRegistrar,
 } from "@/features/credentials/internal-credential-registration"
+import { credentialRegistrationAttemptStatuses } from "@/features/credentials/model"
 import type { UiResourceManifest } from "@/features/ui-resources/ui-resource-manifest"
 import {
   defaultBackofficeAdminRole,
@@ -356,6 +358,7 @@ describe("BackofficeProvider", () => {
       uiResourceKeys.approvalDocuments.detail.actions.updatePolicy,
       uiResourceKeys.approvalDocuments.detail.actions.deletePolicy,
       uiResourceKeys.approvalDocuments.detail.actions.clonePolicy,
+      uiResourceKeys.approvalDocuments.detail.actions.revokePolicyAssignment,
     ])
   })
 
@@ -1391,21 +1394,25 @@ describe("BackofficeProvider", () => {
       }),
     )
     expect(registration.ok).toBe(true)
-    if (!registration.ok) return
-    expect(registration.value.secret).toMatch(/^bok_[a-f0-9]{32}$/)
-    expect(registration.value.apiKey).not.toHaveProperty("maskedValue")
-    expect(registration.value.apiKey).not.toHaveProperty("registrationMethod")
-    expect(registration.value.apiKey.registeredByUserId).toBe(
-      requester.value.id,
+    if (
+      !registration.ok ||
+      registration.value.status !==
+        credentialRegistrationAttemptStatuses.succeeded
     )
-    expect(registration.value.apiKey).toMatchObject({
+      return
+    const registeredApiKey = registration.value.apiKey
+    expect(registration.value.secret).toMatch(/^bok_[a-f0-9]{32}$/)
+    expect(registeredApiKey).not.toHaveProperty("maskedValue")
+    expect(registeredApiKey).not.toHaveProperty("registrationMethod")
+    expect(registeredApiKey.registeredByUserId).toBe(requester.value.id)
+    expect(registeredApiKey).toMatchObject({
       awsSecretName: "backoffice/partner-api",
       awsSecretKey: "partner-integration",
       endpointIds: credentialEndpointIds,
       applicationId: application.value.id,
     })
     const generatedPolicy = result.current.accessPolicies.find(
-      (policy) => policy.id === registration.value.apiKey.accessPolicyId,
+      (policy) => policy.id === registeredApiKey.accessPolicyId,
     )
     expect(generatedPolicy).toMatchObject({
       managementType: "system",
@@ -1671,8 +1678,14 @@ describe("BackofficeProvider", () => {
       }),
     )
     expect(registration.ok).toBe(true)
-    if (!registration.ok) return
-    expect(registration.value.apiKey).toMatchObject({
+    if (
+      !registration.ok ||
+      registration.value.status !==
+        credentialRegistrationAttemptStatuses.succeeded
+    )
+      return
+    const registeredApiKey = registration.value.apiKey
+    expect(registeredApiKey).toMatchObject({
       name: apiKey.name,
       serviceId: apiKey.serviceId,
       replacesApiKeyId: apiKey.id,
@@ -1688,11 +1701,11 @@ describe("BackofficeProvider", () => {
       result.current.createApprovalDocument({
         documentKind: "api-key-lifecycle",
         type: "api-key-dispose",
-        title: `API Key 폐기 요청: ${registration.value.apiKey.name}`,
+        title: `API Key 폐기 요청: ${registeredApiKey.name}`,
         organizationId: issuanceDocument.organizationId,
         requesterId: issuanceDocument.requesterId,
         approvalLineId: disposalTemplate.id,
-        apiKeyId: registration.value.apiKey.id,
+        apiKeyId: registeredApiKey.id,
         content: "더 이상 사용하지 않는 API Key의 폐기를 요청합니다.",
         fieldValues: [],
         approvalSteps: approvalStepsFromTemplate(
@@ -1713,13 +1726,12 @@ describe("BackofficeProvider", () => {
       ),
     ).toMatchObject({ ok: true })
     expect(
-      result.current.apiKeys.find(
-        (item) => item.id === registration.value.apiKey.id,
-      )?.status,
+      result.current.apiKeys.find((item) => item.id === registeredApiKey.id)
+        ?.status,
     ).toBe("inactive")
     expect(
       result.current.accessPolicies.find(
-        (policy) => policy.id === registration.value.apiKey.accessPolicyId,
+        (policy) => policy.id === registeredApiKey.accessPolicyId,
       )?.status,
     ).toBe("inactive")
   })
@@ -1787,7 +1799,12 @@ describe("BackofficeProvider", () => {
     )
 
     expect(registration.ok).toBe(true)
-    if (!registration.ok) return
+    if (
+      !registration.ok ||
+      registration.value.status !==
+        credentialRegistrationAttemptStatuses.succeeded
+    )
+      return
     expect(registration.value.secret).toBeNull()
     expect(registration.value.apiKey).toMatchObject({
       awsSecretName: "backoffice/collaboration-saas",
@@ -1821,16 +1838,21 @@ describe("BackofficeProvider", () => {
         },
       ],
     }
-    const failingRegistrar: InternalCredentialRegistrar = {
-      register() {
-        return Promise.reject(new Error("Registration service unavailable"))
+    let registrationAttempt = 0
+    const retryableRegistrar: InternalCredentialRegistrar = {
+      register(input) {
+        registrationAttempt += 1
+        if (registrationAttempt === 1) {
+          return Promise.reject(new Error("Registration service unavailable"))
+        }
+        return testInternalCredentialRegistrar.register(input)
       },
     }
     function FailingWrapper({ children }: { children: ReactNode }) {
       return (
         <BackofficeProvider
           initialState={state}
-          apiClientFactory={createTestApiClientFactory(failingRegistrar)}
+          apiClientFactory={createTestApiClientFactory(retryableRegistrar)}
         >
           {children}
         </BackofficeProvider>
@@ -1841,18 +1863,53 @@ describe("BackofficeProvider", () => {
     })
     const before = result.current.apiKeys.length
 
-    expect(
-      await act(() =>
-        result.current.registerApiKey({
-          approvalDocumentId,
-          registeredByUserId: administrator.id,
-        }),
-      ),
-    ).toEqual({
-      ok: false,
-      error: "internal-credential-registration-failed",
+    const failedRegistration = await act(() =>
+      result.current.registerApiKey({
+        approvalDocumentId,
+        registeredByUserId: administrator.id,
+      }),
+    )
+    expect(failedRegistration).toMatchObject({
+      ok: true,
+      value: {
+        status: credentialRegistrationAttemptStatuses.failed,
+        apiKey: null,
+        error: backofficeErrorCodes.internalCredentialRegistrationFailed,
+        attempt: {
+          attemptNumber: 1,
+          status: credentialRegistrationAttemptStatuses.failed,
+        },
+      },
     })
     expect(result.current.apiKeys).toHaveLength(before)
+    expect(
+      result.current.credentialRegistrationAttempts.filter(
+        (attempt) => attempt.approvalDocumentId === approvalDocumentId,
+      ),
+    ).toHaveLength(1)
+
+    const retriedRegistration = await act(() =>
+      result.current.registerApiKey({
+        approvalDocumentId,
+        registeredByUserId: administrator.id,
+      }),
+    )
+    expect(retriedRegistration).toMatchObject({
+      ok: true,
+      value: {
+        status: credentialRegistrationAttemptStatuses.succeeded,
+        attempt: {
+          attemptNumber: 2,
+          status: credentialRegistrationAttemptStatuses.succeeded,
+        },
+      },
+    })
+    expect(result.current.apiKeys).toHaveLength(before + 1)
+    expect(
+      result.current.credentialRegistrationAttempts.filter(
+        (attempt) => attempt.approvalDocumentId === approvalDocumentId,
+      ),
+    ).toHaveLength(2)
   })
 
   it("creates permission requests only from a linked access policy", async () => {

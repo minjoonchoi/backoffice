@@ -2,8 +2,11 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { expect, userEvent, waitFor, within } from "storybook/test"
 
 import { SessionAccessProvider } from "@/auth/session-access-provider"
+import { backofficeErrorCodes } from "@/domain/common"
+import { approvalDocumentKinds } from "@/features/access-policies/model"
 import { CredentialIssuancePage } from "@/features/credentials/credential-issuance-page"
 import { ApiKeyPage } from "@/features/credentials/api-key-page"
+import { credentialRegistrationAttemptStatuses } from "@/features/credentials/model"
 import { localDefaultUserId, localFixture } from "@/mocks/fixture"
 import type { BackofficeState } from "@/application/state/model"
 import { BackofficeProvider } from "@/application/state/provider"
@@ -85,6 +88,28 @@ function createRegistrationState(): BackofficeState {
       awsSecretKey: "api-key",
     },
   )
+  return state
+}
+
+function createFailedRegistrationState(): BackofficeState {
+  const state = createRegistrationState()
+  const document = state.approvalDocuments.find(
+    (candidate) => candidate.id === "50000000-0000-4000-8000-000000000091",
+  )
+  if (document?.documentKind !== approvalDocumentKinds.apiKeyIssuance) {
+    throw new Error("Failed registration story document is missing")
+  }
+  state.credentialRegistrationAttempts.push({
+    id: "82000000-0000-4000-8000-000000000091",
+    approvalDocumentId: document.id,
+    serviceId: document.serviceId,
+    registeredByUserId: localDefaultUserId,
+    apiKeyId: null,
+    attemptNumber: 1,
+    status: credentialRegistrationAttemptStatuses.failed,
+    errorCode: backofficeErrorCodes.internalCredentialRegistrationFailed,
+    createdAt: "2026-08-18T01:00:00.000Z",
+  })
   return state
 }
 
@@ -189,7 +214,7 @@ export const RegistrationByServiceType: Story = {
       .find((row) => row.textContent.includes("internal-registration-key"))
     if (!internalRow) throw new Error("INTERNAL registration row not found")
     await userEvent.click(
-      within(internalRow).getByRole("button", { name: "Credential 등록" }),
+      within(internalRow).getByRole("button", { name: "자격증명 등록" }),
     )
     let dialog = screen.getByRole("dialog", {
       name: "내부 서비스 자격증명 자동 등록",
@@ -213,7 +238,7 @@ export const RegistrationByServiceType: Story = {
       .find((row) => row.textContent.includes("external-registration-key"))
     if (!externalRow) throw new Error("EXTERNAL registration row not found")
     await userEvent.click(
-      within(externalRow).getByRole("button", { name: "Credential 등록" }),
+      within(externalRow).getByRole("button", { name: "자격증명 등록" }),
     )
     dialog = screen.getByRole("dialog", {
       name: "외부 서비스 자격증명 수동 등록",
@@ -225,5 +250,45 @@ export const RegistrationByServiceType: Story = {
     await expect(
       within(dialog).getByText("backoffice/external-registration"),
     ).toBeVisible()
+  },
+}
+
+export const FailedRegistrationHasHistoryAndExplicitRetry: Story = {
+  render: () => (
+    <BackofficeProvider initialState={createFailedRegistrationState()}>
+      <SessionAccessProvider
+        localSwitchingEnabled
+        initialUserId={localDefaultUserId}
+      >
+        <ApiKeyPage />
+      </SessionAccessProvider>
+    </BackofficeProvider>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const screen = within(canvasElement.ownerDocument.body)
+    const failedRow = canvas
+      .getAllByRole("row")
+      .find((row) => row.textContent.includes("internal-registration-key"))
+    if (!failedRow) throw new Error("Failed registration row not found")
+
+    await expect(within(failedRow).getByText("등록 실패")).toBeVisible()
+    await expect(
+      within(failedRow).getByRole("button", { name: "등록 재시도" }),
+    ).toBeVisible()
+    await userEvent.click(
+      within(failedRow).getByRole("button", { name: "1회" }),
+    )
+    const historyDialog = await screen.findByRole("dialog", {
+      name: "등록 시도 이력",
+    })
+    await waitFor(async () => {
+      await expect(within(historyDialog).getByText("1차")).toBeVisible()
+      await expect(
+        within(historyDialog).getByText(
+          "자격증명 등록 API 처리에 실패했습니다. 다시 시도해 주세요.",
+        ),
+      ).toBeVisible()
+    })
   },
 }

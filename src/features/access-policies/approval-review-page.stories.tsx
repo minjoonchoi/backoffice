@@ -492,6 +492,31 @@ export const PolicyOperatorCanCreatePolicy: Story = {
   },
 }
 
+export const PolicyOperatorCanReviewAndRevokeAssignments: Story = {
+  render: () => (
+    <SessionAccessProvider
+      localSwitchingEnabled
+      initialUserId={findUserId("Owen")}
+    >
+      <AccessPolicyDetailPage policyId="43000000-0000-4000-8000-000000000001" />
+    </SessionAccessProvider>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const table = canvas.getByRole("table", { name: "현재 부여 대상" })
+
+    await expect(
+      canvas.getByRole("heading", { name: "현재 부여 대상" }),
+    ).toBeVisible()
+    await expect(within(table).getByText("Charlotte")).toBeVisible()
+    await expect(
+      within(table).getByRole("button", {
+        name: "Charlotte 연결 제거",
+      }),
+    ).toBeVisible()
+  },
+}
+
 export const PaginatedUiResourcesPolicyDetail: Story = {
   render: () => (
     <AccessPolicyDetailPage policyId="45000000-0000-4000-8000-000000000101" />

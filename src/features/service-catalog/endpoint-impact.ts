@@ -7,10 +7,21 @@ type EndpointImpactState = Pick<
   "accessPolicies" | "apiKeys" | "serviceEndpointFields"
 >
 
+export const endpointFieldChangeTypes = {
+  added: "added",
+  removed: "removed",
+  changed: "changed",
+} as const
+export type EndpointFieldChangeType =
+  (typeof endpointFieldChangeTypes)[keyof typeof endpointFieldChangeTypes]
+
 export type EndpointChangeImpact = Readonly<{
   addedFields: readonly ServiceEndpointFieldInput[]
   removedFields: readonly ServiceEndpointFieldInput[]
-  changedFields: readonly ServiceEndpointFieldInput[]
+  changedFields: readonly Readonly<{
+    before: ServiceEndpointFieldInput
+    after: ServiceEndpointFieldInput
+  }>[]
   accessPolicyIds: readonly string[]
   apiKeyIds: readonly string[]
 }>
@@ -40,26 +51,33 @@ export function resolveEndpointChangeImpact(
     removedFields: previousFields.filter(
       (field) => !nextByKey.has(fieldKey(field)),
     ),
-    changedFields: nextFields.filter((field) => {
+    changedFields: nextFields.flatMap((field) => {
       const previous = previousByKey.get(fieldKey(field))
-      return Boolean(
-        previous &&
+      return previous &&
         (previous.valueType !== field.valueType ||
           previous.required !== field.required ||
-          previous.description !== field.description),
-      )
+          previous.description !== field.description)
+        ? [{ before: previous, after: field }]
+        : []
     }),
-    accessPolicyIds: state.accessPolicies
-      .filter((policy) =>
-        policy.resources.some(
-          (resource) =>
-            resource.type === accessPolicyResourceTypes.endpoint &&
-            resource.id === endpointId,
-        ),
-      )
-      .map((policy) => policy.id),
+    accessPolicyIds: resolveEndpointReferencedPolicyIds(state, endpointId),
     apiKeyIds: state.apiKeys
       .filter((apiKey) => apiKey.endpointIds.includes(endpointId))
       .map((apiKey) => apiKey.id),
   }
+}
+
+export function resolveEndpointReferencedPolicyIds(
+  state: Pick<BackofficeState, "accessPolicies">,
+  endpointId: string,
+): readonly string[] {
+  return state.accessPolicies
+    .filter((policy) =>
+      policy.resources.some(
+        (resource) =>
+          resource.type === accessPolicyResourceTypes.endpoint &&
+          resource.id === endpointId,
+      ),
+    )
+    .map((policy) => policy.id)
 }

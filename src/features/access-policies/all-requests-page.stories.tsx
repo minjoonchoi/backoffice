@@ -37,9 +37,12 @@ export const AllRequestTypes: Story = {
     ).toBeVisible()
     const table = canvas.getByRole("table", { name: "전체 요청 목록" })
     await expect(within(table).getByText("접근 정책")).toBeVisible()
-    await expect(within(table).getAllByText("자격증명")).toHaveLength(2)
+    await expect(within(table).getAllByText("자격증명")).toHaveLength(3)
     await expect(
       within(table).getByText("로컬 API Key 발급 요청"),
+    ).toBeVisible()
+    await expect(
+      within(table).getByText("협업 SaaS 자격증명 등록 재시도 예시"),
     ).toBeVisible()
     await expect(within(table).getByText("보안 서비스 접근 요청")).toBeVisible()
 

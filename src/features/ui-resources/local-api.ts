@@ -222,17 +222,23 @@ export function createLocalUiResourceApi(
 
     deleteOrphanedUiResources: async (resourceIds, requesterId) => {
       await Promise.resolve()
-      if (
-        !hasUiResourcePolicyAccess(
-          state,
-          requesterId,
-          uiResourceKeys.uiResources.list.actions.deleteUiResources,
-        )
-      ) {
-        return { ok: false, error: "ui-resource-delete-forbidden" }
-      }
       const parsed = entityIdListSchema.safeParse(resourceIds)
       if (!parsed.success) return { ok: false, error: "invalid-input" }
+      const canDeleteFromList = hasUiResourcePolicyAccess(
+        state,
+        requesterId,
+        uiResourceKeys.uiResources.list.actions.deleteUiResources,
+      )
+      const canDeleteFromDetail =
+        parsed.data.length === 1 &&
+        hasUiResourcePolicyAccess(
+          state,
+          requesterId,
+          uiResourceKeys.uiResources.detail.actions.deleteUiResource,
+        )
+      if (!canDeleteFromList && !canDeleteFromDetail) {
+        return { ok: false, error: "ui-resource-delete-forbidden" }
+      }
       const resourceIdSet = new Set(parsed.data)
       const resources = state.uiResources.filter((resource) =>
         resourceIdSet.has(resource.id),

@@ -54,6 +54,8 @@ import {
 } from "@/features/service-catalog/model"
 import { useBackoffice } from "@/application/state/provider"
 import { useServiceResourceAccess } from "@/features/service-catalog/use-service-resource-access"
+import { resolveEndpointReferencedPolicyIds } from "@/features/service-catalog/endpoint-impact"
+import { EndpointReferencedPoliciesTable } from "@/features/service-catalog/endpoint-impact-view"
 import {
   ServiceTypeBadge,
   StatusBadge,
@@ -578,6 +580,10 @@ export function ServiceEndpointDetailPage({
   const endpointRevisions = backoffice.serviceEndpointRevisions
     .filter((revision) => revision.endpointId === endpoint.id)
     .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))
+  const referencedPolicyIds = resolveEndpointReferencedPolicyIds(
+    backoffice,
+    endpoint.id,
+  )
   const revisionColumns: ColumnDef<ServiceEndpointRevision>[] = [
     {
       accessorKey: "version",
@@ -776,6 +782,17 @@ export function ServiceEndpointDetailPage({
             caption={t("requestParameters")}
             empty={t("requestParametersEmpty")}
           />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("referencedPolicies")}</CardTitle>
+          <CardDescription>
+            {t("referencedPoliciesDescription")}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <EndpointReferencedPoliciesTable policyIds={referencedPolicyIds} />
         </CardContent>
       </Card>
       <Card>

@@ -13,6 +13,7 @@ import { useMemo } from "react"
 
 import { useSessionAccess } from "@/auth/session-access-provider"
 import { UiResourceLink } from "@/auth/ui-resource-link"
+import { RelationshipRemoveAction } from "@/application/ui/relationship-remove-action"
 import { ConfirmAction } from "@/components/patterns/confirm-action"
 import { EmptyState } from "@/components/patterns/content-state"
 import { DataTable } from "@/components/patterns/data-table"
@@ -22,7 +23,10 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { snackbar } from "@/components/ui/snackbar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { resolveMissingAccessPolicyResources } from "@/features/access-policies/access-policy-assignment"
+import {
+  resolveAccessPolicyAssignmentAffectedUserIds,
+  resolveMissingAccessPolicyResources,
+} from "@/features/access-policies/access-policy-assignment"
 import {
   Card,
   CardContent,
@@ -42,10 +46,17 @@ import { useBackoffice } from "@/application/state/provider"
 import {
   AccessPolicyEffectBadge,
   ServiceTypeBadge,
+  useBackofficeLabels,
 } from "@/application/ui/backoffice-ui"
 import { AccessPolicyCloneLink } from "@/features/access-policies/access-policy-tools"
 import { isAccessPolicyEffective } from "@/features/access-policies/access-policy-status"
-import { accessPolicyManagementTypes } from "@/features/access-policies/model"
+import {
+  accessPolicyAssignmentTargets,
+  accessPolicyManagementTypes,
+  type AccessPolicyAssignment,
+} from "@/features/access-policies/model"
+import type { BackofficeState } from "@/application/state/model"
+import type { BackofficeUiResourceKey } from "@/config/menu-registry"
 
 type IncludedEndpointResource = AccessPolicyEndpointResource & {
   service: AccessPolicyResourceGroup["service"]
@@ -206,7 +217,14 @@ function AccessPolicyUiResourcesTable({
       {
         id: "name",
         header: common("name"),
-        cell: ({ row }) => row.original.resource.name,
+        cell: ({ row }) => (
+          <UiResourceLink
+            resourceKey={uiResourceKeys.uiResources.detail.key}
+            href={`/ui-resources/${row.original.resource.id}`}
+          >
+            {row.original.resource.name}
+          </UiResourceLink>
+        ),
       },
       {
         id: "namespace",
@@ -310,6 +328,237 @@ function AccessPolicyResourcesTabs({
   )
 }
 
+type AccessPolicyAssignmentTargetView = Readonly<{
+  name: string
+  href: string
+  resourceKey: BackofficeUiResourceKey
+}>
+
+type AccessPolicyAssignmentRow = Readonly<{
+  assignment: AccessPolicyAssignment
+  target: AccessPolicyAssignmentTargetView
+  affectedUserCount: number
+  protected: boolean
+}>
+
+function resolveAssignmentTarget(
+  state: Pick<
+    BackofficeState,
+    "applications" | "organizations" | "roles" | "users"
+  >,
+  assignment: AccessPolicyAssignment,
+): AccessPolicyAssignmentTargetView {
+  if (assignment.targetType === accessPolicyAssignmentTargets.user) {
+    const user = state.users.find(
+      (candidate) => candidate.id === assignment.targetId,
+    )
+    if (!user)
+      throw new Error(`Policy assignment user not found: ${assignment.id}`)
+    return {
+      name: user.nickname,
+      href: `/users/${user.id}`,
+      resourceKey: uiResourceKeys.users.detail.key,
+    }
+  }
+  if (assignment.targetType === accessPolicyAssignmentTargets.organization) {
+    const organization = state.organizations.find(
+      (candidate) => candidate.id === assignment.targetId,
+    )
+    if (!organization) {
+      throw new Error(
+        `Policy assignment organization not found: ${assignment.id}`,
+      )
+    }
+    return {
+      name: organization.name,
+      href: `/organizations/${organization.id}`,
+      resourceKey: uiResourceKeys.organizations.detail.key,
+    }
+  }
+  if (assignment.targetType === accessPolicyAssignmentTargets.role) {
+    const role = state.roles.find(
+      (candidate) => candidate.id === assignment.targetId,
+    )
+    if (!role)
+      throw new Error(`Policy assignment role not found: ${assignment.id}`)
+    return {
+      name: role.name,
+      href: `/roles/${role.id}`,
+      resourceKey: uiResourceKeys.roles.detail.key,
+    }
+  }
+  const application = state.applications.find(
+    (candidate) => candidate.id === assignment.targetId,
+  )
+  if (!application) {
+    throw new Error(`Policy assignment application not found: ${assignment.id}`)
+  }
+  return {
+    name: application.name,
+    href: `/applications/${application.id}`,
+    resourceKey: uiResourceKeys.applications.detail.key,
+  }
+}
+
+function AccessPolicyAssignmentsCard({
+  policyId,
+  policyName,
+  canRevoke,
+}: {
+  policyId: string
+  policyName: string
+  canRevoke: boolean
+}) {
+  const backoffice = useBackoffice()
+  const sessionAccess = useSessionAccess()
+  const t = useTranslations("backoffice.approvalDocuments")
+  const common = useTranslations("backoffice.common")
+  const labels = useBackofficeLabels()
+  const rows = backoffice.accessPolicyAssignments
+    .filter((assignment) => assignment.accessPolicyId === policyId)
+    .map((assignment): AccessPolicyAssignmentRow => ({
+      assignment,
+      target: resolveAssignmentTarget(backoffice, assignment),
+      affectedUserCount: resolveAccessPolicyAssignmentAffectedUserIds(
+        backoffice,
+        assignment.id,
+      ).length,
+      protected: backoffice.namespaces.some(
+        (namespace) =>
+          namespace.managerRoleId === assignment.targetId &&
+          namespace.managerAccessPolicyId === assignment.accessPolicyId,
+      ),
+    }))
+
+  const columns = useMemo<ColumnDef<AccessPolicyAssignmentRow>[]>(
+    () => [
+      {
+        id: "targetType",
+        header: t("assignmentTargetType"),
+        size: 130,
+        cell: ({ row }) => (
+          <Badge variant="secondary">
+            {t(`assignmentTargetTypes.${row.original.assignment.targetType}`)}
+          </Badge>
+        ),
+      },
+      {
+        id: "target",
+        header: t("assignmentTarget"),
+        size: 220,
+        cell: ({ row }) => (
+          <UiResourceLink
+            resourceKey={row.original.target.resourceKey}
+            href={row.original.target.href}
+          >
+            {row.original.target.name}
+          </UiResourceLink>
+        ),
+      },
+      {
+        id: "expiresAt",
+        header: t("assignmentExpiresAt"),
+        size: 180,
+        cell: ({ row }) =>
+          row.original.assignment.expiresAt
+            ? labels.dateTime(row.original.assignment.expiresAt)
+            : t("assignmentNoExpiration"),
+      },
+      {
+        id: "affectedUsers",
+        header: t("revokeAffectedUsers"),
+        size: 150,
+        cell: ({ row }) =>
+          t("affectedUserCount", { count: row.original.affectedUserCount }),
+      },
+      {
+        id: "createdAt",
+        header: common("createdAt"),
+        size: 180,
+        cell: ({ row }) => labels.dateTime(row.original.assignment.createdAt),
+      },
+      ...(canRevoke
+        ? [
+            {
+              id: "actions",
+              header: common("actions"),
+              size: 100,
+              cell: ({ row }) => (
+                <span
+                  data-ui-resource={
+                    uiResourceKeys.approvalDocuments.detail.actions
+                      .revokePolicyAssignment
+                  }
+                >
+                  <RelationshipRemoveAction
+                    subjectName={policyName}
+                    targetName={row.original.target.name}
+                    impactDescription={
+                      row.original.protected
+                        ? t("protectedPolicyAssignment")
+                        : t("policyRevokeImpact", {
+                            count: row.original.affectedUserCount,
+                          })
+                    }
+                    confirmDisabled={row.original.protected}
+                    onRemove={() =>
+                      backoffice.unassignAccessPolicyFromTarget(
+                        row.original.assignment.id,
+                        sessionAccess.currentUser?.id ?? "",
+                      )
+                    }
+                  />
+                </span>
+              ),
+            } satisfies ColumnDef<AccessPolicyAssignmentRow>,
+          ]
+        : []),
+    ],
+    [
+      backoffice,
+      canRevoke,
+      common,
+      labels,
+      policyName,
+      sessionAccess.currentUser?.id,
+      t,
+    ],
+  )
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("assignmentTargetsTitle")}</CardTitle>
+        <CardDescription>{t("assignmentTargetsDescription")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <DataTable
+          caption={t("assignmentTargetsTitle")}
+          columns={columns}
+          data={rows}
+          getRowId={(row) => row.assignment.id}
+          empty={t("assignmentTargetsEmpty")}
+          filterLabel={common("search")}
+          noResults={common("noResults")}
+          filters={[
+            {
+              id: "target",
+              label: t("assignmentTarget"),
+              getValue: (row) => row.target.name,
+            },
+            {
+              id: "type",
+              label: t("assignmentTargetType"),
+              getValue: (row) =>
+                t(`assignmentTargetTypes.${row.assignment.targetType}`),
+            },
+          ]}
+        />
+      </CardContent>
+    </Card>
+  )
+}
+
 export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
   const backoffice = useBackoffice()
   const sessionAccess = useSessionAccess()
@@ -385,6 +634,9 @@ export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
     sessionAccess.canAccessUiResource(
       uiResourceKeys.approvalDocuments.list.actions.createPolicy,
     )
+  const canRevokeAssignment = sessionAccess.canAccessUiResource(
+    uiResourceKeys.approvalDocuments.detail.actions.revokePolicyAssignment,
+  )
   const assignmentCount = backoffice.accessPolicyAssignments.filter(
     (assignment) => assignment.accessPolicyId === policy.id,
   ).length
@@ -514,6 +766,11 @@ export function AccessPolicyDetailPage({ policyId }: { policyId: string }) {
           </DetailGrid>
         </CardContent>
       </Card>
+      <AccessPolicyAssignmentsCard
+        policyId={policy.id}
+        policyName={policy.name}
+        canRevoke={canRevokeAssignment}
+      />
       <Card>
         <CardHeader>
           <CardTitle>{t("resources")}</CardTitle>

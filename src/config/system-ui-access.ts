@@ -7,4 +7,5 @@ export const uiResourceManagerUiResourceKeys = [
   uiResourceKeys.uiResources.list.actions.deleteUiResources,
   uiResourceKeys.uiResources.list.actions.compareUiResourceSyncs,
   uiResourceKeys.uiResources.list.actions.restoreUiResourceSync,
+  uiResourceKeys.uiResources.detail.actions.deleteUiResource,
 ]

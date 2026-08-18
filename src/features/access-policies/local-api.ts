@@ -250,9 +250,15 @@ export function createLocalAccessPolicyApi(
         assignment.targetType === accessPolicyAssignmentTargets.role
           ? uiResourceKeys.roles.detail.actions.assignRolePolicy
           : null
+      const canRevokeFromPolicyDetail = hasUiResourcePolicyAccess(
+        state,
+        requesterId,
+        uiResourceKeys.approvalDocuments.detail.actions.revokePolicyAssignment,
+      )
       if (
-        !permissionKey ||
-        !hasUiResourcePolicyAccess(state, requesterId, permissionKey)
+        !canRevokeFromPolicyDetail &&
+        (!permissionKey ||
+          !hasUiResourcePolicyAccess(state, requesterId, permissionKey))
       ) {
         return { ok: false, error: "policy-assignment-forbidden" }
       }

@@ -1,6 +1,18 @@
 import { z } from "zod"
 
-import { entityIdSchema, type EntityStatus } from "@/domain/common"
+import {
+  backofficeErrorCodes,
+  entityIdSchema,
+  type EntityStatus,
+} from "@/domain/common"
+
+export const credentialRegistrationAttemptStatuses = {
+  succeeded: "succeeded",
+  failed: "failed",
+} as const
+export const credentialRegistrationAttemptStatusSchema = z.enum(
+  credentialRegistrationAttemptStatuses,
+)
 
 export const awsSecretNameInputPattern = "[A-Za-z0-9_+=.@\\/\\-]+"
 export const awsSecretKeyInputPattern = "[A-Za-z0-9_.\\-]+"
@@ -60,6 +72,32 @@ export type ApiKey = {
   createdAt: string
 }
 
+export const credentialRegistrationAttemptSchema = z
+  .object({
+    id: entityIdSchema,
+    approvalDocumentId: entityIdSchema,
+    serviceId: entityIdSchema,
+    registeredByUserId: entityIdSchema,
+    apiKeyId: entityIdSchema.nullable(),
+    attemptNumber: z.number().int().min(1).max(1000),
+    status: credentialRegistrationAttemptStatusSchema,
+    errorCode: z
+      .literal(backofficeErrorCodes.internalCredentialRegistrationFailed)
+      .nullable(),
+    createdAt: z.iso.datetime(),
+  })
+  .refine(
+    (attempt) =>
+      attempt.status === credentialRegistrationAttemptStatuses.succeeded
+        ? attempt.apiKeyId !== null && attempt.errorCode === null
+        : attempt.apiKeyId === null && attempt.errorCode !== null,
+    { path: ["status"] },
+  )
+
+export type CredentialRegistrationAttempt = z.infer<
+  typeof credentialRegistrationAttemptSchema
+>
+
 export type ApiKeyRegistrationInput = z.infer<
   typeof apiKeyRegistrationInputSchema
 >
@@ -73,7 +111,17 @@ export type CredentialLifecycleSettings = CredentialLifecycleSettingsInput & {
 export type ApiKeyEmergencyRevokeInput = z.infer<
   typeof apiKeyEmergencyRevokeInputSchema
 >
-export type ApiKeyRegistration = {
-  apiKey: ApiKey
-  secret: string | null
-}
+export type ApiKeyRegistration =
+  | Readonly<{
+      status: typeof credentialRegistrationAttemptStatuses.succeeded
+      attempt: CredentialRegistrationAttempt
+      apiKey: ApiKey
+      secret: string | null
+    }>
+  | Readonly<{
+      status: typeof credentialRegistrationAttemptStatuses.failed
+      attempt: CredentialRegistrationAttempt
+      apiKey: null
+      secret: null
+      error: typeof backofficeErrorCodes.internalCredentialRegistrationFailed
+    }>

@@ -116,6 +116,7 @@ const policyOperatorUiResourceKeys = [
   uiResourceKeys.approvalDocuments.detail.actions.clonePolicy,
   uiResourceKeys.approvalDocuments.detail.actions.updatePolicy,
   uiResourceKeys.approvalDocuments.detail.actions.deletePolicy,
+  uiResourceKeys.approvalDocuments.detail.actions.revokePolicyAssignment,
 ]
 const systemUiAccessCreatedAt = "2026-08-11T00:00:00.000Z"
 
@@ -372,6 +373,7 @@ export const initialBackofficeState: BackofficeState = {
     updatedAt: systemUiAccessCreatedAt,
     updatedByUserId: null,
   },
+  credentialRegistrationAttempts: [],
   apiKeys: [],
   namespaces: [defaultNamespace],
   uiResources: initialUiResources,
