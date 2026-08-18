@@ -3,6 +3,7 @@
 import { requestTemplateFieldBindingValues } from "@/features/request-templates/model"
 import {
   accessPolicyEffects,
+  accessPolicyInputSchema,
   accessPolicyResourceTypeSchema,
   accessPolicyResourceTypes,
   type AccessPolicy,
@@ -30,6 +31,10 @@ import { PageHeader } from "@/components/patterns/page-header"
 import { EmptyState } from "@/components/patterns/content-state"
 import { DataTable } from "@/components/patterns/data-table"
 import {
+  FieldValidationMessage,
+  useDynamicFormValidation,
+} from "@/components/patterns/dynamic-form-validation"
+import {
   ReviewWorkflowProgress,
   type ReviewWorkflowStep,
 } from "@/components/patterns/review-workflow-progress"
@@ -37,7 +42,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { snackbar } from "@/components/ui/snackbar"
@@ -252,6 +262,7 @@ function AccessPolicyEditorForm({
   const router = useRouter()
   const t = useTranslations("backoffice.approvalDocuments")
   const common = useTranslations("backoffice.common")
+  const validationMessages = useTranslations("backoffice.validation")
   const formId = useId()
   const policy = mode === policyEditorModes.update ? initialPolicy : undefined
   const draftSource = initialPolicy
@@ -441,6 +452,22 @@ function AccessPolicyEditorForm({
     effect: resourceEffect,
     resources: selectedResources,
   }
+  const draftResult = accessPolicyInputSchema.safeParse(draftInput)
+  const validation = useDynamicFormValidation(
+    draftResult.success ? undefined : draftResult.error,
+  )
+  const nameValidation = validation.getFieldValidation(
+    "name",
+    `${formId}-name-error`,
+  )
+  const descriptionValidation = validation.getFieldValidation(
+    "description",
+    `${formId}-description-error`,
+  )
+  const effectValidation = validation.getFieldValidation(
+    "effect",
+    `${formId}-effect-error`,
+  )
   const draftImpact = policy
     ? resolveAccessPolicyUpdateImpact(backoffice, policy, draftInput)
     : null
@@ -452,11 +479,6 @@ function AccessPolicyEditorForm({
       draftImpact.addedResources.length > 0 ||
       draftImpact.removedResources.length > 0),
   )
-  const metadataValid =
-    name.trim().length >= 2 &&
-    name.trim().length <= 100 &&
-    description.trim().length >= 2 &&
-    description.trim().length <= 500
   const resourceSelectionValid =
     resourceTypes.size > 0 &&
     resourceCount > 0 &&
@@ -466,10 +488,23 @@ function AccessPolicyEditorForm({
         : uiResourceNamespaceId !== null && uiResourceIds.size > 0,
     )
   const inputComplete =
-    metadataValid && approvalLines.length === 1 && resourceSelectionValid
+    draftResult.success && approvalLines.length === 1 && resourceSelectionValid
+  const resourcesValidation = validation.getFieldValidation(
+    "resources",
+    `${formId}-resources-error`,
+  )
+  const resourceSelectionError =
+    validation.shouldShowError("resources") && !resourceSelectionValid
+      ? (resourcesValidation.error ?? validationMessages("required"))
+      : resourcesValidation.error
 
   async function submit() {
-    if (!sessionAccess.currentUser || resourceTypes.size === 0) {
+    if (!inputComplete) {
+      validation.revealAll()
+      setStep(1)
+      return
+    }
+    if (!sessionAccess.currentUser) {
       setError("policy-operation-forbidden")
       return
     }
@@ -500,6 +535,11 @@ function AccessPolicyEditorForm({
   }
 
   async function reviewUpdateImpact() {
+    if (!inputComplete) {
+      validation.revealAll()
+      setStep(1)
+      return
+    }
     if (!policy || !sessionAccess.currentUser) {
       setError("policy-operation-forbidden")
       return
@@ -523,6 +563,7 @@ function AccessPolicyEditorForm({
     resourceId: string,
     checked: boolean,
   ) {
+    validation.touch("resources")
     setter((current) => {
       const next = new Set(current)
       if (checked) next.add(resourceId)
@@ -548,6 +589,7 @@ function AccessPolicyEditorForm({
     type: AccessPolicyResourceType,
     checked: boolean,
   ) {
+    validation.touch("resources")
     const next = new Set(resourceTypes)
     if (checked) next.add(type)
     else next.delete(type)
@@ -571,6 +613,7 @@ function AccessPolicyEditorForm({
     if (!isPolicyConfigurationMode(value)) {
       return
     }
+    validation.touch("resources")
     setConfigurationMode(value)
     if (value === requestTemplateFieldBindingValues.custom) return
     const nextTypes =
@@ -592,6 +635,7 @@ function AccessPolicyEditorForm({
   }
 
   function selectUiResourceNamespace(value: string) {
+    validation.touch("resources")
     if (value === uiResourceNamespaceId) return
     setUiResourceNamespaceId(value)
     setUiResourceIds(new Set())
@@ -729,6 +773,10 @@ function AccessPolicyEditorForm({
           onValueChange={(value) => {
             if (value) setResourceEffect(value)
           }}
+          error={effectValidation.error}
+          onInteract={() => {
+            validation.touch("effect")
+          }}
           options={[
             {
               value: accessPolicyEffects.allow,
@@ -770,21 +818,25 @@ function AccessPolicyEditorForm({
               : t("policyTemplateAmbiguous")}
           </p>
         ) : null}
-        <Field>
+        <Field invalid={nameValidation.invalid}>
           <FieldLabel htmlFor={`${formId}-name`}>{t("policyName")}</FieldLabel>
           <Input
             id={`${formId}-name`}
             name="name"
             value={name}
+            aria-invalid={nameValidation.invalid}
+            aria-describedby={nameValidation.errorId}
             onChange={(event) => {
+              validation.touch("name")
               setName(event.target.value)
             }}
             required
             minLength={2}
             maxLength={100}
           />
+          <FieldValidationMessage validation={nameValidation} />
         </Field>
-        <Field>
+        <Field invalid={descriptionValidation.invalid}>
           <FieldLabel htmlFor={`${formId}-description`}>
             {t("policyDescription")}
           </FieldLabel>
@@ -792,7 +844,10 @@ function AccessPolicyEditorForm({
             id={`${formId}-description`}
             name="description"
             value={description}
+            aria-invalid={descriptionValidation.invalid}
+            aria-describedby={descriptionValidation.errorId}
             onChange={(event) => {
+              validation.touch("description")
               setDescription(event.target.value)
             }}
             required
@@ -800,6 +855,7 @@ function AccessPolicyEditorForm({
             maxLength={500}
             rows={4}
           />
+          <FieldValidationMessage validation={descriptionValidation} />
         </Field>
       </section>
     )
@@ -1030,10 +1086,13 @@ function AccessPolicyEditorForm({
                       id: service.id,
                       title: service.name,
                       description: service.host,
-                      searchText: service.slug,
+                      searchText: service.serviceKey,
                     }))}
                     value={endpointServiceId}
-                    onValueChange={setEndpointServiceId}
+                    onValueChange={(value) => {
+                      validation.touch("resources")
+                      setEndpointServiceId(value)
+                    }}
                     listClassName="h-[min(38svh,20rem)] max-h-none"
                   />
                   <RequestMultiTargetSelector
@@ -1061,6 +1120,7 @@ function AccessPolicyEditorForm({
                     }
                     value={[...endpointIds]}
                     onValueChange={(values) => {
+                      validation.touch("resources")
                       setEndpointIds(new Set(values))
                     }}
                     disabled={!endpointServiceId}
@@ -1114,6 +1174,7 @@ function AccessPolicyEditorForm({
                     }
                     value={[...uiResourceIds]}
                     onValueChange={(values) => {
+                      validation.touch("resources")
                       setUiResourceIds(new Set(values))
                     }}
                     disabled={!uiResourceNamespaceId}
@@ -1124,6 +1185,11 @@ function AccessPolicyEditorForm({
             </TabsContent>
           </Tabs>
           {renderSelectedResources(true)}
+          {resourceSelectionError ? (
+            <FieldError id={`${formId}-resources-error`}>
+              {resourceSelectionError}
+            </FieldError>
+          ) : null}
         </div>
       </section>
     )
@@ -1468,10 +1534,15 @@ function AccessPolicyEditorForm({
           <ReviewWorkflowProgress step={step} label={t("creationProgress")} />
           <form
             id={formId}
+            noValidate
             className="grid gap-4"
             aria-label={t(policy ? "updatePolicy" : "createPolicy")}
             onSubmit={(event) => {
               event.preventDefault()
+              if (step === 1 && !inputComplete) {
+                validation.revealAll()
+                return
+              }
               if (step === 1 && policy) {
                 void reviewUpdateImpact()
                 return
@@ -1533,7 +1604,7 @@ function AccessPolicyEditorForm({
               key="review-policy"
               type="submit"
               form={formId}
-              disabled={!inputComplete || (Boolean(policy) && !policyChanged)}
+              disabled={Boolean(policy) && !policyChanged}
             >
               {policy ? t("reviewUpdateImpact") : common("next")}
             </Button>

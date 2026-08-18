@@ -15,6 +15,10 @@ import { useSessionAccess } from "@/auth/session-access-provider"
 import { canManageService } from "@/auth/service-resource-access"
 import { EmptyState } from "@/components/patterns/content-state"
 import { DetailGrid, DetailItem } from "@/components/patterns/detail-grid"
+import {
+  FieldValidationMessage,
+  useDynamicFormValidation,
+} from "@/components/patterns/dynamic-form-validation"
 import { FormSelect } from "@/components/patterns/form-select"
 import { RequestWorkflow } from "@/components/patterns/request-workflow"
 import {
@@ -23,7 +27,12 @@ import {
 } from "@/components/patterns/review-workflow-progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { snackbar } from "@/components/ui/snackbar"
 import { Textarea } from "@/components/ui/textarea"
@@ -33,6 +42,7 @@ import {
   approvalTypeValues,
 } from "@/features/request-templates/model"
 import {
+  parseEndpointFieldSection,
   parseEndpointFields,
   toEndpointFieldInput,
 } from "@/features/service-catalog/editor-support"
@@ -45,10 +55,13 @@ import {
   endpointFieldLocationValues,
   endpointLifecycleValues,
   endpointVersionInputPattern,
+  filterServiceKeyInput,
   httpMethods,
   isEndpointRequestParameterLocation,
   serviceEndpointInputSchema,
+  serviceEndpointFieldInputSchema,
   serviceInputSchema,
+  serviceKeyInputPattern,
   serviceTypes,
   serviceTypeValues,
   type HttpMethod,
@@ -95,7 +108,7 @@ export function ServiceEditorPage({ serviceId }: { serviceId?: string }) {
     service?.ownerOrganizationId ?? organizations[0]?.id ?? ""
   const [step, setStep] = useState<ReviewWorkflowStep>(1)
   const [name, setName] = useState(service?.name ?? "")
-  const [slug, setSlug] = useState(service?.slug ?? "")
+  const [serviceKey, setServiceKey] = useState(service?.serviceKey ?? "")
   const [host, setHost] = useState(service?.host ?? "")
   const [type, setType] = useState<ServiceType | null>(service?.type ?? null)
   const [ownerOrganizationId, setOwnerOrganizationId] = useState<string | null>(
@@ -113,6 +126,37 @@ export function ServiceEditorPage({ serviceId }: { serviceId?: string }) {
       firstTemplateId(approvalTypeValues.apiKeyDispose),
   })
   const [error, setError] = useState<BackofficeErrorCode>()
+  const parsed = serviceInputSchema.safeParse({
+    name,
+    serviceKey,
+    host,
+    type,
+    ownerOrganizationId,
+    credentialTemplateIds,
+  })
+  const validation = useDynamicFormValidation(
+    parsed.success ? undefined : parsed.error,
+  )
+  const nameValidation = validation.getFieldValidation(
+    "name",
+    "service-editor-name-error",
+  )
+  const serviceKeyValidation = validation.getFieldValidation(
+    "serviceKey",
+    "service-editor-service-key-error",
+  )
+  const hostValidation = validation.getFieldValidation(
+    "host",
+    "service-editor-host-error",
+  )
+  const typeValidation = validation.getFieldValidation(
+    "type",
+    "service-editor-type-error",
+  )
+  const ownerValidation = validation.getFieldValidation(
+    "ownerOrganizationId",
+    "service-editor-owner-error",
+  )
 
   if (serviceId && !service) {
     return (
@@ -136,14 +180,6 @@ export function ServiceEditorPage({ serviceId }: { serviceId?: string }) {
     )
   }
 
-  const parsed = serviceInputSchema.safeParse({
-    name,
-    slug,
-    host,
-    type,
-    ownerOrganizationId,
-    credentialTemplateIds,
-  })
   const owner = organizations.find((item) => item.id === ownerOrganizationId)
   const hasEndpoints = Boolean(
     service &&
@@ -155,14 +191,14 @@ export function ServiceEditorPage({ serviceId }: { serviceId?: string }) {
   async function submit() {
     const nextInput = serviceInputSchema.safeParse({
       name,
-      slug,
+      serviceKey,
       host,
       type,
       ownerOrganizationId,
       credentialTemplateIds,
     })
     if (!nextInput.success) {
-      setError("invalid-input")
+      validation.revealAll()
       setStep(1)
       return
     }
@@ -185,6 +221,7 @@ export function ServiceEditorPage({ serviceId }: { serviceId?: string }) {
 
   return (
     <RequestWorkflow
+      noValidate
       title={t(service ? "edit" : "add")}
       description={t(service ? "editDescription" : "addDescription")}
       cancelLabel={common("cancel")}
@@ -193,7 +230,6 @@ export function ServiceEditorPage({ serviceId }: { serviceId?: string }) {
       submitLabel={
         step === 1 ? common("next") : common(service ? "save" : "create")
       }
-      submitDisabled={!parsed.success}
       onPrevious={() => {
         setStep(1)
       }}
@@ -202,7 +238,7 @@ export function ServiceEditorPage({ serviceId }: { serviceId?: string }) {
       <ReviewWorkflowProgress step={step} label={common("editorProgress")} />
       {step === 1 ? (
         <div className="grid gap-4">
-          <Field>
+          <Field invalid={nameValidation.invalid}>
             <FieldLabel htmlFor="service-editor-name">
               {common("name")}
             </FieldLabel>
@@ -212,30 +248,40 @@ export function ServiceEditorPage({ serviceId }: { serviceId?: string }) {
               required
               minLength={2}
               maxLength={100}
+              aria-invalid={nameValidation.invalid}
+              aria-describedby={nameValidation.errorId}
               onChange={(event) => {
+                validation.touch("name")
                 setName(event.currentTarget.value)
               }}
             />
+            <FieldValidationMessage validation={nameValidation} />
           </Field>
-          <Field>
-            <FieldLabel htmlFor="service-editor-slug">{t("slug")}</FieldLabel>
+          <Field invalid={serviceKeyValidation.invalid}>
+            <FieldLabel htmlFor="service-editor-service-key">
+              {t("serviceKey")}
+            </FieldLabel>
             <Input
-              id="service-editor-slug"
-              value={slug}
+              id="service-editor-service-key"
+              value={serviceKey}
               required
               minLength={2}
               maxLength={32}
-              pattern="[a-z]+(?:-[a-z]+)*"
+              pattern={serviceKeyInputPattern}
               readOnly={Boolean(service)}
               autoCapitalize="none"
               spellCheck={false}
+              aria-invalid={serviceKeyValidation.invalid}
+              aria-describedby={serviceKeyValidation.errorId}
               onChange={(event) => {
-                setSlug(event.currentTarget.value)
+                validation.touch("serviceKey")
+                setServiceKey(filterServiceKeyInput(event.currentTarget.value))
               }}
             />
-            <FieldDescription>{t("slugDescription")}</FieldDescription>
+            <FieldDescription>{t("serviceKeyDescription")}</FieldDescription>
+            <FieldValidationMessage validation={serviceKeyValidation} />
           </Field>
-          <Field>
+          <Field invalid={hostValidation.invalid}>
             <FieldLabel htmlFor="service-editor-host">{t("host")}</FieldLabel>
             <Input
               id="service-editor-host"
@@ -243,15 +289,23 @@ export function ServiceEditorPage({ serviceId }: { serviceId?: string }) {
               value={host}
               required
               maxLength={2048}
+              aria-invalid={hostValidation.invalid}
+              aria-describedby={hostValidation.errorId}
               onChange={(event) => {
+                validation.touch("host")
                 setHost(event.currentTarget.value)
               }}
             />
+            <FieldValidationMessage validation={hostValidation} />
           </Field>
           <FormSelect
             label={t("type")}
             value={type}
             onValueChange={setType}
+            error={typeValidation.error}
+            onInteract={() => {
+              validation.touch("type")
+            }}
             options={serviceTypes
               .filter(
                 (item) => item === serviceTypeValues.internal || !hasEndpoints,
@@ -266,6 +320,10 @@ export function ServiceEditorPage({ serviceId }: { serviceId?: string }) {
               label={t("owner")}
               value={ownerOrganizationId}
               onValueChange={setOwnerOrganizationId}
+              error={ownerValidation.error}
+              onInteract={() => {
+                validation.touch("ownerOrganizationId")
+              }}
               options={organizations.map((item) => ({
                 value: item.id,
                 label: item.name,
@@ -275,25 +333,36 @@ export function ServiceEditorPage({ serviceId }: { serviceId?: string }) {
             <DetailItem label={t("owner")}>{owner?.name ?? "—"}</DetailItem>
           )}
           {service
-            ? credentialTemplateFields.map(([key, requestType, label]) => (
-                <FormSelect
-                  key={key}
-                  label={t(label)}
-                  value={credentialTemplateIds[key] || null}
-                  onValueChange={(value) => {
-                    setCredentialTemplateIds((current) => ({
-                      ...current,
-                      [key]: value,
-                    }))
-                  }}
-                  options={credentialTemplates
-                    .filter((template) => template.type === requestType)
-                    .map((template) => ({
-                      value: template.id,
-                      label: template.name,
-                    }))}
-                />
-              ))
+            ? credentialTemplateFields.map(([key, requestType, label]) => {
+                const fieldName = `credentialTemplateIds.${key}`
+                const templateValidation = validation.getFieldValidation(
+                  fieldName,
+                  `service-editor-${key}-template-error`,
+                )
+                return (
+                  <FormSelect
+                    key={key}
+                    label={t(label)}
+                    value={credentialTemplateIds[key] || null}
+                    onValueChange={(value) => {
+                      setCredentialTemplateIds((current) => ({
+                        ...current,
+                        [key]: value,
+                      }))
+                    }}
+                    error={templateValidation.error}
+                    onInteract={() => {
+                      validation.touch(fieldName)
+                    }}
+                    options={credentialTemplates
+                      .filter((template) => template.type === requestType)
+                      .map((template) => ({
+                        value: template.id,
+                        label: template.name,
+                      }))}
+                  />
+                )
+              })
             : null}
           <CommandErrorMessage error={error} />
         </div>
@@ -307,8 +376,8 @@ export function ServiceEditorPage({ serviceId }: { serviceId?: string }) {
           </div>
           <DetailGrid>
             <DetailItem label={common("name")}>{name.trim()}</DetailItem>
-            <DetailItem label={t("slug")}>
-              <code>{slug.trim()}</code>
+            <DetailItem label={t("serviceKey")}>
+              <code>{serviceKey.trim()}</code>
             </DetailItem>
             <DetailItem label={t("host")}>{host.trim()}</DetailItem>
             <DetailItem label={t("type")}>
@@ -343,6 +412,7 @@ export function ServiceEndpointEditorPage({
   const router = useRouter()
   const common = useTranslations("backoffice.common")
   const t = useTranslations("backoffice.endpoints")
+  const validationMessages = useTranslations("backoffice.validation")
   const endpoint = endpointId
     ? backoffice.serviceEndpoints.find((item) => item.id === endpointId)
     : undefined
@@ -391,18 +461,6 @@ export function ServiceEndpointEditorPage({
     ),
   )
   const [error, setError] = useState<BackofficeErrorCode>()
-
-  if (endpointId && !endpoint) {
-    return <EmptyState title={t("detailTitle")} description={t("notFound")} />
-  }
-  if (services.length === 0) {
-    return (
-      <EmptyState
-        title={t(endpoint ? "edit" : "add")}
-        description={t("prerequisite")}
-      />
-    )
-  }
   const parsed = serviceEndpointInputSchema.safeParse({
     serviceId,
     name,
@@ -416,6 +474,73 @@ export function ServiceEndpointEditorPage({
       responseBodyFields,
     ),
   })
+  const validation = useDynamicFormValidation(
+    parsed.success ? undefined : parsed.error,
+  )
+  const serviceValidation = validation.getFieldValidation(
+    "serviceId",
+    "endpoint-editor-service-error",
+  )
+  const nameValidation = validation.getFieldValidation(
+    "name",
+    "endpoint-editor-name-error",
+  )
+  const methodValidation = validation.getFieldValidation(
+    "method",
+    "endpoint-editor-method-error",
+  )
+  const pathValidation = validation.getFieldValidation(
+    "path",
+    "endpoint-editor-path-error",
+  )
+  const versionValidation = validation.getFieldValidation(
+    "version",
+    "endpoint-editor-version-error",
+  )
+  const endpointFieldSections = [
+    {
+      id: "request-parameters",
+      label: "requestParameters" as const,
+      name: "requestParameters",
+      value: requestParameters,
+      setValue: setRequestParameters,
+      parsed: parseEndpointFieldSection(requestParameters),
+    },
+    {
+      id: "request-body",
+      label: "requestBodyFields" as const,
+      name: "requestBodyFields",
+      value: requestBodyFields,
+      setValue: setRequestBodyFields,
+      parsed: parseEndpointFieldSection(
+        requestBodyFields,
+        endpointFieldLocationValues.requestBody,
+      ),
+    },
+    {
+      id: "response-body",
+      label: "responseBodyFields" as const,
+      name: "responseBodyFields",
+      value: responseBodyFields,
+      setValue: setResponseBodyFields,
+      parsed: parseEndpointFieldSection(
+        responseBodyFields,
+        endpointFieldLocationValues.responseBody,
+      ),
+    },
+  ] as const
+
+  if (endpointId && !endpoint) {
+    return <EmptyState title={t("detailTitle")} description={t("notFound")} />
+  }
+  if (services.length === 0) {
+    return (
+      <EmptyState
+        title={t(endpoint ? "edit" : "add")}
+        description={t("prerequisite")}
+      />
+    )
+  }
   const selectedService = services.find((service) => service.id === serviceId)
   const impact: EndpointChangeImpact | null =
     endpoint && parsed.success
@@ -424,7 +549,7 @@ export function ServiceEndpointEditorPage({
 
   async function submit() {
     if (!parsed.success) {
-      setError("invalid-input")
+      validation.revealAll()
       setStep(1)
       return
     }
@@ -451,6 +576,7 @@ export function ServiceEndpointEditorPage({
 
   return (
     <RequestWorkflow
+      noValidate
       title={t(endpoint ? "edit" : "add")}
       description={t(endpoint ? "editDescription" : "addDescription")}
       cancelLabel={common("cancel")}
@@ -461,7 +587,6 @@ export function ServiceEndpointEditorPage({
       submitLabel={
         step === 1 ? common("next") : common(endpoint ? "save" : "create")
       }
-      submitDisabled={!parsed.success}
       onPrevious={() => {
         setStep(1)
       }}
@@ -474,12 +599,16 @@ export function ServiceEndpointEditorPage({
             label={t("service")}
             value={serviceId}
             onValueChange={setServiceId}
+            error={serviceValidation.error}
+            onInteract={() => {
+              validation.touch("serviceId")
+            }}
             options={services.map((service) => ({
               value: service.id,
               label: service.name,
             }))}
           />
-          <Field>
+          <Field invalid={nameValidation.invalid}>
             <FieldLabel htmlFor="endpoint-editor-name">
               {common("name")}
             </FieldLabel>
@@ -489,18 +618,26 @@ export function ServiceEndpointEditorPage({
               required
               minLength={2}
               maxLength={100}
+              aria-invalid={nameValidation.invalid}
+              aria-describedby={nameValidation.errorId}
               onChange={(event) => {
+                validation.touch("name")
                 setName(event.currentTarget.value)
               }}
             />
+            <FieldValidationMessage validation={nameValidation} />
           </Field>
           <FormSelect
             label={t("method")}
             value={method}
             onValueChange={setMethod}
+            error={methodValidation.error}
+            onInteract={() => {
+              validation.touch("method")
+            }}
             options={httpMethods.map((item) => ({ value: item, label: item }))}
           />
-          <Field>
+          <Field invalid={pathValidation.invalid}>
             <FieldLabel htmlFor="endpoint-editor-path">{t("path")}</FieldLabel>
             <Input
               id="endpoint-editor-path"
@@ -508,12 +645,16 @@ export function ServiceEndpointEditorPage({
               required
               maxLength={500}
               pattern="/.*"
+              aria-invalid={pathValidation.invalid}
+              aria-describedby={pathValidation.errorId}
               onChange={(event) => {
+                validation.touch("path")
                 setPath(event.currentTarget.value)
               }}
             />
+            <FieldValidationMessage validation={pathValidation} />
           </Field>
-          <Field>
+          <Field invalid={versionValidation.invalid}>
             <FieldLabel htmlFor="endpoint-editor-version">
               {t("version")}
             </FieldLabel>
@@ -524,49 +665,49 @@ export function ServiceEndpointEditorPage({
               minLength={1}
               maxLength={40}
               pattern={endpointVersionInputPattern}
+              aria-invalid={versionValidation.invalid}
+              aria-describedby={versionValidation.errorId}
               onChange={(event) => {
+                validation.touch("version")
                 setVersion(event.currentTarget.value)
               }}
             />
+            <FieldValidationMessage validation={versionValidation} />
           </Field>
-          {(
-            [
-              [
-                "request-parameters",
-                "requestParameters",
-                requestParameters,
-                setRequestParameters,
-              ],
-              [
-                "request-body",
-                "requestBodyFields",
-                requestBodyFields,
-                setRequestBodyFields,
-              ],
-              [
-                "response-body",
-                "responseBodyFields",
-                responseBodyFields,
-                setResponseBodyFields,
-              ],
-            ] as const
-          ).map(([id, label, value, setValue]) => (
-            <Field key={id}>
-              <FieldLabel htmlFor={`endpoint-editor-${id}`}>
-                {t(label)}
-              </FieldLabel>
-              <Textarea
-                id={`endpoint-editor-${id}`}
-                value={value}
-                required
-                rows={8}
-                className="max-h-64 font-mono text-xs"
-                onChange={(event) => {
-                  setValue(event.currentTarget.value)
-                }}
-              />
-            </Field>
-          ))}
+          {endpointFieldSections.map((section) => {
+            const fieldError =
+              validation.shouldShowError(section.name) &&
+              !serviceEndpointFieldInputSchema.array().safeParse(section.parsed)
+                .success
+                ? validationMessages("invalid")
+                : undefined
+            const errorId = fieldError
+              ? `endpoint-editor-${section.id}-error`
+              : undefined
+            return (
+              <Field key={section.id} invalid={Boolean(fieldError)}>
+                <FieldLabel htmlFor={`endpoint-editor-${section.id}`}>
+                  {t(section.label)}
+                </FieldLabel>
+                <Textarea
+                  id={`endpoint-editor-${section.id}`}
+                  value={section.value}
+                  required
+                  rows={8}
+                  className="max-h-64 font-mono text-xs"
+                  aria-invalid={Boolean(fieldError)}
+                  aria-describedby={errorId}
+                  onChange={(event) => {
+                    validation.touch(section.name)
+                    section.setValue(event.currentTarget.value)
+                  }}
+                />
+                {fieldError ? (
+                  <FieldError id={errorId}>{fieldError}</FieldError>
+                ) : null}
+              </Field>
+            )
+          })}
           <FieldDescription>{t("schemaInputDescription")}</FieldDescription>
           <CommandErrorMessage error={error} />
         </div>

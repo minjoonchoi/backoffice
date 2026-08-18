@@ -30,13 +30,13 @@ organizations:
 applications:
   - id: 25000000-0000-4000-8000-000000000001
     name: Developer Console
-    slug: developer_console
+    applicationKey: developer_console
     description: 개발자 도구에서 Developer API를 호출하는 어플리케이션입니다.
     ownerOrganizationId: 20000000-0000-4000-8000-000000000002
     createdAt: 2026-08-08T09:00:00.000Z
   - id: 25000000-0000-4000-8000-000000000002
     name: Platform Automation
-    slug: platform_automation
+    applicationKey: platform_automation
     description: 개발실이 소유하고 내부 플랫폼 자동화에 사용하는 어플리케이션입니다.
     ownerOrganizationId: 20000000-0000-4000-8000-000000000008
     createdAt: 2026-08-08T09:00:00.000Z
@@ -162,7 +162,7 @@ roles:
     createdAt: 2026-08-12T00:00:00.000Z
   - id: 00000000-0000-4000-8000-000000000008
     name: Backoffice 일반 사용자
-    description: Backoffice의 카탈로그, 접근 정책과 자격증명을 조회하는 기본 역할입니다.
+    description: Backoffice의 서비스·엔드포인트·네임스페이스 카탈로그, 접근 정책과 자격증명을 조회하는 기본 역할입니다.
     userIds:
       - 10000000-0000-4000-8000-000000000001
       - 10000000-0000-4000-8000-000000000002
@@ -631,7 +631,7 @@ notifications:
 services:
   - id: 60000000-0000-4000-8000-000000000001
     name: Developer API
-    slug: developer-api
+    serviceKey: developer-api
     host: https://api.example.com
     type: internal
     ownerOrganizationId: 20000000-0000-4000-8000-000000000002
@@ -643,7 +643,7 @@ services:
     createdAt: 2026-08-08T09:00:00.000Z
   - id: 60000000-0000-4000-8000-000000000002
     name: 협업 SaaS
-    slug: collaboration-saas
+    serviceKey: collaboration-saas
     host: https://collaboration.example.com
     type: external
     ownerOrganizationId: 20000000-0000-4000-8000-000000000007
@@ -655,7 +655,7 @@ services:
     createdAt: 2026-08-08T09:00:00.000Z
   - id: 60000000-0000-4000-8000-000000000003
     name: Audit API
-    slug: audit-api
+    serviceKey: audit-api
     host: https://audit-api.example.com
     type: internal
     ownerOrganizationId: 20000000-0000-4000-8000-000000000007
@@ -667,7 +667,7 @@ services:
     createdAt: 2026-08-08T09:00:00.000Z
   - id: 60000000-0000-4000-8000-000000000004
     name: Backoffice API
-    slug: backoffice-api
+    serviceKey: backoffice-api
     host: https://backoffice-api.example.com
     type: internal
     ownerOrganizationId: 20000000-0000-4000-8000-000000000001

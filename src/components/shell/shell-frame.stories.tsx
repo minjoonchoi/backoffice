@@ -143,12 +143,13 @@ export const LocalAccess: Story = {
         canvas.getByRole("link", { name: "Credentials" }),
       ).toBeVisible()
       await expect(canvas.getByRole("link", { name: "Policies" })).toBeVisible()
+      await expect(canvas.getByRole("link", { name: "Users" })).toBeVisible()
       await expect(
-        canvas.queryByRole("link", { name: "Users" }),
-      ).not.toBeInTheDocument()
+        canvas.getByRole("link", { name: "Organizations" }),
+      ).toBeVisible()
       await expect(
-        canvas.queryByRole("link", { name: "Organizations" }),
-      ).not.toBeInTheDocument()
+        canvas.getByRole("link", { name: "Namespaces" }),
+      ).toBeVisible()
       await expect(
         canvas.queryByRole("link", { name: "Roles" }),
       ).not.toBeInTheDocument()
@@ -178,18 +179,17 @@ export const OrganizationLeaderAccess: Story = {
   ],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
+    await expect(canvas.getByRole("link", { name: "Users" })).toBeVisible()
     await expect(
-      canvas.queryByRole("link", { name: "Users" }),
-    ).not.toBeInTheDocument()
-    await expect(
-      canvas.queryByRole("link", { name: "Organizations" }),
-    ).not.toBeInTheDocument()
+      canvas.getByRole("link", { name: "Organizations" }),
+    ).toBeVisible()
     await expect(
       canvas.queryByRole("link", { name: "Roles" }),
     ).not.toBeInTheDocument()
+    await expect(canvas.getByText("IAM", { exact: true })).toBeVisible()
     await expect(
-      canvas.queryByText("IAM", { exact: true }),
-    ).not.toBeInTheDocument()
+      canvas.getByRole("link", { name: "Applications" }),
+    ).toBeVisible()
     await expect(
       canvas.queryByText("System management"),
     ).not.toBeInTheDocument()

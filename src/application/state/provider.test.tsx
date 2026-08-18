@@ -293,9 +293,13 @@ describe("BackofficeProvider", () => {
         .map((menu) => menu.id),
     ).toEqual([
       "home",
+      "users",
+      "organizations",
+      "applications",
       "approvalDocuments",
       "services",
       "serviceEndpoints",
+      "namespaces",
       "apiKeys",
     ])
     expect(
@@ -1045,7 +1049,7 @@ describe("BackofficeProvider", () => {
     expect(cycle).toEqual({ ok: false, error: "invalid-input" })
   })
 
-  it("validates an application slug and keeps it immutable", async () => {
+  it("validates an application key and keeps it immutable", async () => {
     const { result } = renderHook(() => useBackoffice(), {
       wrapper: SeededWrapper,
     })
@@ -1053,9 +1057,9 @@ describe("BackofficeProvider", () => {
       await act(() =>
         result.current.createApplication(
           {
-            name: "Invalid Slug Application",
-            slug: "invalid-slug",
-            description: "snake_case가 아닌 slug 입력을 거부합니다.",
+            name: "Invalid Application Key",
+            applicationKey: "invalid-key",
+            description: "snake_case가 아닌 어플리케이션 키 입력을 거부합니다.",
             ownerOrganizationId: seededOrganizationId,
           },
           seededUserId,
@@ -1067,7 +1071,7 @@ describe("BackofficeProvider", () => {
       result.current.createApplication(
         {
           name: "Automation Worker",
-          slug: "automation_worker",
+          applicationKey: "automation_worker",
           description: "권한 주체로 사용하는 자동화 어플리케이션입니다.",
           ownerOrganizationId: seededOrganizationId,
         },
@@ -1080,7 +1084,7 @@ describe("BackofficeProvider", () => {
       await act(() =>
         result.current.updateApplication(
           application.value.id,
-          { ...application.value, slug: "renamed_worker" },
+          { ...application.value, applicationKey: "renamed_worker" },
           seededUserId,
         ),
       ),
@@ -1116,7 +1120,7 @@ describe("BackofficeProvider", () => {
       result.current.createApplication(
         {
           name: "Partner Console",
-          slug: "partner_console",
+          applicationKey: "partner_console",
           description:
             "파트너 API 자격증명을 소유하는 테스트 어플리케이션입니다.",
           ownerOrganizationId: organization.value.id,
@@ -1293,7 +1297,7 @@ describe("BackofficeProvider", () => {
     const service = await act(() =>
       result.current.createService({
         name: "파트너 API",
-        slug: "partner-api",
+        serviceKey: "partner-api",
         host: "https://partner.example.com",
         type: "internal",
         ownerOrganizationId: organization.value.id,
@@ -1537,7 +1541,7 @@ describe("BackofficeProvider", () => {
       result.current.createApplication(
         {
           name: "Secondary Console",
-          slug: "secondary_console",
+          applicationKey: "secondary_console",
           description: "두 번째 자격증명 흐름을 검증하는 어플리케이션입니다.",
           ownerOrganizationId: organization.value.id,
         },
@@ -2245,7 +2249,7 @@ describe("BackofficeProvider", () => {
     const updated = await act(() =>
       result.current.updateService(service.id, {
         name: "협업 도구 SaaS",
-        slug: service.slug,
+        serviceKey: service.serviceKey,
         host: service.host,
         type: service.type,
         ownerOrganizationId: service.ownerOrganizationId,
@@ -2260,7 +2264,7 @@ describe("BackofficeProvider", () => {
       await act(() =>
         result.current.updateService(protectedService.id, {
           name: protectedService.name,
-          slug: protectedService.slug,
+          serviceKey: protectedService.serviceKey,
           host: protectedService.host,
           type: "external",
           ownerOrganizationId: protectedService.ownerOrganizationId,
@@ -2275,7 +2279,7 @@ describe("BackofficeProvider", () => {
     const disposableService = await act(() =>
       result.current.createService({
         name: "삭제 검증 서비스",
-        slug: "deletion-test-service",
+        serviceKey: "deletion-test-service",
         host: "https://deletion-test.example.com",
         type: service.type,
         ownerOrganizationId: service.ownerOrganizationId,

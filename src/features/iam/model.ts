@@ -37,14 +37,20 @@ export const roleInputSchema = z.object({
   description: z.string().trim().min(2).max(500),
 })
 
+export const applicationKeyInputPattern = "[a-z][a-z0-9]*(?:_[a-z0-9]+)*"
+
+export function filterApplicationKeyInput(value: string) {
+  return value.replace(/[^a-z0-9_]/g, "")
+}
+
 export const applicationInputSchema = z.object({
   name: z.string().trim().min(2).max(100),
-  slug: z
+  applicationKey: z
     .string()
     .trim()
     .min(2)
     .max(64)
-    .regex(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/),
+    .regex(new RegExp(`^${applicationKeyInputPattern}$`)),
   description: z.string().trim().min(2).max(500),
   ownerOrganizationId: entityIdSchema,
 })

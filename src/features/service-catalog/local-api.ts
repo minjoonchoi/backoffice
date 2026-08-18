@@ -189,8 +189,12 @@ export function createLocalServiceCatalogApi(
       ) {
         return { ok: false, error: "policy-operation-forbidden" }
       }
-      if (state.services.some((service) => service.slug === parsed.data.slug)) {
-        return { ok: false, error: "service-slug-exists" }
+      if (
+        state.services.some(
+          (service) => service.serviceKey === parsed.data.serviceKey,
+        )
+      ) {
+        return { ok: false, error: "service-key-exists" }
       }
       if (
         !state.organizations.some(
@@ -234,15 +238,16 @@ export function createLocalServiceCatalogApi(
       ) {
         return { ok: false, error: "policy-operation-forbidden" }
       }
-      if (parsed.data.slug !== existing.slug) {
+      if (parsed.data.serviceKey !== existing.serviceKey) {
         return { ok: false, error: "protected-relationship" }
       }
       if (
         state.services.some(
-          (service) => service.id !== id && service.slug === parsed.data.slug,
+          (service) =>
+            service.id !== id && service.serviceKey === parsed.data.serviceKey,
         )
       ) {
-        return { ok: false, error: "service-slug-exists" }
+        return { ok: false, error: "service-key-exists" }
       }
       if (
         !state.organizations.some(

@@ -4,12 +4,20 @@ import {
   type ServiceEndpointFieldInput,
 } from "@/features/service-catalog/model"
 
-function parseJsonArray(value: string): unknown[] | null {
+export function parseEndpointFieldSection(
+  value: string,
+  location?:
+    | typeof endpointFieldLocationValues.requestBody
+    | typeof endpointFieldLocationValues.responseBody,
+): unknown[] | null {
   const source = value.trim()
   if (!source) return []
   try {
     const parsed: unknown = JSON.parse(source)
-    return Array.isArray(parsed) ? parsed : null
+    if (!Array.isArray(parsed)) return null
+    return parsed.map((field: unknown) =>
+      location ? setBodyFieldLocation(field, location) : field,
+    )
   } catch {
     return null
   }
@@ -32,19 +40,17 @@ export function parseEndpointFields(
   requestBodySource: string,
   responseBodySource: string,
 ): unknown {
-  const parameters = parseJsonArray(requestParametersSource)
-  const requestBody = parseJsonArray(requestBodySource)
-  const responseBody = parseJsonArray(responseBodySource)
+  const parameters = parseEndpointFieldSection(requestParametersSource)
+  const requestBody = parseEndpointFieldSection(
+    requestBodySource,
+    endpointFieldLocationValues.requestBody,
+  )
+  const responseBody = parseEndpointFieldSection(
+    responseBodySource,
+    endpointFieldLocationValues.responseBody,
+  )
   if (!parameters || !requestBody || !responseBody) return null
-  return [
-    ...parameters,
-    ...requestBody.map((field) =>
-      setBodyFieldLocation(field, endpointFieldLocationValues.requestBody),
-    ),
-    ...responseBody.map((field) =>
-      setBodyFieldLocation(field, endpointFieldLocationValues.responseBody),
-    ),
-  ]
+  return [...parameters, ...requestBody, ...responseBody]
 }
 
 export function toEndpointFieldInput(

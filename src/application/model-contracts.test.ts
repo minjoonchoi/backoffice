@@ -471,7 +471,7 @@ describe("backoffice input schemas", () => {
     expect(
       serviceInputSchema.safeParse({
         name: "파트너 API",
-        slug: "partner-api",
+        serviceKey: "partner-api",
         host: "https://partner.example.com",
         type: "internal",
         ownerOrganizationId: organizationId,
@@ -481,7 +481,7 @@ describe("backoffice input schemas", () => {
     expect(
       serviceInputSchema.safeParse({
         name: "파트너 API",
-        slug: "partner-api",
+        serviceKey: "partner-api",
         host: "https://partner.example.com/v1",
         type: "internal",
         ownerOrganizationId: organizationId,
@@ -491,7 +491,7 @@ describe("backoffice input schemas", () => {
     expect(
       serviceInputSchema.safeParse({
         name: "외부 협업 도구",
-        slug: "collaboration-tool",
+        serviceKey: "collaboration-tool",
         host: "https://collaboration.example.com",
         type: "external",
         ownerOrganizationId: organizationId,
@@ -501,7 +501,7 @@ describe("backoffice input schemas", () => {
     expect(
       serviceInputSchema.safeParse({
         name: "과거 SaaS 유형",
-        slug: "legacy-saas",
+        serviceKey: "legacy-saas",
         host: "https://legacy.example.com",
         type: "saas",
         ownerOrganizationId: organizationId,

@@ -124,7 +124,7 @@ test("uses a dedicated page for entity creation and resets after navigation", as
   await expect(page.getByRole("textbox", { name: "이름" })).toHaveValue("")
 })
 
-test("keeps system management last and separates IAM from organization leaders", async ({
+test("keeps system management last and exposes the shared directory without IAM operations", async ({
   page,
 }) => {
   await page.goto("/")
@@ -198,13 +198,50 @@ test("keeps system management last and separates IAM from organization leaders",
   await expect(
     page.locator("header").getByRole("button", { name: "유효 역할: 2" }),
   ).toBeVisible()
-  await expect(navigation.getByRole("link", { name: "사용자" })).toHaveCount(0)
-  await expect(navigation.getByRole("link", { name: "조직" })).toHaveCount(0)
+  await expect(
+    navigation.getByRole("link", { name: "사용자", exact: true }),
+  ).toBeVisible()
+  await expect(
+    navigation.getByRole("link", { name: "조직", exact: true }),
+  ).toBeVisible()
   await expect(navigation.getByRole("link", { name: "역할" })).toHaveCount(0)
-  await expect(navigation.getByText("IAM", { exact: true })).toHaveCount(0)
+  await expect(navigation.getByText("IAM", { exact: true })).toBeVisible()
+  await expect(
+    navigation.getByRole("link", { name: "어플리케이션", exact: true }),
+  ).toBeVisible()
   await expect(
     navigation.getByText("시스템 관리", { exact: true }),
   ).toHaveCount(0)
+
+  await navigation
+    .getByRole("link", { name: "어플리케이션", exact: true })
+    .click()
+  await expect(
+    page.getByText("Developer Console", { exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByText("Platform Automation", { exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    page.getByRole("button", { name: "어플리케이션 등록" }),
+  ).toBeVisible()
+  await page.getByText("Developer Console", { exact: true }).click()
+  await expect(page).toHaveURL(/\/applications\/[0-9a-f-]+$/)
+  const applicationEdit = page.getByRole("button", {
+    name: "어플리케이션 수정",
+  })
+  await expect(applicationEdit).toBeVisible()
+  const applicationDelete = page.getByRole("button", { name: "삭제" })
+  await expect(applicationDelete).toBeDisabled()
+  await expect(applicationDelete).toHaveAttribute(
+    "title",
+    "유효한 자격증명이 있어 삭제할 수 없습니다.",
+  )
+  await applicationEdit.click()
+  await expect(page).toHaveURL(/\/applications\/[0-9a-f-]+\/edit$/)
+  await expect(
+    page.getByRole("heading", { name: "어플리케이션 수정" }),
+  ).toBeVisible()
 
   await navigation.getByRole("link", { name: "홈", exact: true }).click()
   const credentialTable = page.getByRole("table", {
@@ -238,20 +275,31 @@ test("keeps system management last and separates IAM from organization leaders",
   })
   await page.getByRole("menuitem", { name: "Charlotte" }).click()
   await generalUserSessionRefresh
-  for (const menuName of ["홈", "정책", "자격증명", "서비스", "엔드포인트"]) {
+  for (const menuName of [
+    "홈",
+    "사용자",
+    "조직",
+    "어플리케이션",
+    "정책",
+    "자격증명",
+    "서비스",
+    "엔드포인트",
+  ]) {
     await expect(
       navigation.getByRole("link", { name: menuName, exact: true }),
     ).toBeVisible()
   }
-  await expect(navigation.getByText("IAM", { exact: true })).toHaveCount(0)
-  for (const menuName of ["사용자", "조직", "역할"]) {
-    await expect(
-      navigation.getByRole("link", { name: menuName, exact: true }),
-    ).toHaveCount(0)
-  }
+  await expect(navigation.getByText("IAM", { exact: true })).toBeVisible()
+  await expect(
+    navigation.getByRole("link", { name: "역할", exact: true }),
+  ).toHaveCount(0)
   await expect(
     page.getByRole("heading", { level: 2, name: "접근 권한이 없습니다" }),
-  ).toBeVisible()
+  ).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "사용자 등록" })).toHaveCount(0)
+  await expect(page.getByText("Olivia", { exact: true })).toHaveCount(0)
+  await navigation.getByRole("link", { name: "조직", exact: true }).click()
+  await expect(page.getByRole("button", { name: "조직 등록" })).toHaveCount(0)
   await navigation.getByRole("link", { name: "정책", exact: true }).click()
   await expect(page).toHaveURL(/\/approval-documents$/)
   await waitForHydration(page)
@@ -932,7 +980,7 @@ test("creates and approves an API key issuance request", async ({ page }) => {
     .getByRole("textbox", { name: "어플리케이션 이름" })
     .fill("Partner Integration")
   await dialog
-    .getByRole("textbox", { name: "Slug" })
+    .getByRole("textbox", { name: "어플리케이션 키" })
     .fill("partner_integration")
   await dialog
     .getByRole("textbox", { name: "설명" })
@@ -941,6 +989,20 @@ test("creates and approves an API key issuance request", async ({ page }) => {
   await dialog.getByRole("button", { name: "다음" }).click()
   await dialog.getByRole("button", { name: "등록" }).click()
   await expect(page).toHaveURL(/\/applications\/[0-9a-f-]+$/)
+  const applicationDetailUrl = page.url()
+  await page.getByRole("button", { name: "자격증명 생성" }).click()
+  await expect(page).toHaveURL(
+    /\/credentials\/request\?applicationId=[0-9a-f-]+$/,
+  )
+  await expect(
+    page.getByRole("radio", { name: /Partner Integration/ }),
+  ).toBeChecked()
+  await page.getByRole("radio", { name: /Developer API/ }).click()
+  await expect(page.getByRole("combobox", { name: "요청 조직" })).toContainText(
+    "개발 1팀",
+  )
+  await page.goBack()
+  await expect(page).toHaveURL(applicationDetailUrl)
 
   await page.getByRole("link", { name: "조직" }).click()
   await createOrganization(page, "플랫폼 운영", "Owen")
@@ -953,7 +1015,7 @@ test("creates and approves an API key issuance request", async ({ page }) => {
   await expect(page).toHaveURL(/\/services\/new$/)
   dialog = page.locator("main")
   await dialog.getByRole("textbox", { name: "이름" }).fill("파트너 API")
-  await dialog.getByRole("textbox", { name: "Slug" }).fill("partner-api")
+  await dialog.getByRole("textbox", { name: "서비스 키" }).fill("partner-api")
   await dialog
     .getByRole("textbox", { name: "호스트" })
     .fill("https://partner.example.com")

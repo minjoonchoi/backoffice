@@ -87,7 +87,7 @@ describe("mock backoffice API client", () => {
         id: service.id,
         body: {
           name: service.name,
-          slug: service.slug,
+          serviceKey: service.serviceKey,
           host: service.host,
           type: service.type,
           ownerOrganizationId: service.ownerOrganizationId,
@@ -128,7 +128,7 @@ describe("mock backoffice API client", () => {
         id: anotherOrganizationService.id,
         body: {
           name: anotherOrganizationService.name,
-          slug: anotherOrganizationService.slug,
+          serviceKey: anotherOrganizationService.serviceKey,
           host: anotherOrganizationService.host,
           type: anotherOrganizationService.type,
           ownerOrganizationId: anotherOrganizationService.ownerOrganizationId,
@@ -139,6 +139,88 @@ describe("mock backoffice API client", () => {
       }),
     ).resolves.toEqual({ ok: false, error: "policy-operation-forbidden" })
     await expect(client.getSnapshot({})).resolves.toEqual(before)
+  })
+
+  it("allows a general user to create applications only for their organizations", async () => {
+    const client = createMockBackofficeApiClient({ initialState: localFixture })
+    const generalUser = localFixture.users.find(
+      (user) => user.nickname === "Daniel",
+    )
+    const ownerOrganization = localFixture.organizations.find((organization) =>
+      generalUser?.organizationIds.includes(organization.id),
+    )
+    const foreignOrganization = localFixture.organizations.find(
+      (organization) => organization.id !== ownerOrganization?.id,
+    )
+    if (!generalUser || !ownerOrganization || !foreignOrganization) {
+      throw new Error("Application organization scope fixture is incomplete")
+    }
+
+    const created = await client.iam.createApplication({
+      body: {
+        name: "Privacy Review Console",
+        applicationKey: "privacy_review_console",
+        description: "소속 조직이 사용하는 개인정보 검토 어플리케이션입니다.",
+        ownerOrganizationId: ownerOrganization.id,
+      },
+      requesterId: generalUser.id,
+    })
+    expect(created).toMatchObject({
+      ok: true,
+      value: { ownerOrganizationId: ownerOrganization.id },
+    })
+    if (!created.ok) throw new Error(created.error)
+    await expect(
+      client.iam.updateApplication({
+        applicationId: created.value.id,
+        body: {
+          ...created.value,
+          name: "Privacy Review Workspace",
+        },
+        requesterId: generalUser.id,
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { name: "Privacy Review Workspace" },
+    })
+    await expect(
+      client.iam.createApplication({
+        body: {
+          name: "Foreign Organization Console",
+          applicationKey: "foreign_organization_console",
+          description: "다른 조직으로 등록할 수 없는 어플리케이션입니다.",
+          ownerOrganizationId: foreignOrganization.id,
+        },
+        requesterId: generalUser.id,
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      error: "policy-operation-forbidden",
+    })
+    await expect(
+      client.iam.deleteApplication({
+        applicationId: created.value.id,
+        requesterId: generalUser.id,
+      }),
+    ).resolves.toMatchObject({ ok: true })
+  })
+
+  it("prevents deleting an application with a valid credential", async () => {
+    const client = createMockBackofficeApiClient({ initialState: localFixture })
+    const owner = localFixture.users.find((user) => user.nickname === "Emma")
+    const application = localFixture.applications.find(
+      (candidate) => candidate.name === "Developer Console",
+    )
+    if (!owner || !application) {
+      throw new Error("Application credential fixture is incomplete")
+    }
+
+    await expect(
+      client.iam.deleteApplication({
+        applicationId: application.id,
+        requesterId: owner.id,
+      }),
+    ).resolves.toEqual({ ok: false, error: "protected-relationship" })
   })
 
   it("marks only the current user's notification as read", async () => {

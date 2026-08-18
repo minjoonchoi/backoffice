@@ -10,7 +10,7 @@ describe("user directory access", () => {
     ).not.toContainEqual(expect.objectContaining({ nickname: "Olivia" }))
   })
 
-  it("keeps resigned users visible with directory access", () => {
+  it("keeps resigned users visible with directory management access", () => {
     expect(
       resolveVisibleDirectoryUsers(localFixture.users, true),
     ).toContainEqual(expect.objectContaining({ nickname: "Olivia" }))

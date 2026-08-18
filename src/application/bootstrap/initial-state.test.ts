@@ -176,7 +176,7 @@ describe("backoffice initial state", () => {
 
   it("exposes Backoffice menu operations through the service catalog", () => {
     const backofficeService = localFixture.services.find(
-      (service) => service.slug === "backoffice-api",
+      (service) => service.serviceKey === "backoffice-api",
     )
     const expectedMenuPaths = [
       "/v1/home/summary",
@@ -260,9 +260,13 @@ describe("backoffice initial state", () => {
       resolveBackofficeAccess(localFixture, generalUser.id).menuIds,
     ).toEqual([
       "home",
+      "users",
+      "organizations",
+      "applications",
       "approvalDocuments",
       "services",
       "serviceEndpoints",
+      "namespaces",
       "apiKeys",
     ])
     expect(
@@ -271,9 +275,13 @@ describe("backoffice initial state", () => {
       roleIds: [defaultGeneralUserRole.id, defaultServiceOperatorRole.id],
       menuIds: [
         "home",
+        "users",
+        "organizations",
+        "applications",
         "approvalDocuments",
         "services",
         "serviceEndpoints",
+        "namespaces",
         "apiKeys",
       ],
     })
@@ -314,9 +322,30 @@ describe("backoffice initial state", () => {
         resource.type === "ui-resource" ? [resource.id] : [],
       ),
     )
+    for (const resourceKey of [
+      uiResourceKeys.users.key,
+      uiResourceKeys.users.list.key,
+      uiResourceKeys.users.detail.key,
+      uiResourceKeys.organizations.key,
+      uiResourceKeys.organizations.list.key,
+      uiResourceKeys.organizations.detail.key,
+      uiResourceKeys.namespaces.key,
+      uiResourceKeys.namespaces.list.key,
+      uiResourceKeys.namespaces.detail.key,
+    ]) {
+      const resource = initialBackofficeState.uiResources.find(
+        (candidate) => candidate.key === resourceKey,
+      )
+      expect(resource && generalUserResourceIds.has(resource.id)).toBe(true)
+    }
     expect(
       initialBackofficeState.uiResources
-        .filter((resource) => resource.key.startsWith("users"))
+        .filter(
+          (resource) =>
+            resource.type === "action" &&
+            (resource.key.startsWith(`${uiResourceKeys.users.key}:`) ||
+              resource.key.startsWith(`${uiResourceKeys.organizations.key}:`)),
+        )
         .every((resource) => !generalUserResourceIds.has(resource.id)),
     ).toBe(true)
     expect(

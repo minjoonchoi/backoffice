@@ -62,9 +62,13 @@ describe("SessionAccessProvider", () => {
     expect(result.current.assignedAccessPolicyIds.length).toBeGreaterThan(0)
     expect(result.current.accessibleMenuIds).toEqual([
       "home",
+      "users",
+      "organizations",
+      "applications",
       "approvalDocuments",
       "services",
       "serviceEndpoints",
+      "namespaces",
       "apiKeys",
     ])
     expect(

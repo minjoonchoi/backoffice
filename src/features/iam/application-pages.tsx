@@ -2,7 +2,7 @@
 
 import { entityStatuses } from "@/domain/common"
 import type { ColumnDef } from "@tanstack/react-table"
-import { AppWindow, Pencil, Plus, Trash2 } from "lucide-react"
+import { AppWindow, KeyRound, Pencil, Plus, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
@@ -21,6 +21,11 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { snackbar } from "@/components/ui/snackbar"
 import { uiResourceKeys } from "@/config/menu-registry"
+import {
+  applicationDeletionBlockers,
+  resolveApplicationDeletionBlocker,
+  resolveApplicationResourceAccess,
+} from "@/features/iam/application-access"
 import type { Application } from "@/features/iam/model"
 import type { ApiKey } from "@/features/credentials/model"
 import { accessPolicyAssignmentTargets } from "@/features/access-policies/model"
@@ -37,10 +42,14 @@ export function ApplicationsPage() {
   const canViewDetail = sessionAccess.canAccessUiResource(
     uiResourceKeys.applications.detail.key,
   )
+  const visibleApplications = resolveApplicationResourceAccess(
+    backoffice,
+    sessionAccess.currentUser?.id ?? null,
+  ).applications
   const columns = useMemo<ColumnDef<Application>[]>(
     () => [
       { accessorKey: "name", header: t("name") },
-      { accessorKey: "slug", header: t("slug") },
+      { accessorKey: "applicationKey", header: t("applicationKey") },
       {
         id: "ownerOrganization",
         header: t("ownerOrganization"),
@@ -81,12 +90,12 @@ export function ApplicationsPage() {
       <MetricCard
         icon={AppWindow}
         title={t("total")}
-        value={backoffice.applications.length}
+        value={visibleApplications.length}
       />
       <DataTable
         caption={t("tableCaption")}
         columns={columns}
-        data={backoffice.applications}
+        data={[...visibleApplications]}
         getRowId={(row) => row.id}
         getRowHref={(row) =>
           canViewDetail ? `/applications/${row.id}` : undefined
@@ -97,7 +106,11 @@ export function ApplicationsPage() {
         noResults={common("noResults")}
         filters={[
           { id: "name", label: t("name"), getValue: (row) => row.name },
-          { id: "slug", label: t("slug"), getValue: (row) => row.slug },
+          {
+            id: "applicationKey",
+            label: t("applicationKey"),
+            getValue: (row) => row.applicationKey,
+          },
           {
             id: "owner",
             label: t("ownerOrganization"),
@@ -123,9 +136,10 @@ export function ApplicationDetailPage({
   const common = useTranslations("backoffice.common")
   const t = useTranslations("backoffice.applications")
   const credentialsT = useTranslations("backoffice.apiKeys")
-  const application = backoffice.applications.find(
-    (item) => item.id === applicationId,
-  )
+  const application = resolveApplicationResourceAccess(
+    backoffice,
+    sessionAccess.currentUser?.id ?? null,
+  ).applications.find((item) => item.id === applicationId)
 
   if (!application) {
     return (
@@ -152,12 +166,29 @@ export function ApplicationDetailPage({
       assignment.targetType === accessPolicyAssignmentTargets.application &&
       assignment.targetId === application.id,
   )
+  const deletionBlocker = resolveApplicationDeletionBlocker(
+    backoffice,
+    application.id,
+  )
+  const deletionBlockedTitle =
+    deletionBlocker === applicationDeletionBlockers.activeCredential
+      ? t("deleteBlockedByActiveCredential")
+      : deletionBlocker === applicationDeletionBlockers.credentialHistory
+        ? t("deleteBlockedByCredentialHistory")
+        : deletionBlocker === applicationDeletionBlockers.policyAssignment
+          ? t("deleteBlockedByPolicy")
+          : undefined
   const policies = assignments.flatMap((assignment) => {
     const policy = backoffice.accessPolicies.find(
       (candidate) => candidate.id === assignment.accessPolicyId,
     )
     return policy ? [policy] : []
   })
+  const canRequestCredential = Boolean(
+    sessionAccess.currentUser?.organizationIds.includes(
+      application.ownerOrganizationId,
+    ) && sessionAccess.canAccessUiResource(uiResourceKeys.apiKeys.request.key),
+  )
   const credentialColumns: ColumnDef<ApiKey>[] = [
     { accessorKey: "name", header: credentialsT("keyName") },
     {
@@ -193,6 +224,20 @@ export function ApplicationDetailPage({
         description={t("detailDescription")}
         actions={
           <>
+            {canRequestCredential ? (
+              <Button
+                data-ui-resource={uiResourceKeys.apiKeys.request.key}
+                nativeButton={false}
+                render={
+                  <Link
+                    href={`/credentials/request?applicationId=${application.id}`}
+                  />
+                }
+              >
+                <KeyRound />
+                {t("createCredential")}
+              </Button>
+            ) : null}
             {sessionAccess.canAccessUiResource(
               uiResourceKeys.applications.detail.actions.updateApplication,
             ) ? (
@@ -209,6 +254,10 @@ export function ApplicationDetailPage({
               uiResourceKeys.applications.detail.actions.deleteApplication,
             ) ? (
               <ConfirmAction
+                disabled={deletionBlocker !== null}
+                {...(deletionBlockedTitle
+                  ? { triggerTitle: deletionBlockedTitle }
+                  : {})}
                 trigger={
                   <>
                     <Trash2 />
@@ -235,8 +284,8 @@ export function ApplicationDetailPage({
       />
       <DetailGrid>
         <DetailItem label={t("name")}>{application.name}</DetailItem>
-        <DetailItem label={t("slug")}>
-          <code>{application.slug}</code>
+        <DetailItem label={t("applicationKey")}>
+          <code>{application.applicationKey}</code>
         </DetailItem>
         <DetailItem label={t("ownerOrganization")}>
           {ownerOrganization ? (

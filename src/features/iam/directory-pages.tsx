@@ -351,7 +351,9 @@ export function UsersPage() {
     () =>
       resolveVisibleDirectoryUsers(
         backoffice.users,
-        sessionAccess.canAccessUiResource(uiResourceKeys.users.list.key),
+        sessionAccess.canAccessUiResource(
+          uiResourceKeys.users.list.actions.createUser,
+        ),
       ),
     [sessionAccess, backoffice.users],
   )
@@ -539,7 +541,9 @@ export function OrganizationDetailPage({
 
   const visibleUsers = resolveVisibleDirectoryUsers(
     backoffice.users,
-    sessionAccess.canAccessUiResource(uiResourceKeys.users.list.key),
+    sessionAccess.canAccessUiResource(
+      uiResourceKeys.users.list.actions.createUser,
+    ),
   )
   const members = visibleUsers.filter((user) =>
     user.organizationIds.includes(organization.id),
@@ -902,7 +906,9 @@ export function UserDetailPage({ userId }: { userId: string }) {
   const labels = useBackofficeLabels()
   const user = resolveVisibleDirectoryUsers(
     backoffice.users,
-    sessionAccess.canAccessUiResource(uiResourceKeys.users.detail.key),
+    sessionAccess.canAccessUiResource(
+      uiResourceKeys.users.list.actions.createUser,
+    ),
   ).find((item) => item.id === userId)
   if (!user)
     return (

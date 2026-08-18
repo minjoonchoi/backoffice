@@ -52,6 +52,8 @@
 ## 상태와 피드백
 
 - interactive component는 적용 가능한 `default`, `hover`, `active`, `focus-visible`, `disabled`, `read-only`, `invalid`, `selected/open`, `checked/indeterminate` 상태를 정의한다.
+- 생성·수정 폼은 도메인 Zod 스키마를 입력 조건의 단일 원천으로 사용하고 `useDynamicFormValidation`으로 상호작용한 필드를 즉시 검증한다. 검토·저장 시도에는 `revealAll`로 전체 오류를 표시하며 같은 길이·형식 조건을 JSX와 별도 조건문에 중복 구현하지 않는다.
+- 필드 오류는 해당 `Field`의 invalid 상태, 컨트롤의 `aria-invalid`·`aria-describedby`, `FieldValidationMessage`를 함께 사용한다. Select는 `FormSelect`의 `error`와 `onInteract` 계약을 사용한다.
 - loading button은 별도 API를 중복 추가하지 않고 `disabled`, `aria-busy`와 spinner를 조합한다.
 - 빈 결과, 검색 결과 없음, loading과 오류를 서로 다른 상태로 표현한다. 오류를 숨기거나 정상 결과로 대체하지 않는다.
 - 파괴적이거나 관계를 제거하는 동작은 선택한 대상을 구체적으로 표시하고 필요한 경우 확인 Dialog를 사용한다.

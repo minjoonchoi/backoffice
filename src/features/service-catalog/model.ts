@@ -49,12 +49,18 @@ export const serviceTypeSchema = z.enum(serviceTypeValues)
 export const httpMethodSchema = z.enum(httpMethodValues)
 export const endpointLifecycleSchema = z.enum(endpointLifecycleValues)
 
-const serviceSlugSchema = z
+export const serviceKeyInputPattern = "[a-z]+(?:-[a-z]+)*"
+
+export function filterServiceKeyInput(value: string) {
+  return value.replace(/[^a-z-]/g, "")
+}
+
+const serviceKeySchema = z
   .string()
   .trim()
   .min(2)
   .max(32)
-  .regex(/^[a-z]+(?:-[a-z]+)*$/)
+  .regex(new RegExp(`^${serviceKeyInputPattern}$`))
 const serviceHostSchema = z
   .string()
   .trim()
@@ -101,7 +107,7 @@ export const serviceEndpointFieldInputSchema = z.object({
 
 export const serviceInputSchema = z.object({
   name: z.string().trim().min(2).max(100),
-  slug: serviceSlugSchema,
+  serviceKey: serviceKeySchema,
   host: serviceHostSchema,
   type: serviceTypeSchema,
   ownerOrganizationId: entityIdSchema,

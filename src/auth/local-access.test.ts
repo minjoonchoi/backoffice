@@ -51,6 +51,7 @@ describe("local backoffice access", () => {
       "approvalDocuments",
       "services",
       "serviceEndpoints",
+      "namespaces",
       "apiKeys",
       "uiResources",
     ])
@@ -90,7 +91,7 @@ describe("local backoffice access", () => {
     ).not.toContain("approvalLines")
   })
 
-  it("grants catalog and request read access through the general user role", () => {
+  it("grants directory, catalog and request read access through the general user role", () => {
     const directAccess = resolveBackofficeAccess(
       localFixture,
       findUserId("Benjamin"),
@@ -107,9 +108,13 @@ describe("local backoffice access", () => {
     expect(inheritedAccess.roleIds).toEqual([defaultGeneralUserRole.id])
     expect(inheritedAccess.menuIds).toEqual([
       "home",
+      "users",
+      "organizations",
+      "applications",
       "approvalDocuments",
       "services",
       "serviceEndpoints",
+      "namespaces",
       "apiKeys",
     ])
   })
@@ -121,9 +126,13 @@ describe("local backoffice access", () => {
       roleIds: [defaultGeneralUserRole.id],
       menuIds: [
         "home",
+        "users",
+        "organizations",
+        "applications",
         "approvalDocuments",
         "services",
         "serviceEndpoints",
+        "namespaces",
         "apiKeys",
       ],
     })
@@ -176,15 +185,19 @@ describe("local backoffice access", () => {
     expect(access.roleIds).toEqual([defaultGeneralUserRole.id])
     expect(access.menuIds).toEqual([
       "home",
+      "users",
+      "organizations",
+      "applications",
       "approvalLines",
       "approvalDocuments",
       "services",
       "serviceEndpoints",
+      "namespaces",
       "apiKeys",
     ])
   })
 
-  it("keeps organization leaders out of IAM while preserving operational access", () => {
+  it("limits organization leaders to applications within IAM", () => {
     const access = resolveBackofficeAccess(localFixture, findUserId("Emma"))
 
     expect(access.roleIds).toEqual([
@@ -193,9 +206,13 @@ describe("local backoffice access", () => {
     ])
     expect(access.menuIds).toEqual([
       "home",
+      "users",
+      "organizations",
+      "applications",
       "approvalDocuments",
       "services",
       "serviceEndpoints",
+      "namespaces",
       "apiKeys",
     ])
     const uiAccess = resolveUiResourcePolicyAccess(
@@ -204,6 +221,23 @@ describe("local backoffice access", () => {
     ).resourceKeys
     expect(uiAccess).toContain(
       uiResourceKeys.services.list.actions.createService,
+    )
+    expect(uiAccess).toContain(
+      uiResourceKeys.applications.list.actions.createApplication,
+    )
+    expect(uiAccess).toContain(
+      uiResourceKeys.applications.detail.actions.updateApplication,
+    )
+    expect(uiAccess).toContain(
+      uiResourceKeys.applications.detail.actions.deleteApplication,
+    )
+    expect(uiAccess).toContain(uiResourceKeys.namespaces.list.key)
+    expect(uiAccess).toContain(uiResourceKeys.namespaces.detail.key)
+    expect(uiAccess).not.toContain(
+      uiResourceKeys.namespaces.list.actions.createNamespace,
+    )
+    expect(uiAccess).not.toContain(
+      uiResourceKeys.namespaces.detail.actions.changeNamespaceManager,
     )
     expect(uiAccess).not.toContain(uiResourceKeys.roles.list.actions.createRole)
   })

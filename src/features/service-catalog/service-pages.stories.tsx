@@ -89,7 +89,7 @@ export const OrganizationLeaderServices: Story = {
       "팀 API",
     )
     await userEvent.type(
-      canvas.getByRole("textbox", { name: "Slug" }),
+      canvas.getByRole("textbox", { name: "서비스 키" }),
       "team-api",
     )
     await userEvent.type(
@@ -199,7 +199,14 @@ export const OrganizationLeaderEndpoints: Story = {
         name: "엔드포인트 등록",
       }),
     ).toBeVisible()
-    await expect(canvas.getByRole("button", { name: "다음" })).toBeDisabled()
+    const nextButton = canvas.getByRole("button", { name: "다음" })
+    await expect(nextButton).toBeEnabled()
+    await userEvent.click(nextButton)
+    await expect(canvas.getByRole("textbox", { name: "이름" })).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    )
+    await expect(canvas.getAllByRole("alert").length).toBeGreaterThan(0)
     const body = within(canvasElement.ownerDocument.body)
     const serviceSelect = canvas.getByRole("combobox", { name: "서비스" })
     serviceSelect.focus()

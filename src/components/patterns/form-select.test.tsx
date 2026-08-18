@@ -38,4 +38,22 @@ describe("FormSelect", () => {
       screen.getByRole("combobox", { name: "Employment status" }),
     ).toHaveTextContent("Employed")
   })
+
+  it("connects a dynamic error message to the trigger", () => {
+    render(
+      <FormSelect
+        label="요청 유형"
+        value={null}
+        onValueChange={vi.fn()}
+        options={[{ value: "credential", label: "자격증명" }]}
+        error="필수 입력 항목입니다."
+      />,
+    )
+
+    const trigger = screen.getByRole("combobox", { name: "요청 유형" })
+    const error = screen.getByText("필수 입력 항목입니다.")
+    expect(trigger).toHaveAttribute("aria-invalid", "true")
+    expect(trigger).toHaveAttribute("aria-describedby", error.id)
+    expect(error).toHaveAttribute("role", "alert")
+  })
 })

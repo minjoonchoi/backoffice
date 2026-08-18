@@ -265,7 +265,7 @@ export function createAuditEvents(
       name: (application) => application.name,
       snapshot: (application) => ({
         name: application.name,
-        slug: application.slug,
+        applicationKey: application.applicationKey,
         description: application.description,
         ownerOrganizationId: application.ownerOrganizationId,
       }),
@@ -351,7 +351,7 @@ export function createAuditEvents(
       name: (service) => service.name,
       snapshot: (service) => ({
         name: service.name,
-        slug: service.slug,
+        serviceKey: service.serviceKey,
         host: service.host,
         type: service.type,
         ownerOrganizationId: service.ownerOrganizationId,

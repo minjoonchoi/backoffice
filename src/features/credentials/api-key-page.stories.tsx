@@ -195,6 +195,36 @@ export const OwnedCredentialServiceIsExcluded: Story = {
   },
 }
 
+export const ApplicationAndOrganizationArePrefilled: Story = {
+  render: () => {
+    const application = localFixture.applications.find(
+      (candidate) => candidate.name === "Developer Console",
+    )
+    if (!application) throw new Error("Application fixture is missing")
+    return (
+      <SessionAccessProvider
+        localSwitchingEnabled
+        initialUserId={findUserId("Emma")}
+      >
+        <CredentialIssuancePage
+          templates={localFixture.approvalLines}
+          initialApplicationId={application.id}
+        />
+      </SessionAccessProvider>
+    )
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole("radio", { name: /Developer Console/ }),
+    ).toBeChecked()
+    await userEvent.click(canvas.getByRole("radio", { name: /협업 SaaS/ }))
+    await expect(
+      canvas.getByRole("combobox", { name: "요청 조직" }),
+    ).toHaveTextContent("개발 2팀")
+  },
+}
+
 export const RegistrationByServiceType: Story = {
   render: () => (
     <BackofficeProvider initialState={createRegistrationState()}>

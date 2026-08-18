@@ -29,6 +29,10 @@ import {
 } from "@/features/iam/model"
 import { resolveOrganizationMembershipRemovalImpact } from "@/features/iam/relationship-impact"
 import { accessPolicyAssignmentTargets } from "@/features/access-policies/model"
+import {
+  resolveApplicationDeletionBlocker,
+  resolveApplicationResourceAccess,
+} from "@/features/iam/application-access"
 
 export function synchronizeOrganizationLeaderRole(
   roles: Role[],
@@ -119,12 +123,23 @@ export function createLocalIamApi(
       ) {
         return { ok: false, error: "organization-not-found" }
       }
+      const applicationAccess = resolveApplicationResourceAccess(
+        state,
+        requesterId,
+      )
+      if (
+        !applicationAccess.ownerOrganizations.some(
+          (organization) => organization.id === parsed.data.ownerOrganizationId,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       const normalizedName = parsed.data.name.toLocaleLowerCase()
       if (
         state.applications.some(
           (application) =>
             application.name.toLocaleLowerCase() === normalizedName ||
-            application.slug === parsed.data.slug,
+            application.applicationKey === parsed.data.applicationKey,
         )
       ) {
         return { ok: false, error: "invalid-input" }
@@ -155,9 +170,20 @@ export function createLocalIamApi(
         (application) => application.id === id,
       )
       if (!existing) return { ok: false, error: "invalid-input" }
+      const applicationAccess = resolveApplicationResourceAccess(
+        state,
+        requesterId,
+      )
+      if (
+        !applicationAccess.applications.some(
+          (application) => application.id === existing.id,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
       const parsed = applicationInputSchema.safeParse(input)
       if (!parsed.success) return { ok: false, error: "invalid-input" }
-      if (parsed.data.slug !== existing.slug) {
+      if (parsed.data.applicationKey !== existing.applicationKey) {
         return { ok: false, error: "protected-relationship" }
       }
       if (
@@ -166,6 +192,13 @@ export function createLocalIamApi(
         )
       ) {
         return { ok: false, error: "organization-not-found" }
+      }
+      if (
+        !applicationAccess.ownerOrganizations.some(
+          (organization) => organization.id === parsed.data.ownerOrganizationId,
+        )
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
       }
       const application: Application = {
         ...existing,
@@ -195,15 +228,20 @@ export function createLocalIamApi(
         (candidate) => candidate.id === id,
       )
       if (!application) return { ok: false, error: "invalid-input" }
-      const inUse =
-        state.apiKeys.some((apiKey) => apiKey.applicationId === id) ||
-        state.accessPolicyAssignments.some(
-          (assignment) =>
-            assignment.targetType ===
-              accessPolicyAssignmentTargets.application &&
-            assignment.targetId === id,
+      const applicationAccess = resolveApplicationResourceAccess(
+        state,
+        requesterId,
+      )
+      if (
+        !applicationAccess.applications.some(
+          (candidate) => candidate.id === application.id,
         )
-      if (inUse) return { ok: false, error: "protected-relationship" }
+      ) {
+        return { ok: false, error: "policy-operation-forbidden" }
+      }
+      if (resolveApplicationDeletionBlocker(state, id)) {
+        return { ok: false, error: "protected-relationship" }
+      }
       updateState((current) => ({
         ...current,
         applications: current.applications.filter(

@@ -10,6 +10,10 @@ import { CommandErrorMessage } from "@/application/ui/backoffice-ui"
 import { useSessionAccess } from "@/auth/session-access-provider"
 import { EmptyState } from "@/components/patterns/content-state"
 import { DetailGrid, DetailItem } from "@/components/patterns/detail-grid"
+import {
+  FieldValidationMessage,
+  useDynamicFormValidation,
+} from "@/components/patterns/dynamic-form-validation"
 import { RequestWorkflow } from "@/components/patterns/request-workflow"
 import {
   ReviewWorkflowProgress,
@@ -37,6 +41,18 @@ export function RoleEditorPage({ roleId }: { roleId?: string }) {
   const [name, setName] = useState(role?.name ?? "")
   const [description, setDescription] = useState(role?.description ?? "")
   const [error, setError] = useState<BackofficeErrorCode>()
+  const parsed = roleInputSchema.safeParse({ name, description })
+  const validation = useDynamicFormValidation(
+    parsed.success ? undefined : parsed.error,
+  )
+  const nameValidation = validation.getFieldValidation(
+    "name",
+    "role-editor-name-error",
+  )
+  const descriptionValidation = validation.getFieldValidation(
+    "description",
+    "role-editor-description-error",
+  )
 
   if (roleId && !role) {
     return (
@@ -69,12 +85,10 @@ export function RoleEditorPage({ roleId }: { roleId?: string }) {
     )
   }
 
-  const parsed = roleInputSchema.safeParse({ name, description })
-
   async function submit() {
     const nextInput = roleInputSchema.safeParse({ name, description })
     if (!nextInput.success) {
-      setError("invalid-input")
+      validation.revealAll()
       if (step === 2) setStep(1)
       return
     }
@@ -104,6 +118,7 @@ export function RoleEditorPage({ roleId }: { roleId?: string }) {
 
   return (
     <RequestWorkflow
+      noValidate
       title={t(role ? "edit" : "add")}
       description={t(role ? "editDescription" : "addDescription")}
       cancelLabel={common("cancel")}
@@ -112,7 +127,6 @@ export function RoleEditorPage({ roleId }: { roleId?: string }) {
       submitLabel={
         step === 1 ? common("next") : common(role ? "save" : "create")
       }
-      submitDisabled={!parsed.success}
       onPrevious={() => {
         setStep(1)
         setError(undefined)
@@ -122,7 +136,7 @@ export function RoleEditorPage({ roleId }: { roleId?: string }) {
       <ReviewWorkflowProgress step={step} label={common("editorProgress")} />
       {step === 1 ? (
         <div className="grid gap-4">
-          <Field>
+          <Field invalid={nameValidation.invalid}>
             <FieldLabel htmlFor="role-editor-name">{t("roleName")}</FieldLabel>
             <Input
               id="role-editor-name"
@@ -130,12 +144,16 @@ export function RoleEditorPage({ roleId }: { roleId?: string }) {
               required
               minLength={2}
               maxLength={80}
+              aria-invalid={nameValidation.invalid}
+              aria-describedby={nameValidation.errorId}
               onChange={(event) => {
+                validation.touch("name")
                 setName(event.currentTarget.value)
               }}
             />
+            <FieldValidationMessage validation={nameValidation} />
           </Field>
-          <Field>
+          <Field invalid={descriptionValidation.invalid}>
             <FieldLabel htmlFor="role-editor-description">
               {t("roleDescription")}
             </FieldLabel>
@@ -146,10 +164,14 @@ export function RoleEditorPage({ roleId }: { roleId?: string }) {
               minLength={2}
               maxLength={500}
               rows={6}
+              aria-invalid={descriptionValidation.invalid}
+              aria-describedby={descriptionValidation.errorId}
               onChange={(event) => {
+                validation.touch("description")
                 setDescription(event.currentTarget.value)
               }}
             />
+            <FieldValidationMessage validation={descriptionValidation} />
           </Field>
         </div>
       ) : (

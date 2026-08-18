@@ -17,6 +17,10 @@ import { useState } from "react"
 import { PageHeader } from "@/components/patterns/page-header"
 import { EmptyState } from "@/components/patterns/content-state"
 import {
+  FieldValidationMessage,
+  useDynamicFormValidation,
+} from "@/components/patterns/dynamic-form-validation"
+import {
   ReviewWorkflowProgress,
   type ReviewWorkflowStep,
 } from "@/components/patterns/review-workflow-progress"
@@ -25,7 +29,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Field, FieldLabel } from "@/components/ui/field"
+import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { snackbar } from "@/components/ui/snackbar"
 import { FormSelect } from "@/components/patterns/form-select"
@@ -341,7 +345,7 @@ function RequestTemplateEditorForm({
   async function submit() {
     const parsed = parseInput()
     if (!parsed.success) {
-      setError("invalid-input")
+      validation.revealAll()
       return
     }
     if (step === 1) {
@@ -526,7 +530,39 @@ function RequestTemplateEditorForm({
     )
   }
 
-  const inputValid = parseInput().success
+  const inputResult = parseInput()
+  const validation = useDynamicFormValidation(
+    inputResult.success ? undefined : inputResult.error,
+  )
+  const nameValidation = validation.getFieldValidation(
+    "name",
+    "line-name-error",
+  )
+  const categoryValidation = validation.getFieldValidation(
+    "category",
+    "line-category-error",
+  )
+  const typeValidation = validation.getFieldValidation(
+    "type",
+    "line-type-error",
+  )
+  const executionValidation = validation.getFieldValidation(
+    "approvalExecution.type",
+    "line-execution-error",
+  )
+  const grooDocumentValidation = validation.getFieldValidation(
+    "approvalExecution.draftDocumentId",
+    "groo-draft-document-id-error",
+  )
+  const stepsValidation = validation.getFieldValidation(
+    "steps",
+    "line-steps-error",
+  )
+  const fieldsValidation = validation.getFieldValidation(
+    "fields",
+    "line-fields-error",
+  )
+  const inputValid = inputResult.success
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-6">
@@ -548,6 +584,7 @@ function RequestTemplateEditorForm({
         <CardContent className="grid gap-5">
           <ReviewWorkflowProgress step={step} label={t("workflowProgress")} />
           <form
+            noValidate
             className="grid gap-5"
             onSubmit={(event) => {
               event.preventDefault()
@@ -557,22 +594,31 @@ function RequestTemplateEditorForm({
             {step === 1 ? (
               <>
                 <div className="grid gap-4">
-                  <Field>
+                  <Field invalid={nameValidation.invalid}>
                     <FieldLabel htmlFor="line-name">{t("lineName")}</FieldLabel>
                     <Input
                       id="line-name"
                       name="name"
                       value={name}
                       required
+                      minLength={2}
                       maxLength={100}
+                      aria-invalid={nameValidation.invalid}
+                      aria-describedby={nameValidation.errorId}
                       onChange={(event) => {
+                        validation.touch("name")
                         setName(event.currentTarget.value)
                       }}
                     />
+                    <FieldValidationMessage validation={nameValidation} />
                   </Field>
                   <FormSelect
                     label={t("category")}
                     value={category}
+                    error={categoryValidation.error}
+                    onInteract={() => {
+                      validation.touch("category")
+                    }}
                     onValueChange={(value) => {
                       setCategory(value)
                       setType(null)
@@ -596,6 +642,10 @@ function RequestTemplateEditorForm({
                     label={t("type")}
                     value={type}
                     onValueChange={setType}
+                    error={typeValidation.error}
+                    onInteract={() => {
+                      validation.touch("type")
+                    }}
                     options={approvalTypes
                       .filter((item) =>
                         category === requestCategoryValues.credential
@@ -612,6 +662,10 @@ function RequestTemplateEditorForm({
                   <FormSelect
                     label={t("approvalExecution")}
                     value={approvalExecutionType}
+                    error={executionValidation.error}
+                    onInteract={() => {
+                      validation.touch("approvalExecution.type")
+                    }}
                     onValueChange={(value) => {
                       if (!value) return
                       setApprovalExecutionType(value)
@@ -640,7 +694,7 @@ function RequestTemplateEditorForm({
                   />
                   {approvalExecutionType ===
                   approvalExecutionTypeValues.groo ? (
-                    <Field>
+                    <Field invalid={grooDocumentValidation.invalid}>
                       <FieldLabel htmlFor="groo-draft-document-id">
                         {t("grooDraftDocumentId")}
                       </FieldLabel>
@@ -650,9 +704,15 @@ function RequestTemplateEditorForm({
                         required
                         maxLength={200}
                         pattern="\\S+"
+                        aria-invalid={grooDocumentValidation.invalid}
+                        aria-describedby={grooDocumentValidation.errorId}
                         onChange={(event) => {
+                          validation.touch("approvalExecution.draftDocumentId")
                           setGrooDraftDocumentId(event.currentTarget.value)
                         }}
+                      />
+                      <FieldValidationMessage
+                        validation={grooDocumentValidation}
                       />
                     </Field>
                   ) : null}
@@ -675,165 +735,213 @@ function RequestTemplateEditorForm({
                         {t("addStep")}
                       </Button>
                     </div>
-                    {steps.map((step, index) => (
-                      <div
-                        key={step.id}
-                        className="grid items-end gap-2 rounded-lg border bg-surface-subtle p-3 md:grid-cols-[auto_6rem_1fr_1fr_1fr_auto]"
-                      >
-                        <span className="pb-2 font-semibold tabular-nums">
-                          {index + 1}
-                        </span>
-                        <Field>
-                          <FieldLabel htmlFor={`${step.id}-stage`}>
-                            {t("stageLabel")}
-                          </FieldLabel>
-                          <Input
-                            id={`${step.id}-stage`}
-                            type="number"
-                            min={1}
-                            max={12}
-                            value={step.stage}
-                            onChange={(event) => {
-                              const stage = event.currentTarget.valueAsNumber
+                    {steps.map((step, index) => {
+                      const stepPath = `steps.${String(index)}`
+                      const stageValidation = validation.getFieldValidation(
+                        `${stepPath}.stage`,
+                        `${step.id}-stage-error`,
+                      )
+                      const kindValidation = validation.getFieldValidation(
+                        `${stepPath}.kind`,
+                        `${step.id}-kind-error`,
+                      )
+                      const assigneeModeValidation =
+                        validation.getFieldValidation(
+                          `${stepPath}.assigneeMode`,
+                          `${step.id}-assignee-mode-error`,
+                        )
+                      const assigneeValidation = validation.getFieldValidation(
+                        step.assigneeMode ===
+                          approvalAssigneeModeValues.fixedUser
+                          ? `${stepPath}.userId`
+                          : `${stepPath}.organizationId`,
+                        `${step.id}-assignee-error`,
+                      )
+                      return (
+                        <div
+                          key={step.id}
+                          className="grid items-end gap-2 rounded-lg border bg-surface-subtle p-3 md:grid-cols-[auto_6rem_1fr_1fr_1fr_auto]"
+                        >
+                          <span className="pb-2 font-semibold tabular-nums">
+                            {index + 1}
+                          </span>
+                          <Field invalid={stageValidation.invalid}>
+                            <FieldLabel htmlFor={`${step.id}-stage`}>
+                              {t("stageLabel")}
+                            </FieldLabel>
+                            <Input
+                              id={`${step.id}-stage`}
+                              type="number"
+                              min={1}
+                              max={12}
+                              value={step.stage}
+                              aria-invalid={stageValidation.invalid}
+                              aria-describedby={stageValidation.errorId}
+                              onChange={(event) => {
+                                validation.touch(`${stepPath}.stage`)
+                                const stage = event.currentTarget.valueAsNumber
+                                setSteps((current) =>
+                                  current.map((item) =>
+                                    item.id === step.id
+                                      ? { ...item, stage }
+                                      : item,
+                                  ),
+                                )
+                              }}
+                            />
+                            <FieldValidationMessage
+                              validation={stageValidation}
+                            />
+                          </Field>
+                          <FormSelect
+                            label={t("step")}
+                            value={step.kind}
+                            error={kindValidation.error}
+                            onInteract={() => {
+                              validation.touch(`${stepPath}.kind`)
+                            }}
+                            onValueChange={(value) => {
+                              if (!value) return
                               setSteps((current) =>
                                 current.map((item) =>
                                   item.id === step.id
-                                    ? { ...item, stage }
+                                    ? { ...item, kind: value }
                                     : item,
                                 ),
                               )
                             }}
-                          />
-                        </Field>
-                        <FormSelect
-                          label={t("step")}
-                          value={step.kind}
-                          onValueChange={(value) => {
-                            if (!value) return
-                            setSteps((current) =>
-                              current.map((item) =>
-                                item.id === step.id
-                                  ? { ...item, kind: value }
-                                  : item,
-                              ),
-                            )
-                          }}
-                          options={approvalStepKinds.map((item) => ({
-                            value: item,
-                            label: labels.stepKind(item),
-                          }))}
-                        />
-                        <FormSelect
-                          label={t("assigneeMode")}
-                          value={step.assigneeMode}
-                          onValueChange={(value) => {
-                            if (!value) return
-                            setSteps((current) =>
-                              current.map((item) =>
-                                item.id === step.id
-                                  ? { ...item, assigneeMode: value }
-                                  : item,
-                              ),
-                            )
-                          }}
-                          options={approvalAssigneeModes
-                            .filter(
-                              (item) =>
-                                category === requestCategoryValues.credential ||
-                                item !==
-                                  approvalAssigneeModeValues.serviceOwnerOrganization,
-                            )
-                            .map((item) => ({
+                            options={approvalStepKinds.map((item) => ({
                               value: item,
-                              label: labels.assigneeMode(item),
+                              label: labels.stepKind(item),
                             }))}
-                        />
-                        {step.assigneeMode ===
-                        approvalAssigneeModeValues.fixedUser ? (
+                          />
                           <FormSelect
-                            label={t("assignee")}
-                            value={step.userId}
+                            label={t("assigneeMode")}
+                            value={step.assigneeMode}
+                            error={assigneeModeValidation.error}
+                            onInteract={() => {
+                              validation.touch(`${stepPath}.assigneeMode`)
+                            }}
                             onValueChange={(value) => {
+                              if (!value) return
                               setSteps((current) =>
                                 current.map((item) =>
                                   item.id === step.id
-                                    ? { ...item, userId: value }
+                                    ? { ...item, assigneeMode: value }
                                     : item,
                                 ),
                               )
                             }}
-                            options={employedUsers.map((user) => ({
-                              value: user.id,
-                              label: user.nickname,
-                            }))}
-                          />
-                        ) : step.assigneeMode ===
-                          approvalAssigneeModeValues.fixedOrganization ? (
-                          <FormSelect
-                            label={t("assignee")}
-                            value={step.organizationId}
-                            onValueChange={(value) => {
-                              setSteps((current) =>
-                                current.map((item) =>
-                                  item.id === step.id
-                                    ? { ...item, organizationId: value }
-                                    : item,
-                                ),
+                            options={approvalAssigneeModes
+                              .filter(
+                                (item) =>
+                                  category ===
+                                    requestCategoryValues.credential ||
+                                  item !==
+                                    approvalAssigneeModeValues.serviceOwnerOrganization,
                               )
-                            }}
-                            options={backoffice.organizations.map(
-                              (organization) => ({
-                                value: organization.id,
-                                label: organization.name,
-                              }),
-                            )}
+                              .map((item) => ({
+                                value: item,
+                                label: labels.assigneeMode(item),
+                              }))}
                           />
-                        ) : (
-                          <div className="pb-2 text-sm text-muted-foreground">
-                            {labels.assigneeMode(step.assigneeMode)}
+                          {step.assigneeMode ===
+                          approvalAssigneeModeValues.fixedUser ? (
+                            <FormSelect
+                              label={t("assignee")}
+                              value={step.userId}
+                              error={assigneeValidation.error}
+                              onInteract={() => {
+                                validation.touch(`${stepPath}.userId`)
+                              }}
+                              onValueChange={(value) => {
+                                setSteps((current) =>
+                                  current.map((item) =>
+                                    item.id === step.id
+                                      ? { ...item, userId: value }
+                                      : item,
+                                  ),
+                                )
+                              }}
+                              options={employedUsers.map((user) => ({
+                                value: user.id,
+                                label: user.nickname,
+                              }))}
+                            />
+                          ) : step.assigneeMode ===
+                            approvalAssigneeModeValues.fixedOrganization ? (
+                            <FormSelect
+                              label={t("assignee")}
+                              value={step.organizationId}
+                              error={assigneeValidation.error}
+                              onInteract={() => {
+                                validation.touch(`${stepPath}.organizationId`)
+                              }}
+                              onValueChange={(value) => {
+                                setSteps((current) =>
+                                  current.map((item) =>
+                                    item.id === step.id
+                                      ? { ...item, organizationId: value }
+                                      : item,
+                                  ),
+                                )
+                              }}
+                              options={backoffice.organizations.map(
+                                (organization) => ({
+                                  value: organization.id,
+                                  label: organization.name,
+                                }),
+                              )}
+                            />
+                          ) : (
+                            <div className="pb-2 text-sm text-muted-foreground">
+                              {labels.assigneeMode(step.assigneeMode)}
+                            </div>
+                          )}
+                          <div className="flex gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`${String(index + 1)} ${t("moveUp")}`}
+                              disabled={index === 0}
+                              onClick={() => {
+                                move(index, -1)
+                              }}
+                            >
+                              <ArrowUp />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`${String(index + 1)} ${t("moveDown")}`}
+                              disabled={index === steps.length - 1}
+                              onClick={() => {
+                                move(index, 1)
+                              }}
+                            >
+                              <ArrowDown />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`${String(index + 1)} ${t("removeStep")}`}
+                              onClick={() => {
+                                validation.touch("steps")
+                                setSteps((current) =>
+                                  current.filter((item) => item.id !== step.id),
+                                )
+                              }}
+                            >
+                              <Trash2 />
+                            </Button>
                           </div>
-                        )}
-                        <div className="flex gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`${String(index + 1)} ${t("moveUp")}`}
-                            disabled={index === 0}
-                            onClick={() => {
-                              move(index, -1)
-                            }}
-                          >
-                            <ArrowUp />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`${String(index + 1)} ${t("moveDown")}`}
-                            disabled={index === steps.length - 1}
-                            onClick={() => {
-                              move(index, 1)
-                            }}
-                          >
-                            <ArrowDown />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`${String(index + 1)} ${t("removeStep")}`}
-                            onClick={() => {
-                              setSteps((current) =>
-                                current.filter((item) => item.id !== step.id),
-                              )
-                            }}
-                          >
-                            <Trash2 />
-                          </Button>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
+                    <FieldValidationMessage validation={stepsValidation} />
                   </section>
                 ) : null}
 
@@ -857,141 +965,186 @@ function RequestTemplateEditorForm({
                       {t("addField")}
                     </Button>
                   </div>
-                  {fields.map((field, index) => (
-                    <div
-                      key={field.id}
-                      className="grid items-end gap-3 rounded-lg border bg-surface-subtle p-3 md:grid-cols-[auto_1fr_1fr_1fr_1fr_auto]"
-                    >
-                      <span className="pb-2 font-semibold tabular-nums">
-                        {index + 1}
-                      </span>
-                      <Field>
-                        <FieldLabel htmlFor={`${field.id}-key`}>
-                          {t("fieldKey")}
-                        </FieldLabel>
-                        <Input
-                          id={`${field.id}-key`}
-                          value={field.key}
-                          required
-                          pattern="[a-z]+(?:-[a-z]+)*"
-                          maxLength={60}
-                          onChange={(event) => {
-                            const key = event.currentTarget.value
-                            setFields((current) =>
-                              current.map((item) =>
-                                item.id === field.id ? { ...item, key } : item,
-                              ),
-                            )
-                          }}
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor={`${field.id}-label`}>
-                          {t("fieldLabel")}
-                        </FieldLabel>
-                        <Input
-                          id={`${field.id}-label`}
-                          value={field.label}
-                          required
-                          maxLength={80}
-                          onChange={(event) => {
-                            const label = event.currentTarget.value
-                            setFields((current) =>
-                              current.map((item) =>
-                                item.id === field.id
-                                  ? { ...item, label }
-                                  : item,
-                              ),
-                            )
-                          }}
-                        />
-                      </Field>
-                      <FormSelect
-                        label={t("fieldBinding")}
-                        value={field.binding}
-                        onValueChange={(binding) => {
-                          if (!binding) return
-                          setFields((current) =>
-                            current.map((item) =>
-                              item.id === field.id
-                                ? { ...item, binding }
-                                : item,
-                            ),
-                          )
-                        }}
-                        options={fieldBindings
-                          .filter(
-                            (item) =>
-                              (item !==
-                                requestTemplateFieldBindingValues.awsSecretName &&
-                                item !==
-                                  requestTemplateFieldBindingValues.awsSecretKey) ||
-                              type === approvalTypeValues.apiKey ||
-                              type === approvalTypeValues.apiKeyReplace,
-                          )
-                          .map((item) => ({
-                            value: item,
-                            label: t(`fieldBindings.${item}`),
-                          }))}
-                      />
-                      {field.binding ===
-                      requestTemplateFieldBindingValues.custom ? (
+                  {fields.map((field, index) => {
+                    const fieldPath = `fields.${String(index)}`
+                    const keyValidation = validation.getFieldValidation(
+                      `${fieldPath}.key`,
+                      `${field.id}-key-error`,
+                    )
+                    const labelValidation = validation.getFieldValidation(
+                      `${fieldPath}.label`,
+                      `${field.id}-label-error`,
+                    )
+                    const bindingValidation = validation.getFieldValidation(
+                      `${fieldPath}.binding`,
+                      `${field.id}-binding-error`,
+                    )
+                    const controlValidation = validation.getFieldValidation(
+                      `${fieldPath}.control`,
+                      `${field.id}-control-error`,
+                    )
+                    return (
+                      <div
+                        key={field.id}
+                        className="grid items-end gap-3 rounded-lg border bg-surface-subtle p-3 md:grid-cols-[auto_1fr_1fr_1fr_1fr_auto]"
+                      >
+                        <span className="pb-2 font-semibold tabular-nums">
+                          {index + 1}
+                        </span>
+                        <Field invalid={keyValidation.invalid}>
+                          <FieldLabel htmlFor={`${field.id}-key`}>
+                            {t("fieldKey")}
+                          </FieldLabel>
+                          <Input
+                            id={`${field.id}-key`}
+                            value={field.key}
+                            required
+                            pattern="[a-z]+(?:-[a-z]+)*"
+                            maxLength={60}
+                            aria-invalid={keyValidation.invalid}
+                            aria-describedby={keyValidation.errorId}
+                            onChange={(event) => {
+                              validation.touch(`${fieldPath}.key`)
+                              const key = event.currentTarget.value
+                              setFields((current) =>
+                                current.map((item) =>
+                                  item.id === field.id
+                                    ? { ...item, key }
+                                    : item,
+                                ),
+                              )
+                            }}
+                          />
+                          <FieldValidationMessage validation={keyValidation} />
+                        </Field>
+                        <Field invalid={labelValidation.invalid}>
+                          <FieldLabel htmlFor={`${field.id}-label`}>
+                            {t("fieldLabel")}
+                          </FieldLabel>
+                          <Input
+                            id={`${field.id}-label`}
+                            value={field.label}
+                            required
+                            maxLength={80}
+                            aria-invalid={labelValidation.invalid}
+                            aria-describedby={labelValidation.errorId}
+                            onChange={(event) => {
+                              validation.touch(`${fieldPath}.label`)
+                              const label = event.currentTarget.value
+                              setFields((current) =>
+                                current.map((item) =>
+                                  item.id === field.id
+                                    ? { ...item, label }
+                                    : item,
+                                ),
+                              )
+                            }}
+                          />
+                          <FieldValidationMessage
+                            validation={labelValidation}
+                          />
+                        </Field>
                         <FormSelect
-                          label={t("fieldControl")}
-                          value={field.control}
-                          onValueChange={(control) => {
-                            if (!control) return
+                          label={t("fieldBinding")}
+                          value={field.binding}
+                          error={bindingValidation.error}
+                          onInteract={() => {
+                            validation.touch(`${fieldPath}.binding`)
+                          }}
+                          onValueChange={(binding) => {
+                            if (!binding) return
                             setFields((current) =>
                               current.map((item) =>
                                 item.id === field.id
-                                  ? { ...item, control }
+                                  ? { ...item, binding }
                                   : item,
                               ),
                             )
                           }}
-                          options={customFieldControls.map((item) => ({
-                            value: item,
-                            label: t(`fieldControls.${item}`),
-                          }))}
+                          options={fieldBindings
+                            .filter(
+                              (item) =>
+                                (item !==
+                                  requestTemplateFieldBindingValues.awsSecretName &&
+                                  item !==
+                                    requestTemplateFieldBindingValues.awsSecretKey) ||
+                                type === approvalTypeValues.apiKey ||
+                                type === approvalTypeValues.apiKeyReplace,
+                            )
+                            .map((item) => ({
+                              value: item,
+                              label: t(`fieldBindings.${item}`),
+                            }))}
                         />
-                      ) : (
-                        <div className="pb-2 text-sm text-muted-foreground">
-                          {t(`fieldBindings.${field.binding}`)}
+                        {field.binding ===
+                        requestTemplateFieldBindingValues.custom ? (
+                          <FormSelect
+                            label={t("fieldControl")}
+                            value={field.control}
+                            error={controlValidation.error}
+                            onInteract={() => {
+                              validation.touch(`${fieldPath}.control`)
+                            }}
+                            onValueChange={(control) => {
+                              if (!control) return
+                              setFields((current) =>
+                                current.map((item) =>
+                                  item.id === field.id
+                                    ? { ...item, control }
+                                    : item,
+                                ),
+                              )
+                            }}
+                            options={customFieldControls.map((item) => ({
+                              value: item,
+                              label: t(`fieldControls.${item}`),
+                            }))}
+                          />
+                        ) : (
+                          <div className="pb-2 text-sm text-muted-foreground">
+                            {t(`fieldBindings.${field.binding}`)}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 pb-2">
+                          <Checkbox
+                            id={`${field.id}-required`}
+                            checked={field.required}
+                            onCheckedChange={(required) => {
+                              setFields((current) =>
+                                current.map((item) =>
+                                  item.id === field.id
+                                    ? { ...item, required }
+                                    : item,
+                                ),
+                              )
+                            }}
+                          />
+                          <FieldLabel htmlFor={`${field.id}-required`}>
+                            {t("fieldRequired")}
+                          </FieldLabel>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`${String(index + 1)} ${t("removeField")}`}
+                            onClick={() => {
+                              validation.touch("fields")
+                              setFields((current) =>
+                                current.filter((item) => item.id !== field.id),
+                              )
+                            }}
+                          >
+                            <Trash2 />
+                          </Button>
                         </div>
-                      )}
-                      <div className="flex items-center gap-2 pb-2">
-                        <Checkbox
-                          id={`${field.id}-required`}
-                          checked={field.required}
-                          onCheckedChange={(required) => {
-                            setFields((current) =>
-                              current.map((item) =>
-                                item.id === field.id
-                                  ? { ...item, required }
-                                  : item,
-                              ),
-                            )
-                          }}
-                        />
-                        <FieldLabel htmlFor={`${field.id}-required`}>
-                          {t("fieldRequired")}
-                        </FieldLabel>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`${String(index + 1)} ${t("removeField")}`}
-                          onClick={() => {
-                            setFields((current) =>
-                              current.filter((item) => item.id !== field.id),
-                            )
-                          }}
-                        >
-                          <Trash2 />
-                        </Button>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
+                  {fieldsValidation.error ? (
+                    <FieldError id={fieldsValidation.errorId}>
+                      {fieldsValidation.error}
+                    </FieldError>
+                  ) : null}
                 </section>
               </>
             ) : (
@@ -1027,7 +1180,7 @@ function RequestTemplateEditorForm({
                   {common("previous")}
                 </Button>
               ) : null}
-              <Button type="submit" disabled={!inputValid}>
+              <Button type="submit" disabled={step === 2 && !inputValid}>
                 {step === 1
                   ? common("next")
                   : t(

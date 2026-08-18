@@ -3,9 +3,9 @@ import type { BackofficeUser } from "@/features/iam/model"
 
 export function resolveVisibleDirectoryUsers(
   users: readonly BackofficeUser[],
-  canViewDirectory: boolean,
+  includeResignedUsers: boolean,
 ): BackofficeUser[] {
-  if (canViewDirectory) return [...users]
+  if (includeResignedUsers) return [...users]
   return users.filter(
     (user) => user.employmentStatus !== employmentStatusValues.resigned,
   )

@@ -158,7 +158,7 @@ function ServicesTable({
         accessorKey: "name",
         header: common("name"),
       },
-      { accessorKey: "slug", header: t("slug") },
+      { accessorKey: "serviceKey", header: t("serviceKey") },
       {
         accessorKey: "host",
         header: t("host"),
@@ -221,9 +221,9 @@ function ServicesTable({
           getValue: (row) => row.name,
         },
         {
-          id: "service-slug",
-          label: t("slug"),
-          getValue: (row) => row.slug,
+          id: "service-key",
+          label: t("serviceKey"),
+          getValue: (row) => row.serviceKey,
         },
         { id: "service-host", label: t("host"), getValue: (row) => row.host },
         {
@@ -977,8 +977,8 @@ export function ServiceDetailPage({ serviceId }: { serviceId: string }) {
         </CardHeader>
         <CardContent>
           <DetailGrid>
-            <DetailItem label={t("slug")}>
-              <code>{service.slug}</code>
+            <DetailItem label={t("serviceKey")}>
+              <code>{service.serviceKey}</code>
             </DetailItem>
             <DetailItem label={t("host")}>{service.host}</DetailItem>
             <DetailItem label={t("type")}>

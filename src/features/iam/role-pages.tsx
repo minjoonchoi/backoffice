@@ -263,7 +263,9 @@ export function RoleDetailPage({ roleId }: { roleId: string }) {
   const managedRole = isSystemManagedRole(backoffice.systemReferences, role.id)
   const visibleUsers = resolveVisibleDirectoryUsers(
     backoffice.users,
-    sessionAccess.canAccessUiResource(uiResourceKeys.users.list.key),
+    sessionAccess.canAccessUiResource(
+      uiResourceKeys.users.list.actions.createUser,
+    ),
   )
   const users = visibleUsers.filter((user) => role.userIds.includes(user.id))
   const organizations = backoffice.organizations.filter((organization) =>

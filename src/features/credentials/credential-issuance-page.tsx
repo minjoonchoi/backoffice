@@ -57,12 +57,14 @@ import { CommandErrorMessage } from "@/application/ui/backoffice-ui"
 
 export type CredentialIssuancePageProps = {
   templates?: ApprovalLine[]
+  initialApplicationId?: string
   initialServiceId?: string
   excludedServiceIds?: readonly string[]
 }
 
 export function CredentialIssuancePage({
   templates,
+  initialApplicationId,
   initialServiceId,
   excludedServiceIds,
 }: CredentialIssuancePageProps) {
@@ -89,7 +91,18 @@ export function CredentialIssuancePage({
   }
 
   const requester = sessionAccess.currentUser
-  const defaultRequestOrganizationId = requester?.organizationIds[0] ?? null
+  const selectableApplications = backoffice.applications.filter((application) =>
+    requester?.organizationIds.includes(application.ownerOrganizationId),
+  )
+  const initialApplication = initialApplicationId
+    ? selectableApplications.find(
+        (application) => application.id === initialApplicationId,
+      )
+    : undefined
+  const defaultRequestOrganizationId =
+    initialApplication?.ownerOrganizationId ??
+    requester?.organizationIds[0] ??
+    null
   const [step, setStep] = useState<ReviewWorkflowStep>(1)
   const [keyName, setKeyName] = useState("")
   const [awsSecretName, setAwsSecretName] = useState("")
@@ -98,7 +111,9 @@ export function CredentialIssuancePage({
   const [serviceId, setServiceId] = useState<string | null>(
     initialServiceId ?? null,
   )
-  const [applicationId, setApplicationId] = useState<string | null>(null)
+  const [applicationId, setApplicationId] = useState<string | null>(
+    initialApplication?.id ?? null,
+  )
   const [endpointIds, setEndpointIds] = useState<string[]>([])
   const [requestOrganizationId, setRequestOrganizationId] = useState<
     string | null
@@ -114,9 +129,6 @@ export function CredentialIssuancePage({
   )
   const selectedApplication = backoffice.applications.find(
     (item) => item.id === applicationId,
-  )
-  const selectableApplications = backoffice.applications.filter((application) =>
-    requester?.organizationIds.includes(application.ownerOrganizationId),
   )
   const effectiveExcludedServiceIds =
     excludedServiceIds ??
@@ -145,6 +157,22 @@ export function CredentialIssuancePage({
       !effectiveExcludedServiceIds.includes(service.id) &&
       Boolean(credentialTemplateForService(service.id)),
   )
+  if (initialApplicationId && !initialApplication) {
+    return (
+      <EmptyState
+        title={t("requestTitle")}
+        description={t("applicationUnavailable")}
+        action={
+          <Button
+            nativeButton={false}
+            render={<Link href={`/applications/${initialApplicationId}`} />}
+          >
+            {t("backToApplication")}
+          </Button>
+        }
+      />
+    )
+  }
   if (
     initialServiceId &&
     !activeServices.some((service) => service.id === initialServiceId)
@@ -189,7 +217,9 @@ export function CredentialIssuancePage({
     setAwsSecretName("")
     setAwsSecretKey("")
     setContent("")
-    setRequestOrganizationId(defaultRequestOrganizationId)
+    setRequestOrganizationId(
+      selectedApplication?.ownerOrganizationId ?? defaultRequestOrganizationId,
+    )
     setCustomValues({})
     setApprovalSteps([])
     setError(undefined)
@@ -411,7 +441,7 @@ export function CredentialIssuancePage({
                 (organization) =>
                   organization.id === application.ownerOrganizationId,
               )?.name ?? "",
-            searchText: application.slug,
+            searchText: application.applicationKey,
           }))}
           value={applicationId}
           onValueChange={(value) => {
@@ -438,7 +468,7 @@ export function CredentialIssuancePage({
               id: service.id,
               title: service.name,
               description: service.host,
-              searchText: service.slug,
+              searchText: service.serviceKey,
             }))}
             value={serviceId}
             onValueChange={(value) => {
@@ -653,7 +683,11 @@ export function CredentialIssuancePage({
       description={t("requestDescription")}
       cancelLabel={common("cancel")}
       cancelHref={
-        initialServiceId ? `/services/${initialServiceId}` : "/credentials"
+        initialApplicationId
+          ? `/applications/${initialApplicationId}`
+          : initialServiceId
+            ? `/services/${initialServiceId}`
+            : "/credentials"
       }
       {...(step === 2 ? { previousLabel: common("previous") } : {})}
       submitLabel={step === 1 ? common("next") : t("submit")}

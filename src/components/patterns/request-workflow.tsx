@@ -18,6 +18,7 @@ type RequestWorkflowProps = {
   submitLabel: string
   submitDisabled?: boolean
   secondaryDisabled?: boolean
+  noValidate?: boolean
   onPrevious?: () => void
   onSecondary?: () => void
   onSubmit: (form: HTMLFormElement) => void
@@ -34,6 +35,7 @@ export function RequestWorkflow({
   submitLabel,
   submitDisabled = false,
   secondaryDisabled = false,
+  noValidate = false,
   onPrevious,
   onSecondary,
   onSubmit,
@@ -47,6 +49,7 @@ export function RequestWorkflow({
         <CardContent>
           <form
             id={formId}
+            noValidate={noValidate}
             className="grid gap-4"
             onSubmit={(event) => {
               event.preventDefault()

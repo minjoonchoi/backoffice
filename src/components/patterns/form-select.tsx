@@ -2,7 +2,7 @@
 
 import { useId } from "react"
 
-import { Field, FieldLabel } from "@/components/ui/field"
+import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import {
   Select,
   SelectContent,
@@ -22,24 +22,37 @@ export function FormSelect<Value extends string>({
   onValueChange,
   options,
   disabled,
+  error,
+  onInteract,
 }: {
   label: string
   value: Value | null
   onValueChange: (value: Value | null) => void
   options: readonly FormSelectOption<Value>[]
   disabled?: boolean
+  error?: string | undefined
+  onInteract?: (() => void) | undefined
 }) {
   const id = useId()
+  const errorId = `${id}-error`
   return (
-    <Field disabled={disabled === true}>
+    <Field disabled={disabled === true} invalid={Boolean(error)}>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Select
         value={value}
         items={options}
-        onValueChange={onValueChange}
+        onValueChange={(nextValue) => {
+          onInteract?.()
+          onValueChange(nextValue)
+        }}
         disabled={disabled === true}
       >
-        <SelectTrigger id={id} className="w-full">
+        <SelectTrigger
+          id={id}
+          className="w-full"
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -50,6 +63,7 @@ export function FormSelect<Value extends string>({
           ))}
         </SelectContent>
       </Select>
+      {error ? <FieldError id={errorId}>{error}</FieldError> : null}
     </Field>
   )
 }

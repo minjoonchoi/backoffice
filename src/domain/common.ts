@@ -49,7 +49,7 @@ export const backofficeErrorCodes = {
   apiKeyRegistrationForbidden: "api-key-registration-forbidden",
   internalCredentialRegistrationFailed:
     "internal-credential-registration-failed",
-  serviceSlugExists: "service-slug-exists",
+  serviceKeyExists: "service-key-exists",
   serviceNotFound: "service-not-found",
   endpointServiceInvalid: "endpoint-service-invalid",
   endpointExists: "endpoint-exists",

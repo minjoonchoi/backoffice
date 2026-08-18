@@ -9,6 +9,10 @@ import { useSessionAccess } from "@/auth/session-access-provider"
 import { useBackoffice } from "@/application/state/provider"
 import { CommandErrorMessage } from "@/application/ui/backoffice-ui"
 import { DetailGrid, DetailItem } from "@/components/patterns/detail-grid"
+import {
+  FieldValidationMessage,
+  useDynamicFormValidation,
+} from "@/components/patterns/dynamic-form-validation"
 import { PageHeader } from "@/components/patterns/page-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -39,21 +43,36 @@ export function CredentialLifecycleSettingsPage() {
     String(settings.rotationIntervalDays),
   )
   const [error, setError] = useState<BackofficeErrorCode>()
+  const inputResult = credentialLifecycleSettingsInputSchema.safeParse({
+    expirationPeriodDays: Number(expirationPeriodDays),
+    rotationIntervalDays: Number(rotationIntervalDays),
+  })
+  const validation = useDynamicFormValidation(
+    inputResult.success ? undefined : inputResult.error,
+  )
+  const expirationValidation = validation.getFieldValidation(
+    "expirationPeriodDays",
+    "credential-expiration-period-days-error",
+  )
+  const rotationValidation = validation.getFieldValidation(
+    "rotationIntervalDays",
+    "credential-rotation-interval-days-error",
+  )
   const activeCredentialCount = backoffice.apiKeys.filter(
     (credential) => credential.status === entityStatuses.active,
   ).length
 
   async function submit() {
-    const parsed = credentialLifecycleSettingsInputSchema.safeParse({
-      expirationPeriodDays: Number(expirationPeriodDays),
-      rotationIntervalDays: Number(rotationIntervalDays),
-    })
-    if (!parsed.success || !sessionAccess.currentUser) {
+    if (!inputResult.success) {
+      validation.revealAll()
+      return
+    }
+    if (!sessionAccess.currentUser) {
       setError("invalid-input")
       return
     }
     const result = await backoffice.updateCredentialLifecycleSettings(
-      parsed.data,
+      inputResult.data,
       sessionAccess.currentUser.id,
     )
     if (!result.ok) {
@@ -101,13 +120,14 @@ export function CredentialLifecycleSettingsPage() {
         <CardContent>
           <form
             id="credential-lifecycle-settings-form"
+            noValidate
             className="grid gap-4"
             onSubmit={(event) => {
               event.preventDefault()
               void submit()
             }}
           >
-            <Field>
+            <Field invalid={expirationValidation.invalid}>
               <FieldLabel htmlFor="credential-expiration-period-days">
                 {t("expirationPeriodDays")}
               </FieldLabel>
@@ -118,15 +138,19 @@ export function CredentialLifecycleSettingsPage() {
                 max={3650}
                 required
                 value={expirationPeriodDays}
+                aria-invalid={expirationValidation.invalid}
+                aria-describedby={expirationValidation.errorId}
                 onChange={(event) => {
+                  validation.touch("expirationPeriodDays")
                   setExpirationPeriodDays(event.currentTarget.value)
                 }}
               />
               <FieldDescription>
                 {t("expirationPeriodDescription")}
               </FieldDescription>
+              <FieldValidationMessage validation={expirationValidation} />
             </Field>
-            <Field>
+            <Field invalid={rotationValidation.invalid}>
               <FieldLabel htmlFor="credential-rotation-interval-days">
                 {t("rotationIntervalDays")}
               </FieldLabel>
@@ -137,13 +161,17 @@ export function CredentialLifecycleSettingsPage() {
                 max={365}
                 required
                 value={rotationIntervalDays}
+                aria-invalid={rotationValidation.invalid}
+                aria-describedby={rotationValidation.errorId}
                 onChange={(event) => {
+                  validation.touch("rotationIntervalDays")
                   setRotationIntervalDays(event.currentTarget.value)
                 }}
               />
               <FieldDescription>
                 {t("commonRotationDescription")}
               </FieldDescription>
+              <FieldValidationMessage validation={rotationValidation} />
             </Field>
             <CommandErrorMessage error={error} />
           </form>

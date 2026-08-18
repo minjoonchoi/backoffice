@@ -10,6 +10,10 @@ import { CommandErrorMessage } from "@/application/ui/backoffice-ui"
 import { useSessionAccess } from "@/auth/session-access-provider"
 import { EmptyState } from "@/components/patterns/content-state"
 import { DetailGrid, DetailItem } from "@/components/patterns/detail-grid"
+import {
+  FieldValidationMessage,
+  useDynamicFormValidation,
+} from "@/components/patterns/dynamic-form-validation"
 import { FormSelect } from "@/components/patterns/form-select"
 import { RequestWorkflow } from "@/components/patterns/request-workflow"
 import {
@@ -85,10 +89,31 @@ export function UserEditorPage() {
     })
   }
 
+  const parsed = parseInput()
+  const validation = useDynamicFormValidation(
+    parsed.success ? undefined : parsed.error,
+  )
+  const nicknameValidation = validation.getFieldValidation(
+    "nickname",
+    "user-create-nickname-error",
+  )
+  const emailValidation = validation.getFieldValidation(
+    "email",
+    "user-create-email-error",
+  )
+  const employmentValidation = validation.getFieldValidation(
+    "employmentStatus",
+    "user-create-employment-status-error",
+  )
+  const organizationsValidation = validation.getFieldValidation(
+    "organizationIds",
+    "user-create-organizations-error",
+  )
+
   async function submit() {
-    const parsed = parseInput()
-    if (!parsed.success) {
-      setError("invalid-input")
+    const nextInput = parseInput()
+    if (!nextInput.success) {
+      validation.revealAll()
       if (step === 2) setStep(1)
       return
     }
@@ -98,7 +123,7 @@ export function UserEditorPage() {
       return
     }
     const result = await backoffice.createUser(
-      parsed.data satisfies UserInput,
+      nextInput.data satisfies UserInput,
       sessionAccess.currentUser?.id ?? "",
     )
     if (!result.ok) {
@@ -115,13 +140,13 @@ export function UserEditorPage() {
 
   return (
     <RequestWorkflow
+      noValidate
       title={t("add")}
       description={t("addDescription")}
       cancelLabel={common("cancel")}
       cancelHref="/users"
       previousLabel={step === 2 ? common("previous") : undefined}
       submitLabel={step === 1 ? common("next") : common("create")}
-      submitDisabled={!parseInput().success}
       onPrevious={() => {
         setStep(1)
         setError(undefined)
@@ -131,7 +156,7 @@ export function UserEditorPage() {
       <ReviewWorkflowProgress step={step} label={common("editorProgress")} />
       {step === 1 ? (
         <div className="grid gap-4">
-          <Field>
+          <Field invalid={nicknameValidation.invalid}>
             <FieldLabel htmlFor="user-create-nickname">
               {t("nickname")}
             </FieldLabel>
@@ -141,12 +166,16 @@ export function UserEditorPage() {
               required
               minLength={2}
               maxLength={40}
+              aria-invalid={nicknameValidation.invalid}
+              aria-describedby={nicknameValidation.errorId}
               onChange={(event) => {
+                validation.touch("nickname")
                 setNickname(event.currentTarget.value)
               }}
             />
+            <FieldValidationMessage validation={nicknameValidation} />
           </Field>
-          <Field>
+          <Field invalid={emailValidation.invalid}>
             <FieldLabel htmlFor="user-create-email">{t("email")}</FieldLabel>
             <Input
               id="user-create-email"
@@ -154,10 +183,14 @@ export function UserEditorPage() {
               type="email"
               required
               maxLength={160}
+              aria-invalid={emailValidation.invalid}
+              aria-describedby={emailValidation.errorId}
               onChange={(event) => {
+                validation.touch("email")
                 setEmail(event.currentTarget.value)
               }}
             />
+            <FieldValidationMessage validation={emailValidation} />
           </Field>
           <FormSelect
             label={t("employmentStatus")}
@@ -165,12 +198,20 @@ export function UserEditorPage() {
             onValueChange={(value) => {
               if (value) setEmploymentStatus(value)
             }}
+            onInteract={() => {
+              validation.touch("employmentStatus")
+            }}
+            error={employmentValidation.error}
             options={employmentStatuses.map((status) => ({
               value: status,
               label: employmentT(status),
             }))}
           />
-          <fieldset className="grid gap-2 rounded-card border p-3">
+          <fieldset
+            className="grid gap-2 rounded-card border p-3"
+            aria-invalid={organizationsValidation.invalid}
+            aria-describedby={organizationsValidation.errorId}
+          >
             <legend className="px-1 text-sm font-medium">
               {t("organizations")}
             </legend>
@@ -184,6 +225,7 @@ export function UserEditorPage() {
                     <Checkbox
                       checked={organizationIds.has(organization.id)}
                       onCheckedChange={(checked) => {
+                        validation.touch("organizationIds")
                         setOrganizationIds((current) => {
                           const next = new Set(current)
                           if (checked) next.add(organization.id)
@@ -199,6 +241,7 @@ export function UserEditorPage() {
             ) : (
               <p className="text-sm text-muted-foreground">{t("unassigned")}</p>
             )}
+            <FieldValidationMessage validation={organizationsValidation} />
           </fieldset>
         </div>
       ) : (
@@ -245,6 +288,26 @@ export function OrganizationEditorPage({
     organization?.parentId ?? null,
   )
   const [error, setError] = useState<BackofficeErrorCode>()
+  const parsed = organizationInputSchema.safeParse({
+    name,
+    leaderUserId,
+    ...(parentId ? { parentId } : {}),
+  })
+  const validation = useDynamicFormValidation(
+    parsed.success ? undefined : parsed.error,
+  )
+  const nameValidation = validation.getFieldValidation(
+    "name",
+    "organization-editor-name-error",
+  )
+  const leaderValidation = validation.getFieldValidation(
+    "leaderUserId",
+    "organization-editor-leader-error",
+  )
+  const parentValidation = validation.getFieldValidation(
+    "parentId",
+    "organization-editor-parent-error",
+  )
 
   if (organizationId && !organization) {
     return (
@@ -283,11 +346,6 @@ export function OrganizationEditorPage({
       (!organization ||
         !isDescendant(backoffice.organizations, candidate.id, organization.id)),
   )
-  const parsed = organizationInputSchema.safeParse({
-    name,
-    leaderUserId,
-    ...(parentId ? { parentId } : {}),
-  })
   const leader = backoffice.users.find((user) => user.id === leaderUserId)
   const parent = backoffice.organizations.find((item) => item.id === parentId)
 
@@ -298,7 +356,7 @@ export function OrganizationEditorPage({
       ...(parentId ? { parentId } : {}),
     })
     if (!nextInput.success) {
-      setError("invalid-input")
+      validation.revealAll()
       if (step === 2) setStep(1)
       return
     }
@@ -328,6 +386,7 @@ export function OrganizationEditorPage({
 
   return (
     <RequestWorkflow
+      noValidate
       title={t(organization ? "edit" : "add")}
       description={t(organization ? "editDescription" : "addDescription")}
       cancelLabel={common("cancel")}
@@ -338,7 +397,6 @@ export function OrganizationEditorPage({
       submitLabel={
         step === 1 ? common("next") : common(organization ? "save" : "create")
       }
-      submitDisabled={!parsed.success}
       onPrevious={() => {
         setStep(1)
         setError(undefined)
@@ -348,7 +406,7 @@ export function OrganizationEditorPage({
       <ReviewWorkflowProgress step={step} label={common("editorProgress")} />
       {step === 1 ? (
         <div className="grid gap-4">
-          <Field>
+          <Field invalid={nameValidation.invalid}>
             <FieldLabel htmlFor="organization-editor-name">
               {t("organizationName")}
             </FieldLabel>
@@ -358,15 +416,23 @@ export function OrganizationEditorPage({
               required
               minLength={2}
               maxLength={80}
+              aria-invalid={nameValidation.invalid}
+              aria-describedby={nameValidation.errorId}
               onChange={(event) => {
+                validation.touch("name")
                 setName(event.currentTarget.value)
               }}
             />
+            <FieldValidationMessage validation={nameValidation} />
           </Field>
           <FormSelect
             label={t("leader")}
             value={leaderUserId}
             onValueChange={setLeaderUserId}
+            onInteract={() => {
+              validation.touch("leaderUserId")
+            }}
+            error={leaderValidation.error}
             options={employedUsers.map((user) => ({
               value: user.id,
               label: user.nickname,
@@ -376,8 +442,10 @@ export function OrganizationEditorPage({
             label={t("parent")}
             value={parentId ?? rootOrganizationValue}
             onValueChange={(value) => {
+              validation.touch("parentId")
               setParentId(value === rootOrganizationValue ? null : value)
             }}
+            error={parentValidation.error}
             options={[
               { value: rootOrganizationValue, label: t("noParent") },
               ...parentCandidates.map((candidate) => ({

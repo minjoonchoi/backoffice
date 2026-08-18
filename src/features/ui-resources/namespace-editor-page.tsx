@@ -10,6 +10,10 @@ import { CommandErrorMessage } from "@/application/ui/backoffice-ui"
 import { useSessionAccess } from "@/auth/session-access-provider"
 import { EmptyState } from "@/components/patterns/content-state"
 import { DetailGrid, DetailItem } from "@/components/patterns/detail-grid"
+import {
+  FieldValidationMessage,
+  useDynamicFormValidation,
+} from "@/components/patterns/dynamic-form-validation"
 import { FormSelect } from "@/components/patterns/form-select"
 import { RequestWorkflow } from "@/components/patterns/request-workflow"
 import {
@@ -44,6 +48,31 @@ export function NamespaceEditorPage({ namespaceId }: { namespaceId?: string }) {
     namespace?.managerRoleId ?? null,
   )
   const [error, setError] = useState<BackofficeErrorCode>()
+  const inputResult = namespaceInputSchema.safeParse({
+    key,
+    name,
+    description,
+    managerRoleId,
+  })
+  const validation = useDynamicFormValidation(
+    inputResult.success ? undefined : inputResult.error,
+  )
+  const keyValidation = validation.getFieldValidation(
+    "key",
+    "namespace-editor-key-error",
+  )
+  const nameValidation = validation.getFieldValidation(
+    "name",
+    "namespace-editor-name-error",
+  )
+  const descriptionValidation = validation.getFieldValidation(
+    "description",
+    "namespace-editor-description-error",
+  )
+  const managerRoleValidation = validation.getFieldValidation(
+    "managerRoleId",
+    "namespace-editor-manager-role-error",
+  )
 
   if (namespaceId && !namespace) {
     return (
@@ -75,17 +104,12 @@ export function NamespaceEditorPage({ namespaceId }: { namespaceId?: string }) {
 
   const parsed = namespace
     ? managerRoleId !== null && managerRoleId !== namespace.managerRoleId
-    : namespaceInputSchema.safeParse({
-        key,
-        name,
-        description,
-        managerRoleId,
-      }).success
+    : inputResult.success
   const managerRole = backoffice.roles.find((role) => role.id === managerRoleId)
 
   async function submit() {
     if (!managerRoleId) {
-      setError("invalid-input")
+      validation.revealAll()
       return
     }
     const createInput = namespaceInputSchema.safeParse({
@@ -95,7 +119,7 @@ export function NamespaceEditorPage({ namespaceId }: { namespaceId?: string }) {
       managerRoleId,
     })
     if (!namespace && !createInput.success) {
-      setError("invalid-input")
+      validation.revealAll()
       if (step === 2) setStep(1)
       return
     }
@@ -137,6 +161,7 @@ export function NamespaceEditorPage({ namespaceId }: { namespaceId?: string }) {
 
   return (
     <RequestWorkflow
+      noValidate
       title={t(namespace ? "changeManagerTitle" : "add")}
       description={t(namespace ? "changeManagerDescription" : "addDescription")}
       cancelLabel={common("cancel")}
@@ -145,7 +170,7 @@ export function NamespaceEditorPage({ namespaceId }: { namespaceId?: string }) {
       submitLabel={
         step === 1 ? common("next") : common(namespace ? "save" : "create")
       }
-      submitDisabled={!parsed}
+      submitDisabled={namespace ? !parsed : false}
       onPrevious={() => {
         setStep(1)
         setError(undefined)
@@ -157,7 +182,7 @@ export function NamespaceEditorPage({ namespaceId }: { namespaceId?: string }) {
         <div className="grid gap-4">
           {!namespace ? (
             <>
-              <Field>
+              <Field invalid={keyValidation.invalid}>
                 <FieldLabel htmlFor="namespace-editor-key">
                   {t("key")}
                 </FieldLabel>
@@ -170,13 +195,17 @@ export function NamespaceEditorPage({ namespaceId }: { namespaceId?: string }) {
                   pattern="[a-z][a-z0-9]*(?:-[a-z0-9]+)*"
                   autoCapitalize="none"
                   spellCheck={false}
+                  aria-invalid={keyValidation.invalid}
+                  aria-describedby={keyValidation.errorId}
                   onChange={(event) => {
+                    validation.touch("key")
                     setKey(event.currentTarget.value)
                   }}
                 />
                 <FieldDescription>{t("keyDescription")}</FieldDescription>
+                <FieldValidationMessage validation={keyValidation} />
               </Field>
-              <Field>
+              <Field invalid={nameValidation.invalid}>
                 <FieldLabel htmlFor="namespace-editor-name">
                   {common("name")}
                 </FieldLabel>
@@ -186,12 +215,16 @@ export function NamespaceEditorPage({ namespaceId }: { namespaceId?: string }) {
                   required
                   minLength={2}
                   maxLength={100}
+                  aria-invalid={nameValidation.invalid}
+                  aria-describedby={nameValidation.errorId}
                   onChange={(event) => {
+                    validation.touch("name")
                     setName(event.currentTarget.value)
                   }}
                 />
+                <FieldValidationMessage validation={nameValidation} />
               </Field>
-              <Field>
+              <Field invalid={descriptionValidation.invalid}>
                 <FieldLabel htmlFor="namespace-editor-description">
                   {t("namespaceDescription")}
                 </FieldLabel>
@@ -202,10 +235,14 @@ export function NamespaceEditorPage({ namespaceId }: { namespaceId?: string }) {
                   minLength={2}
                   maxLength={500}
                   rows={6}
+                  aria-invalid={descriptionValidation.invalid}
+                  aria-describedby={descriptionValidation.errorId}
                   onChange={(event) => {
+                    validation.touch("description")
                     setDescription(event.currentTarget.value)
                   }}
                 />
+                <FieldValidationMessage validation={descriptionValidation} />
               </Field>
             </>
           ) : null}
@@ -213,6 +250,10 @@ export function NamespaceEditorPage({ namespaceId }: { namespaceId?: string }) {
             label={t("managerRole")}
             value={managerRoleId}
             onValueChange={setManagerRoleId}
+            onInteract={() => {
+              validation.touch("managerRoleId")
+            }}
+            error={managerRoleValidation.error}
             options={[...backoffice.roles]
               .sort((left, right) => left.name.localeCompare(right.name, "ko"))
               .map((role) => ({ value: role.id, label: role.name }))}
