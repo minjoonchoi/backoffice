@@ -1,0 +1,1285 @@
+version: 1
+defaultUserId: 10000000-0000-4000-8000-000000000001
+organizations:
+  - id: 20000000-0000-4000-8000-000000000001
+    name: 개발 1팀
+    leaderUserId: 10000000-0000-4000-8000-000000000001
+    parentId: 20000000-0000-4000-8000-000000000008
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 20000000-0000-4000-8000-000000000002
+    name: 개발 2팀
+    leaderUserId: 10000000-0000-4000-8000-000000000003
+    parentId: 20000000-0000-4000-8000-000000000008
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 20000000-0000-4000-8000-000000000005
+    name: 개인정보보호팀
+    leaderUserId: 10000000-0000-4000-8000-000000000002
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 20000000-0000-4000-8000-000000000006
+    name: 보안성검토팀
+    leaderUserId: 10000000-0000-4000-8000-000000000008
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 20000000-0000-4000-8000-000000000007
+    name: IT보안팀
+    leaderUserId: 10000000-0000-4000-8000-000000000016
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 20000000-0000-4000-8000-000000000008
+    name: 개발실
+    leaderUserId: 10000000-0000-4000-8000-000000000018
+    createdAt: 2026-08-08T09:00:00.000Z
+applications:
+  - id: 25000000-0000-4000-8000-000000000001
+    name: Developer Console
+    applicationKey: developer_console
+    description: 개발자 도구에서 Developer API를 호출하는 어플리케이션입니다.
+    ownerOrganizationId: 20000000-0000-4000-8000-000000000002
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 25000000-0000-4000-8000-000000000002
+    name: Platform Automation
+    applicationKey: platform_automation
+    description: 개발실이 소유하고 내부 플랫폼 자동화에 사용하는 어플리케이션입니다.
+    ownerOrganizationId: 20000000-0000-4000-8000-000000000008
+    createdAt: 2026-08-08T09:00:00.000Z
+users:
+  - id: 10000000-0000-4000-8000-000000000001
+    nickname: David
+    email: david@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000001
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000002
+    nickname: James
+    email: james@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000005
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000003
+    nickname: Emma
+    email: emma@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000002
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000006
+    nickname: Noah
+    email: noah@example.com
+    employmentStatus: on-leave
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000001
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000007
+    nickname: Olivia
+    email: olivia@example.com
+    employmentStatus: resigned
+    organizationIds: []
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000008
+    nickname: Ethan
+    email: ethan@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000006
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000009
+    nickname: Owen
+    email: owen@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000001
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000010
+    nickname: Amelia
+    email: amelia@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000002
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000013
+    nickname: Henry
+    email: henry@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000005
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000014
+    nickname: Charlotte
+    email: charlotte@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000006
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000015
+    nickname: Daniel
+    email: daniel@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000005
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000016
+    nickname: Benjamin
+    email: benjamin@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000007
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000017
+    nickname: Evelyn
+    email: evelyn@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000007
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 10000000-0000-4000-8000-000000000018
+    nickname: Jhonny
+    email: jhonny@example.com
+    employmentStatus: employed
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000008
+    createdAt: 2026-08-08T09:00:00.000Z
+roles:
+  - id: 00000000-0000-4000-8000-000000000001
+    name: Access Governance 시스템 관리자
+    description: Access Governance 네임스페이스의 모든 UI 리소스와 관리 기능에 접근하는 기본 역할입니다.
+    userIds:
+      - 10000000-0000-4000-8000-000000000001
+    organizationIds: []
+    createdAt: 2026-08-08T00:00:00.000Z
+  - id: 00000000-0000-4000-8000-000000000004
+    name: Access Governance 정책 운영자
+    description: Access Governance에서 정책을 생성·수정·삭제하는 시스템 기본 역할입니다.
+    userIds:
+      - 10000000-0000-4000-8000-000000000009
+    organizationIds: []
+    createdAt: 2026-08-08T00:00:00.000Z
+  - id: 00000000-0000-4000-8000-000000000011
+    name: Access Governance IAM 운영자
+    description: Access Governance의 사용자, 조직, 역할과 어플리케이션을 조회하고 관리하는 시스템 기본 역할입니다.
+    userIds: []
+    organizationIds:
+      - 20000000-0000-4000-8000-000000000001
+    createdAt: 2026-08-12T00:00:00.000Z
+  - id: 00000000-0000-4000-8000-000000000008
+    name: Access Governance 일반 사용자
+    description: Access Governance의 서비스·엔드포인트·네임스페이스 카탈로그, 접근 정책과 자격증명을 조회하는 기본 역할입니다.
+    userIds:
+      - 10000000-0000-4000-8000-000000000001
+      - 10000000-0000-4000-8000-000000000002
+      - 10000000-0000-4000-8000-000000000003
+      - 10000000-0000-4000-8000-000000000006
+      - 10000000-0000-4000-8000-000000000007
+      - 10000000-0000-4000-8000-000000000008
+      - 10000000-0000-4000-8000-000000000009
+      - 10000000-0000-4000-8000-000000000010
+      - 10000000-0000-4000-8000-000000000013
+      - 10000000-0000-4000-8000-000000000014
+      - 10000000-0000-4000-8000-000000000015
+      - 10000000-0000-4000-8000-000000000016
+      - 10000000-0000-4000-8000-000000000017
+      - 10000000-0000-4000-8000-000000000018
+    organizationIds: []
+    createdAt: 2026-08-08T00:00:00.000Z
+  - id: 00000000-0000-4000-8000-000000000010
+    name: Access Governance UI 리소스 관리자
+    description: 관리 역할로 지정된 네임스페이스의 UI 리소스를 동기화하고 정리하는 시스템 기본 역할입니다.
+    userIds:
+      - 10000000-0000-4000-8000-000000000009
+    organizationIds: []
+    createdAt: 2026-08-11T00:00:00.000Z
+  - id: 00000000-0000-4000-8000-000000000002
+    name: Access Governance 서비스 운영자
+    description: 조직 정보에 따라 현재 조직장에게 자동으로 부여되는 서비스 카탈로그 운영 역할입니다.
+    userIds:
+      - 10000000-0000-4000-8000-000000000001
+      - 10000000-0000-4000-8000-000000000003
+      - 10000000-0000-4000-8000-000000000002
+      - 10000000-0000-4000-8000-000000000008
+      - 10000000-0000-4000-8000-000000000016
+      - 10000000-0000-4000-8000-000000000018
+    organizationIds: []
+    createdAt: 2026-08-08T00:00:00.000Z
+approvalLines:
+  - id: 40000000-0000-4000-8000-000000000001
+    version: 1
+    name: API Key 발급 결재 템플릿
+    category: credential
+    type: api-key
+    approvalExecution:
+      type: groo
+      draftDocumentId: GROO-CREDENTIAL-ISSUANCE-V1
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+    steps: []
+    fields:
+      - id: 43000000-0000-4000-8000-000000000001
+        order: 1
+        key: service
+        label: 발급 대상 서비스
+        binding: service-id
+        control: service-select
+        required: true
+      - id: 43000000-0000-4000-8000-000000000002
+        order: 2
+        key: key-name
+        label: 자격증명 이름
+        binding: key-name
+        control: text
+        required: true
+      - id: 43000000-0000-4000-8000-000000000003
+        order: 3
+        key: aws-secret-name
+        label: AWS ASM Secret name
+        binding: aws-secret-name
+        control: text
+        required: true
+      - id: 43000000-0000-4000-8000-000000000004
+        order: 4
+        key: aws-secret-key
+        label: Secret value key
+        binding: aws-secret-key
+        control: text
+        required: true
+      - id: 43000000-0000-4000-8000-000000000005
+        order: 5
+        key: request-organization
+        label: 요청 조직
+        binding: request-organization-id
+        control: organization-select
+        required: true
+      - id: 43000000-0000-4000-8000-000000000006
+        order: 6
+        key: reason
+        label: 발급 사유
+        binding: content
+        control: textarea
+        required: true
+  - id: 40000000-0000-4000-8000-000000000003
+    version: 1
+    name: API Key 교체 결재 템플릿
+    category: credential
+    type: api-key-replace
+    approvalExecution:
+      type: groo
+      draftDocumentId: GROO-CREDENTIAL-REPLACEMENT-V1
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+    steps: []
+    fields:
+      - id: 44000000-0000-4000-8000-000000000011
+        order: 1
+        key: request-organization
+        label: 요청 조직
+        binding: request-organization-id
+        control: organization-select
+        required: true
+      - id: 44000000-0000-4000-8000-000000000012
+        order: 2
+        key: aws-secret-name
+        label: AWS ASM Secret name
+        binding: aws-secret-name
+        control: text
+        required: true
+      - id: 44000000-0000-4000-8000-000000000013
+        order: 3
+        key: aws-secret-key
+        label: Secret value key
+        binding: aws-secret-key
+        control: text
+        required: true
+      - id: 44000000-0000-4000-8000-000000000014
+        order: 4
+        key: reason
+        label: 교체 사유
+        binding: content
+        control: textarea
+        required: true
+  - id: 40000000-0000-4000-8000-000000000004
+    version: 1
+    name: API Key 폐기 결재 템플릿
+    category: credential
+    type: api-key-dispose
+    approvalExecution:
+      type: groo
+      draftDocumentId: GROO-CREDENTIAL-DISPOSAL-V1
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+    steps: []
+    fields:
+      - id: 45000000-0000-4000-8000-000000000011
+        order: 1
+        key: request-organization
+        label: 요청 조직
+        binding: request-organization-id
+        control: organization-select
+        required: true
+      - id: 45000000-0000-4000-8000-000000000012
+        order: 2
+        key: reason
+        label: 폐기 사유
+        binding: content
+        control: textarea
+        required: true
+  - id: 40000000-0000-4000-8000-000000000002
+    version: 1
+    name: 권한 부여 결재 템플릿
+    category: permission
+    type: access-grant
+    approvalExecution:
+      type: internal
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+    steps:
+      - id: 42000000-0000-4000-8000-000000000001
+        order: 1
+        stage: 1
+        kind: request
+        assigneeMode: requester
+      - id: 42000000-0000-4000-8000-000000000002
+        order: 2
+        stage: 2
+        kind: approval
+        assigneeMode: fixed-user
+        userId: 10000000-0000-4000-8000-000000000008
+    fields: []
+accessPolicies:
+  - id: 43000000-0000-4000-8000-000000000001
+    name: 운영 모니터링 허용
+    description: 서비스 상태와 감사 이벤트를 함께 조회하는 운영 모니터링 리소스 접근을 허용합니다.
+    type: access-grant
+    effect: allow
+    resources:
+      - type: endpoint
+        id: 70000000-0000-4000-8000-000000000001
+      - type: endpoint
+        id: 70000000-0000-4000-8000-000000000003
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 43000000-0000-4000-8000-000000000002
+    name: Developer API 이벤트 발행 거부
+    description: 요청 헤더, 쿼리, 요청 본문과 응답 본문 필드가 정의된 Developer API 이벤트 발행 리소스의 접근을 거부합니다.
+    type: access-grant
+    effect: deny
+    resources:
+      - type: endpoint
+        id: 70000000-0000-4000-8000-000000000002
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 43000000-0000-4000-8000-000000000003
+    name: Developer Console · Developer API 접근
+    description: Developer Console 자격증명이 사용하는 Developer API 엔드포인트 접근을 시스템에서 관리합니다.
+    type: access-grant
+    managementType: system
+    effect: allow
+    resources:
+      - type: endpoint
+        id: 70000000-0000-4000-8000-000000000001
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+accessPolicyAssignments:
+  - id: 44000000-0000-4000-8000-000000000001
+    accessPolicyId: 43000000-0000-4000-8000-000000000001
+    targetType: user
+    targetId: 10000000-0000-4000-8000-000000000014
+    expiresAt: 2027-08-08T09:00:00.000Z
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 44000000-0000-4000-8000-000000000002
+    accessPolicyId: 43000000-0000-4000-8000-000000000001
+    targetType: user
+    targetId: 10000000-0000-4000-8000-000000000001
+    expiresAt: null
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 44000000-0000-4000-8000-000000000003
+    accessPolicyId: 43000000-0000-4000-8000-000000000001
+    targetType: organization
+    targetId: 20000000-0000-4000-8000-000000000001
+    expiresAt: null
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 44000000-0000-4000-8000-000000000004
+    accessPolicyId: 43000000-0000-4000-8000-000000000001
+    targetType: role
+    targetId: 00000000-0000-4000-8000-000000000011
+    expiresAt: null
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 44000000-0000-4000-8000-000000000005
+    accessPolicyId: 43000000-0000-4000-8000-000000000001
+    targetType: role
+    targetId: 00000000-0000-4000-8000-000000000002
+    expiresAt: null
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 44000000-0000-4000-8000-000000000006
+    accessPolicyId: 43000000-0000-4000-8000-000000000003
+    targetType: application
+    targetId: 25000000-0000-4000-8000-000000000001
+    expiresAt: null
+    createdAt: 2026-08-08T09:00:00.000Z
+approvalDocuments:
+  - id: 50000000-0000-4000-8000-000000000001
+    documentKind: api-key-issuance
+    title: 로컬 API Key 발급 요청
+    type: api-key
+    organizationId: 20000000-0000-4000-8000-000000000002
+    requesterId: 10000000-0000-4000-8000-000000000010
+    approvalLineId: 40000000-0000-4000-8000-000000000001
+    approvalExecution:
+      type: groo
+      draftDocumentId: GROO-CREDENTIAL-ISSUANCE-V1
+      requestId: GROO-REQUEST-20260808-0001
+    content: 로컬 테스트에서 API 연동을 검증하기 위한 발급 요청입니다.
+    fieldValues: []
+    applicationId: 25000000-0000-4000-8000-000000000001
+    serviceId: 60000000-0000-4000-8000-000000000001
+    endpointIds:
+      - 70000000-0000-4000-8000-000000000001
+    keyName: local-integration-key
+    awsSecretName: access-governance/developer-api
+    awsSecretKey: local-integration-key
+    status: approved
+    createdAt: 2026-08-08T09:00:00.000Z
+    approvalSteps: []
+    history:
+      - id: 54000000-0000-4000-8000-000000000001
+        type: submitted
+        actorUserId: 10000000-0000-4000-8000-000000000010
+        stepId: null
+        comment: null
+        createdAt: 2026-08-08T09:00:00.000Z
+      - id: 54000000-0000-4000-8000-000000000002
+        type: approved
+        actorUserId: null
+        stepId: null
+        comment: null
+        createdAt: 2026-08-08T09:40:00.000Z
+  - id: 50000000-0000-4000-8000-000000000003
+    documentKind: api-key-issuance
+    title: 협업 SaaS API Key 발급 요청
+    type: api-key
+    organizationId: 20000000-0000-4000-8000-000000000002
+    requesterId: 10000000-0000-4000-8000-000000000010
+    approvalLineId: 40000000-0000-4000-8000-000000000001
+    approvalExecution:
+      type: groo
+      draftDocumentId: GROO-CREDENTIAL-ISSUANCE-V1
+      requestId: GROO-REQUEST-20260808-0002
+    content: 외부 협업 서비스 연동을 위한 API Key 발급 요청입니다.
+    fieldValues: []
+    applicationId: 25000000-0000-4000-8000-000000000001
+    serviceId: 60000000-0000-4000-8000-000000000002
+    endpointIds: []
+    keyName: collaboration-ready-key
+    awsSecretName: access-governance/collaboration-saas
+    awsSecretKey: collaboration-ready-key
+    status: approved
+    createdAt: 2026-08-08T10:00:00.000Z
+    approvalSteps: []
+    history:
+      - id: 54000000-0000-4000-8000-000000000003
+        type: submitted
+        actorUserId: 10000000-0000-4000-8000-000000000010
+        stepId: null
+        comment: null
+        createdAt: 2026-08-08T10:00:00.000Z
+      - id: 54000000-0000-4000-8000-000000000004
+        type: approved
+        actorUserId: null
+        stepId: null
+        comment: null
+        createdAt: 2026-08-08T10:30:00.000Z
+  - id: 50000000-0000-4000-8000-000000000004
+    documentKind: api-key-issuance
+    title: 협업 SaaS 자격증명 등록 재시도 예시
+    type: api-key
+    organizationId: 20000000-0000-4000-8000-000000000002
+    requesterId: 10000000-0000-4000-8000-000000000010
+    approvalLineId: 40000000-0000-4000-8000-000000000001
+    approvalExecution:
+      type: groo
+      draftDocumentId: GROO-CREDENTIAL-ISSUANCE-V1
+      requestId: GROO-REQUEST-20260808-0003
+    content: 외부 협업 서비스 자격증명 등록 실패와 재시도를 검증합니다.
+    fieldValues: []
+    applicationId: 25000000-0000-4000-8000-000000000001
+    serviceId: 60000000-0000-4000-8000-000000000002
+    endpointIds: []
+    keyName: collaboration-retry-key
+    awsSecretName: access-governance/collaboration-saas-retry
+    awsSecretKey: collaboration-retry-key
+    status: approved
+    createdAt: 2026-08-08T10:35:00.000Z
+    approvalSteps: []
+    history:
+      - id: 54000000-0000-4000-8000-000000000005
+        type: submitted
+        actorUserId: 10000000-0000-4000-8000-000000000010
+        stepId: null
+        comment: null
+        createdAt: 2026-08-08T10:35:00.000Z
+      - id: 54000000-0000-4000-8000-000000000006
+        type: approved
+        actorUserId: null
+        stepId: null
+        comment: null
+        createdAt: 2026-08-08T10:40:00.000Z
+  - id: 50000000-0000-4000-8000-000000000002
+    documentKind: general
+    title: 보안 서비스 접근 요청
+    type: access-grant
+    organizationId: 20000000-0000-4000-8000-000000000006
+    requesterId: 10000000-0000-4000-8000-000000000014
+    approvalLineId: 40000000-0000-4000-8000-000000000002
+    approvalExecution:
+      type: internal
+    accessPolicyId: 43000000-0000-4000-8000-000000000001
+    targetUserId: 10000000-0000-4000-8000-000000000014
+    requestMode: grant
+    expiresAt: 2027-08-08T09:00:00.000Z
+    content: 보안 서비스 검토 업무를 수행하기 위한 접근 권한 요청입니다.
+    fieldValues: []
+    status: approved
+    createdAt: 2026-08-08T09:00:00.000Z
+    approvalSteps:
+      - id: 42000000-0000-4000-8000-000000000001
+        order: 1
+        stage: 1
+        kind: request
+        assigneeMode: requester
+        assigneeType: user
+        assigneeId: 10000000-0000-4000-8000-000000000014
+        status: completed
+        processedById: 10000000-0000-4000-8000-000000000014
+        processedAt: 2026-08-08T09:00:00.000Z
+        comment: null
+      - id: 42000000-0000-4000-8000-000000000002
+        order: 2
+        stage: 2
+        kind: approval
+        assigneeMode: fixed-user
+        assigneeType: user
+        assigneeId: 10000000-0000-4000-8000-000000000008
+        status: completed
+        processedById: 10000000-0000-4000-8000-000000000008
+        processedAt: 2026-08-08T09:10:00.000Z
+        comment: 업무 목적을 확인했습니다.
+    history:
+      - id: 54000000-0000-4000-8000-000000000007
+        type: submitted
+        actorUserId: 10000000-0000-4000-8000-000000000014
+        stepId: null
+        comment: null
+        createdAt: 2026-08-08T09:00:00.000Z
+      - id: 54000000-0000-4000-8000-000000000008
+        type: approved
+        actorUserId: 10000000-0000-4000-8000-000000000008
+        stepId: 42000000-0000-4000-8000-000000000002
+        comment: 업무 목적을 확인했습니다.
+        createdAt: 2026-08-08T09:10:00.000Z
+notifications:
+  - id: 53000000-0000-4000-8000-000000000001
+    userId: 10000000-0000-4000-8000-000000000010
+    event: request-submitted
+    targetType: approval-document
+    targetId: 50000000-0000-4000-8000-000000000001
+    createdAt: 2026-08-08T01:00:00.000Z
+    readAt: null
+  - id: 53000000-0000-4000-8000-000000000002
+    userId: 10000000-0000-4000-8000-000000000010
+    event: api-key-issued
+    targetType: approval-document
+    targetId: 50000000-0000-4000-8000-000000000001
+    createdAt: 2026-08-08T02:00:00.000Z
+    readAt: 2026-08-08T03:00:00.000Z
+  - id: 53000000-0000-4000-8000-000000000003
+    userId: 10000000-0000-4000-8000-000000000014
+    event: request-submitted
+    targetType: approval-document
+    targetId: 50000000-0000-4000-8000-000000000002
+    createdAt: 2026-08-08T01:00:00.000Z
+    readAt: null
+  - id: 53000000-0000-4000-8000-000000000004
+    userId: 10000000-0000-4000-8000-000000000014
+    event: access-granted
+    targetType: approval-document
+    targetId: 50000000-0000-4000-8000-000000000002
+    createdAt: 2026-08-08T02:00:00.000Z
+    readAt: null
+services:
+  - id: 60000000-0000-4000-8000-000000000001
+    name: Developer API
+    serviceKey: developer-api
+    host: https://api.example.com
+    type: internal
+    ownerOrganizationId: 20000000-0000-4000-8000-000000000002
+    credentialTemplateIds:
+      issuance: 40000000-0000-4000-8000-000000000001
+      replacement: 40000000-0000-4000-8000-000000000003
+      disposal: 40000000-0000-4000-8000-000000000004
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 60000000-0000-4000-8000-000000000002
+    name: 협업 SaaS
+    serviceKey: collaboration-saas
+    host: https://collaboration.example.com
+    type: external
+    ownerOrganizationId: 20000000-0000-4000-8000-000000000007
+    credentialTemplateIds:
+      issuance: 40000000-0000-4000-8000-000000000001
+      replacement: 40000000-0000-4000-8000-000000000003
+      disposal: 40000000-0000-4000-8000-000000000004
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 60000000-0000-4000-8000-000000000003
+    name: Audit API
+    serviceKey: audit-api
+    host: https://audit-api.example.com
+    type: internal
+    ownerOrganizationId: 20000000-0000-4000-8000-000000000007
+    credentialTemplateIds:
+      issuance: 40000000-0000-4000-8000-000000000001
+      replacement: 40000000-0000-4000-8000-000000000003
+      disposal: 40000000-0000-4000-8000-000000000004
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 60000000-0000-4000-8000-000000000004
+    name: Access Governance API
+    serviceKey: access-governance-api
+    host: https://access-governance-api.example.com
+    type: internal
+    ownerOrganizationId: 20000000-0000-4000-8000-000000000001
+    credentialTemplateIds:
+      issuance: 40000000-0000-4000-8000-000000000001
+      replacement: 40000000-0000-4000-8000-000000000003
+      disposal: 40000000-0000-4000-8000-000000000004
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z
+serviceEndpoints:
+  - id: 70000000-0000-4000-8000-000000000001
+    serviceId: 60000000-0000-4000-8000-000000000001
+    name: 상태 확인 API
+    method: GET
+    path: /health
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000002
+    serviceId: 60000000-0000-4000-8000-000000000001
+    name: 이벤트 API
+    method: POST
+    path: /v1/events
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000003
+    serviceId: 60000000-0000-4000-8000-000000000003
+    name: 감사 이벤트 조회 API
+    method: GET
+    path: /v1/audit-events
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000004
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: UI 리소스 동기화 API
+    method: POST
+    path: /v1/ui-resources/sync
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000005
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 업무 홈 요약 조회 API
+    method: GET
+    path: /v1/home/summary
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000006
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 알림 목록 조회 API
+    method: GET
+    path: /v1/notifications/list
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000007
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 알림 읽음 처리 API
+    method: PATCH
+    path: /v1/notifications/read
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000008
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 사용자 목록 조회 API
+    method: GET
+    path: /v1/users/list
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000009
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 사용자 상세 조회 API
+    method: GET
+    path: /v1/users/detail
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000010
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 사용자 등록 API
+    method: POST
+    path: /v1/users/create
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000011
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 사용자 조직 연결 API
+    method: POST
+    path: /v1/users/organizations/assign
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000012
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 사용자 역할 부여 API
+    method: POST
+    path: /v1/users/roles/assign
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000014
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 사용자 재직 상태 변경 API
+    method: PATCH
+    path: /v1/users/employment-status/update
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000015
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 조직 목록 조회 API
+    method: GET
+    path: /v1/organizations/list
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000016
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 조직 상세 조회 API
+    method: GET
+    path: /v1/organizations/detail
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000017
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 조직 생성 API
+    method: POST
+    path: /v1/organizations/create
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000018
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 조직 수정 API
+    method: PATCH
+    path: /v1/organizations/update
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000019
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 조직 사용자 추가 API
+    method: POST
+    path: /v1/organizations/users/assign
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000020
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 역할 목록 조회 API
+    method: GET
+    path: /v1/roles/list
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000021
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 역할 상세 조회 API
+    method: GET
+    path: /v1/roles/detail
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000022
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 역할 생성 API
+    method: POST
+    path: /v1/roles/create
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000023
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 역할 수정 API
+    method: PATCH
+    path: /v1/roles/update
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000024
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 역할 정책 부여 API
+    method: POST
+    path: /v1/roles/policies/assign
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000025
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 어플리케이션 목록 조회 API
+    method: GET
+    path: /v1/applications/list
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000026
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 어플리케이션 상세 조회 API
+    method: GET
+    path: /v1/applications/detail
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000027
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 어플리케이션 등록 API
+    method: POST
+    path: /v1/applications/create
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000028
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 어플리케이션 수정 API
+    method: PATCH
+    path: /v1/applications/update
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000029
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 어플리케이션 삭제 API
+    method: DELETE
+    path: /v1/applications/delete
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000030
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 정책 목록 조회 API
+    method: GET
+    path: /v1/access-policies/list
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000031
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 정책 상세 조회 API
+    method: GET
+    path: /v1/access-policies/detail
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000032
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 정책 생성 API
+    method: POST
+    path: /v1/access-policies/create
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000033
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 정책 수정 API
+    method: PUT
+    path: /v1/access-policies/update
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000034
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 정책 삭제 API
+    method: DELETE
+    path: /v1/access-policies/delete
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000035
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 정책 부여 요청 API
+    method: POST
+    path: /v1/access-policy-requests/create
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000036
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 정책 요청 처리 API
+    method: PATCH
+    path: /v1/access-policy-requests/process
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000037
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 정책 권한 시뮬레이션 API
+    method: POST
+    path: /v1/access-policies/simulate
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000038
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 정책 충돌 분석 API
+    method: POST
+    path: /v1/access-policies/conflicts/analyze
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000039
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 자격증명 목록 조회 API
+    method: GET
+    path: /v1/credentials/list
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000040
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 자격증명 상세 조회 API
+    method: GET
+    path: /v1/credentials/detail
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000041
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 자격증명 발급 요청 API
+    method: POST
+    path: /v1/credential-requests/issue
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000042
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 자격증명 교체 요청 API
+    method: POST
+    path: /v1/credential-requests/replace
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000043
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 자격증명 폐기 요청 API
+    method: POST
+    path: /v1/credential-requests/dispose
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000044
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 결재 템플릿 목록 조회 API
+    method: GET
+    path: /v1/request-templates/list
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000045
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 결재 템플릿 상세 조회 API
+    method: GET
+    path: /v1/request-templates/detail
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000046
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 결재 템플릿 생성 API
+    method: POST
+    path: /v1/request-templates/create
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000047
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 결재 템플릿 수정 API
+    method: PUT
+    path: /v1/request-templates/update
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000048
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 서비스 목록 조회 API
+    method: GET
+    path: /v1/services/list
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000049
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 서비스 상세 조회 API
+    method: GET
+    path: /v1/services/detail
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000050
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 서비스 등록 API
+    method: POST
+    path: /v1/services/create
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000051
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 서비스 수정 API
+    method: PATCH
+    path: /v1/services/update
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000052
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 엔드포인트 목록 조회 API
+    method: GET
+    path: /v1/service-endpoints/list
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000053
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 엔드포인트 상세 조회 API
+    method: GET
+    path: /v1/service-endpoints/detail
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000054
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 엔드포인트 등록 API
+    method: POST
+    path: /v1/service-endpoints/create
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000055
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 엔드포인트 수정 API
+    method: PUT
+    path: /v1/service-endpoints/update
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000056
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: OpenAPI 엔드포인트 동기화 API
+    method: POST
+    path: /v1/service-endpoints/sync
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000057
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 네임스페이스 목록 조회 API
+    method: GET
+    path: /v1/namespaces/list
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000058
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 네임스페이스 상세 조회 API
+    method: GET
+    path: /v1/namespaces/detail
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000059
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 네임스페이스 생성 API
+    method: POST
+    path: /v1/namespaces/create
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000060
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 네임스페이스 관리 역할 변경 API
+    method: PATCH
+    path: /v1/namespaces/administrator/update
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000061
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: UI 리소스 목록 조회 API
+    method: GET
+    path: /v1/ui-resources/list
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000062
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: UI 리소스 노출 상태 변경 API
+    method: PATCH
+    path: /v1/ui-resources/visibility/update
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000063
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 고아 UI 리소스 삭제 API
+    method: DELETE
+    path: /v1/ui-resources/orphans/delete
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000064
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 감사 이력 목록 조회 API
+    method: GET
+    path: /v1/audit-logs/list
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000065
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 감사 이력 상세 조회 API
+    method: GET
+    path: /v1/audit-logs/detail
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000066
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 전체 결재 목록 조회 API
+    method: GET
+    path: /v1/requests/list
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 70000000-0000-4000-8000-000000000067
+    serviceId: 60000000-0000-4000-8000-000000000004
+    name: 요청 상세 조회 API
+    method: GET
+    path: /v1/requests/detail
+    version: v1
+    lifecycle: active
+    createdAt: 2026-08-08T09:00:00.000Z
+serviceEndpointFields:
+  - id: 71000000-0000-4000-8000-000000000001
+    endpointId: 70000000-0000-4000-8000-000000000001
+    location: response-body
+    fieldPath: $.status
+    valueType: string
+    required: true
+    description: 서비스 상태
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 71000000-0000-4000-8000-000000000002
+    endpointId: 70000000-0000-4000-8000-000000000002
+    location: header
+    fieldPath: $['x-request-id']
+    valueType: string
+    required: false
+    description: 요청 추적 식별자
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 71000000-0000-4000-8000-000000000003
+    endpointId: 70000000-0000-4000-8000-000000000002
+    location: query
+    fieldPath: $.dryRun
+    valueType: boolean
+    required: false
+    description: 처리 없이 요청 유효성만 검증할지 여부
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 71000000-0000-4000-8000-000000000004
+    endpointId: 70000000-0000-4000-8000-000000000002
+    location: request-body
+    fieldPath: $.eventType
+    valueType: string
+    required: true
+    description: 이벤트 유형
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 71000000-0000-4000-8000-000000000005
+    endpointId: 70000000-0000-4000-8000-000000000002
+    location: request-body
+    fieldPath: $.payload
+    valueType: object
+    required: true
+    description: 이벤트 데이터
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 71000000-0000-4000-8000-000000000006
+    endpointId: 70000000-0000-4000-8000-000000000002
+    location: response-body
+    fieldPath: $.accepted
+    valueType: boolean
+    required: true
+    description: 요청 접수 여부
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 71000000-0000-4000-8000-000000000007
+    endpointId: 70000000-0000-4000-8000-000000000003
+    location: response-body
+    fieldPath: $.items
+    valueType: array
+    required: true
+    description: 감사 이벤트 목록
+    createdAt: 2026-08-08T09:00:00.000Z
+credentialLifecycleSettings:
+  expirationPeriodDays: 365
+  rotationIntervalDays: 90
+  updatedAt: 2026-08-08T09:00:00.000Z
+  updatedByUserId: 10000000-0000-4000-8000-000000000001
+credentialRegistrationAttempts:
+  - id: 82000000-0000-4000-8000-000000000001
+    approvalDocumentId: 50000000-0000-4000-8000-000000000001
+    serviceId: 60000000-0000-4000-8000-000000000001
+    registeredByUserId: 10000000-0000-4000-8000-000000000001
+    apiKeyId: 80000000-0000-4000-8000-000000000001
+    attemptNumber: 1
+    status: succeeded
+    errorCode: null
+    createdAt: 2026-08-08T09:00:00.000Z
+  - id: 82000000-0000-4000-8000-000000000003
+    approvalDocumentId: 50000000-0000-4000-8000-000000000004
+    serviceId: 60000000-0000-4000-8000-000000000002
+    registeredByUserId: 10000000-0000-4000-8000-000000000016
+    apiKeyId: null
+    attemptNumber: 1
+    status: failed
+    errorCode: internal-credential-registration-failed
+    createdAt: 2026-08-08T10:45:00.000Z
+apiKeys:
+  - id: 80000000-0000-4000-8000-000000000001
+    name: local-integration-key
+    applicationId: 25000000-0000-4000-8000-000000000001
+    accessPolicyId: 43000000-0000-4000-8000-000000000003
+    serviceId: 60000000-0000-4000-8000-000000000001
+    endpointIds:
+      - 70000000-0000-4000-8000-000000000001
+    approvalDocumentId: 50000000-0000-4000-8000-000000000001
+    replacesApiKeyId: null
+    registeredByUserId: 10000000-0000-4000-8000-000000000001
+    awsSecretName: access-governance/developer-api
+    awsSecretKey: local-integration-key
+    expiresAt: 2027-08-08T09:00:00.000Z
+    nextRotationAt: 2026-11-06T09:00:00.000Z
+    usageSystemNames:
+      - Access Governance batch
+      - Developer portal
+    emergencyRevokedAt: null
+    emergencyRevokeReason: null
+    status: active
+    createdAt: 2026-08-08T09:00:00.000Z

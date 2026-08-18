@@ -1,0 +1,15 @@
+.git
+.github
+.next
+.next-e2e
+.playwright-cli
+.storybook/public
+coverage
+node_modules
+output
+playwright-report
+storybook-static
+test-results
+e2e
+*.tsbuildinfo
+*.md
